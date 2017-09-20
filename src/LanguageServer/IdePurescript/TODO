@@ -1,0 +1,9 @@
+Features
+- Add module import (get modules)
+
+Enhancements
+- Update imports on change
+- Rebuild on change option?
+
+Probably best left in the extension:
+- Pursuit search (direct? expose psc-ide connection via command?)
