@@ -9,7 +9,7 @@ providing editing assistance and build features according to support available. 
 the server will start its own `purs ide server` instance to talk to for the project directory it is started
 in.
 
-## Features
+## Features
 
 - Completion provider
 - Definition provider
@@ -37,15 +37,15 @@ in.
 
 No arguments. Provides diagnostics.
 
-### `purescript.startPscIde`
+### `purescript.startPscIde`
 
 No arguments. Start IDE server according to configuration.
 
-### `purescript.stopPscIde`
+### `purescript.stopPscIde`
 
 No arguments. Stop running IDE server.
 
-### `purescript.restartPscIde`
+### `purescript.restartPscIde`
 
 No arguments. Stop any running IDE server then start a new one according to configuration.
 
@@ -57,7 +57,7 @@ Arguments: identifier, module, document URI.
 
 Arguments: document URI, replacement, replacement range.
 
-### `purescript.caseSplit-explicit`
+### `purescript.caseSplit-explicit`
 
 (Used to back the case split command in VS Code UI).
 
