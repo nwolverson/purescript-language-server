@@ -1,11 +1,16 @@
 module LanguageServer.Types where
 
 import Prelude
+
 import Control.Monad.Eff (kind Effect)
+import Data.Array (concat, groupBy, sortWith, (:))
 import Data.Foreign (Foreign)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, over)
+import Data.NonEmpty ((:|))
 import Data.Nullable (Nullable, toNullable)
+import Data.StrMap (StrMap, fromFoldable)
+import Data.Tuple (Tuple(..))
 
 foreign import data CONN :: Effect
 foreign import data Connection :: Type
@@ -196,10 +201,23 @@ derive instance newtypeCommand :: Newtype Command _
 
 newtype TextEdit = TextEdit { range :: Range, newText :: String }
 
-newtype WorkspaceEdit = WorkspaceEdit { documentChanges :: Nullable (Array TextDocumentEdit) }
+newtype WorkspaceEdit = WorkspaceEdit
+  { documentChanges :: Nullable (Array TextDocumentEdit)
+  , changes :: Nullable (StrMap (Array TextEdit))
+  }
 
+-- | Create workspace edit, supporting both documentChanges and older changes property for v2 clients
 workspaceEdit :: Array TextDocumentEdit -> WorkspaceEdit
-workspaceEdit edits = WorkspaceEdit { documentChanges: toNullable $ Just edits }
+workspaceEdit edits = WorkspaceEdit
+  { documentChanges: toNullable $ Just edits
+  , changes: toNullable $ Just $ 
+      fromFoldable $
+      map (\(h :| t) -> Tuple (uri h) (concat $ edit h : map edit t) ) $
+        groupBy (\a b -> uri a == uri b) $ sortWith uri edits
+  }
+  where
+  uri (TextDocumentEdit { textDocument: TextDocumentIdentifier { uri: DocumentUri uri } }) = uri
+  edit (TextDocumentEdit { edits }) = edits
 
 newtype TextDocumentEdit = TextDocumentEdit { textDocument :: TextDocumentIdentifier, edits :: Array TextEdit }
 
