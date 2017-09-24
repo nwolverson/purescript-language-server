@@ -109,7 +109,7 @@ defaultCompletionItem label = CompletionItem
     , documentation: toNullable Nothing
     , sortText: toNullable Nothing
     , filterText: toNullable Nothing
-    , insertText: toNullable Nothing
+    , insertText: toNullable $ Just label
     , textEdit: toNullable Nothing
     , additionalTextEdits: toNullable Nothing
     , command: toNullable Nothing
