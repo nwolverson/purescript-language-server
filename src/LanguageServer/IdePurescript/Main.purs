@@ -144,7 +144,7 @@ main = do
         fromAff do
           c <- liftEff $ readRef config
           s <- liftEff $ readRef state
-          -- liftEff $ maybe (pure unit) (\con -> log con $ "handler " <> handlerName) (_.conn $ unwrap s)
+          liftEff $ maybe (pure unit) (\con -> log con $ "handler " <> handlerName) (_.conn $ unwrap s)
           maybe (pure unit) updateModules (docUri b)          
           f c s b
 
