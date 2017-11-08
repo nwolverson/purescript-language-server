@@ -1,6 +1,5 @@
 {
   "name": "vscode-ide-purescript",
-  "version": "1.0.0",
   "moduleType": [
     "node"
   ],
