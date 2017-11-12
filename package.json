@@ -21,7 +21,7 @@
     "prepublish": "run-s build",
     "build": "run-s build:*",
     "build:tsc": "tsc -p src/LanguageServer/",
-    "build:server": "pulp build --no-psa --to server.js -m LanguageServer.IdePurescript.Main"
+    "build:server": "pulp --psc-package build --to server.js -m LanguageServer.IdePurescript.Main"
   },
   "dependencies": {
     "purescript": "^0.11.6",
