@@ -10,7 +10,7 @@
     "output"
   ],
   "dependencies": {
-    "purescript-ide-purescript-core": "git://github.com/nwolverson/purescript-ide-purescript-core.git#51d1dd839adeb71c0ec9950fc6b2a112f0235262",
+    "purescript-ide-purescript-core": "^0.13.0",
     "purescript-aff-promise": "^0.5.0",
     "purescript-errors": "^3.0.0",
     "purescript-foreign-generic": "^5.0.0"
