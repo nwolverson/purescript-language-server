@@ -1,0 +1,11 @@
+{
+    "name": "purescript-language-server",
+    "set": "ide-0.12-dev-3",
+    "source": "https://github.com/nwolverson/package-sets.git",
+    "depends": [
+      "aff-promise",
+      "errors",
+      "foreign-generic",
+      "ide-purescript-core"
+    ]
+}
