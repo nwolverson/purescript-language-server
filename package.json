@@ -8,12 +8,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/nwolverson/vscode-ide-purescript.git"
+    "url": "https://github.com/nwolverson/purescript-language-server.git"
   },
   "bugs": {
-    "url": "https://github.com/nwolverson/vscode-ide-purescript/issues"
+    "url": "https://github.com/nwolverson/purescript-language-server/issues"
   },
-  "homepage": "https://github.com/nwolverson/vscode-ide-purescript",
+  "homepage": "https://github.com/nwolverson/purescript-language-server",
   "license": "MIT",
   "main": "./server.js",
   "bin": "./cli.js",
