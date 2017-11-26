@@ -29,10 +29,10 @@ import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidC
 import LanguageServer.IdePurescript.Assist (addClause, caseSplit)
 import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnostics)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceSuggestion)
-import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, buildCmd, caseSplitCmd, cmdName, commands, replaceSuggestionCmd, restartPscIdeCmd, startPscIdeCmd, stopPscIdeCmd)
+import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cmdName, commands, getAvailableModulesCmd, replaceSuggestionCmd, restartPscIdeCmd, startPscIdeCmd, stopPscIdeCmd)
 import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config (fastRebuild)
-import LanguageServer.IdePurescript.Imports (addCompletionImport)
+import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules)
 import LanguageServer.IdePurescript.Server (retry, startServer')
 import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, getWorkspaceSymbols)
 import LanguageServer.IdePurescript.Tooltips (getTooltips)
@@ -217,9 +217,11 @@ main = do
       , Tuple replaceSuggestionCmd $ voidHandler onReplaceSuggestion
       , Tuple buildCmd $ voidHandler onBuild
       , Tuple addCompletionImportCmd $ addCompletionImport logError
+      , Tuple addModuleImportCmd $ voidHandler $ addModuleImport' logError
       , Tuple startPscIdeCmd $ simpleHandler startPscIdeServer
       , Tuple stopPscIdeCmd $ simpleHandler stopPscIdeServer
       , Tuple restartPscIdeCmd $ simpleHandler restartPscIdeServer
+      , Tuple getAvailableModulesCmd $ getAllModules logError
       ]
 
   onExecuteCommand conn $ \{ command, arguments } -> fromAff do

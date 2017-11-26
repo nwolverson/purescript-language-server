@@ -5,7 +5,7 @@ import Prelude
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Class (liftEff)
 import Data.Array (length) as Arr
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..))
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toNullable)
 import Data.String (length)

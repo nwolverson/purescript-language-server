@@ -27,6 +27,9 @@ addCompletionImport :: String -> Maybe String -> Maybe String -> DocumentUri -> 
 addCompletionImport ident mod qual uri = c addCompletionImportCmd $
   Just [ toForeign ident, toForeign $ toNullable mod, toForeign $ toNullable qual, toForeign uri ]
 
+addModuleImportCmd :: CommandInfo
+addModuleImportCmd = CommandInfo "Add module import" "addModuleImport"
+
 replaceSuggestionCmd :: CommandInfo
 replaceSuggestionCmd = CommandInfo "Apply Suggestion" "replaceSuggestion"
 
@@ -48,6 +51,9 @@ stopPscIdeCmd = CommandInfo "Stop Psc-Ide-Server" "stopPscIde"
 
 restartPscIdeCmd :: CommandInfo
 restartPscIdeCmd = CommandInfo "Restart Psc-Ide-Server" "restartPscIde"
+
+getAvailableModulesCmd :: CommandInfo
+getAvailableModulesCmd = CommandInfo "Get available modules" "getAvailableModules"
 
 commands :: Array String
 commands = cmdName <$> 

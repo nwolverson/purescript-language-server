@@ -53,6 +53,14 @@ No arguments. Stop any running IDE server then start a new one according to conf
 
 Arguments: identifier, module, document URI.
 
+### `purescript.addModuleImport`
+
+Arguments: module, qualifier, document URI.
+
+### `purescript.getAvailableModules`
+
+No arguments. Get list of available modules.
+
 ### `purescript.replaceSuggestion`
 
 Arguments: document URI, replacement, replacement range.

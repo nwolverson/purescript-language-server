@@ -62,7 +62,7 @@ addClause :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) 
 addClause docs settings state args = do
   let ServerState { port, conn } = state
   case port, conn, args of
-    Just port', Just conn', [ argUri, argLine, argChar, argType ]
+    Just port', Just conn', [ argUri, argLine, argChar ]
         | Right uri <- runExcept $ readString argUri
         , Right line <- runExcept $ readInt argLine -- TODO: Can this be a Position?
         , Right char <- runExcept $ readInt argChar
