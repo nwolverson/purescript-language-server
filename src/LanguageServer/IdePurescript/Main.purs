@@ -26,13 +26,14 @@ import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.Console (error, info, log, warn)
 import LanguageServer.DocumentStore (getDocument, onDidChangeContent, onDidSaveDocument)
 import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentSymbol, onExecuteCommand, onHover, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendDiagnosticsBegin, sendDiagnosticsEnd)
-import LanguageServer.IdePurescript.Assist (addClause, caseSplit)
+import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fixTypo)
 import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnostics)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceSuggestion)
-import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cmdName, commands, getAvailableModulesCmd, replaceSuggestionCmd, restartPscIdeCmd, startPscIdeCmd, stopPscIdeCmd)
+import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, startPscIdeCmd, stopPscIdeCmd)
 import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config (fastRebuild)
 import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules)
+import LanguageServer.IdePurescript.Search (search)
 import LanguageServer.IdePurescript.Server (retry, startServer')
 import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, getWorkspaceSymbols)
 import LanguageServer.IdePurescript.Tooltips (getTooltips)
@@ -222,6 +223,8 @@ main = do
       , Tuple stopPscIdeCmd $ simpleHandler stopPscIdeServer
       , Tuple restartPscIdeCmd $ simpleHandler restartPscIdeServer
       , Tuple getAvailableModulesCmd $ getAllModules logError
+      , Tuple searchCmd $ search
+      , Tuple fixTypoCmd $ fixTypo
       ]
 
   onExecuteCommand conn $ \{ command, arguments } -> fromAff do

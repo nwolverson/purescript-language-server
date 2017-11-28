@@ -55,6 +55,12 @@ restartPscIdeCmd = CommandInfo "Restart Psc-Ide-Server" "restartPscIde"
 getAvailableModulesCmd :: CommandInfo
 getAvailableModulesCmd = CommandInfo "Get available modules" "getAvailableModules"
 
+searchCmd :: CommandInfo
+searchCmd = CommandInfo "Search identifiers" "search"
+
+fixTypoCmd :: CommandInfo
+fixTypoCmd = CommandInfo "Fix typo" "fixTypo"
+
 commands :: Array String
 commands = cmdName <$> 
   [ addCompletionImportCmd 

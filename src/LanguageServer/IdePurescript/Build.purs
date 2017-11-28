@@ -68,7 +68,6 @@ getDiagnostics uri settings state = do
   filename <- liftEff $ uriToFilename uri
   case state of
     ServerState { port: Just port, root: Just root } -> do
-      -- TODO: Status Indication?
       { errors, success } <- rebuild port filename
       pure $ convertDiagnostics root settings errors
     _ -> pure emptyDiagnostics

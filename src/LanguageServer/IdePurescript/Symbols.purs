@@ -101,29 +101,3 @@ getSymbols root port prefix modules = do
   getInfo _ = pure Nothing
 
   getName (Command.TypePosition { name }) = resolve [ root ] name
-
--- getSymbols :: forall s eff. Ref s -> Int -> SymbolQuery -> Eff ( ref :: REF, net :: NET, editor :: EDITOR, workspace :: WORKSPACE | eff) (Promise (Array SymbolInfo))
--- getSymbols modulesState port query = do
---   state <- readRef modulesState
---   fromAff $ do
---     let prefix = case query of
---                     WorkspaceSymbolQuery pref -> pref
---                     FileSymbolQuery _ -> ""
---     modules <- case query of
---       WorkspaceSymbolQuery _ -> getLoadedModules port
---       FileSymbolQuery document -> liftEff do
---         text <- getText document
---         let mod = getMainModule text
---         pure $ maybe [] singleton mod
-
---     completions <- getCompletion port prefix Nothing Nothing modules (const [])
-
---     let getInfo (Command.TypeInfo { identifier, definedAt: Just typePos, module', type' }) = do
---           fileName <- getName typePos
---           pure $ Just { identifier, range: convTypePosition typePos, fileName, moduleName: module', identType: type' }
---         getInfo _ = pure Nothing
---         getName (Command.TypePosition { name }) = resolveFile name
-    
---     res <- liftEff $ traverse getInfo completions
---     pure $ catMaybes res
-
