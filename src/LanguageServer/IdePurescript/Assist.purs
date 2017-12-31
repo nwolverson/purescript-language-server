@@ -12,10 +12,12 @@ import Data.Foreign.Index ((!))
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (over)
 import IdePurescript.PscIde (eitherToErr)
+import IdePurescript.PscIdeServer (Notify)
 import IdePurescript.Tokens (identifierAtPoint)
 import LanguageServer.Console (log)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (applyEdit)
+import LanguageServer.IdePurescript.Imports (addCompletionImport)
 import LanguageServer.IdePurescript.Types (MainEff, ServerState(..))
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (getTextAtRange, getVersion)
@@ -94,8 +96,8 @@ decodeTypoResult obj = do
   mod <- obj ! "mod" >>= readString
   pure $ TypoResult { identifier, mod }
 
-fixTypo :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Foreign
-fixTypo docs settings state args = do
+fixTypo :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Foreign
+fixTypo log docs settings state args = do
   let ServerState { port, conn, modules } = state
   (toForeign <<< map encodeTypoResult) <$> case port, conn, args !! 0, args !! 1, args !! 2 of
     Just port', Just conn', Just argUri, Just argLine, Just argChar
@@ -106,12 +108,12 @@ fixTypo docs settings state args = do
         lineText <- liftEff $ getTextAtRange doc (lineRange' line char)
         version <- liftEff $ getVersion doc
         case identifierAtPoint lineText char, (runExcept <<< decodeTypoResult) <$> args !! 3 of
-            Just { range }, Just (Right (TypoResult { identifier, mod })) -> [] <$ replace conn' uri version line range identifier
+            Just { range }, Just (Right (TypoResult { identifier, mod })) -> [] <$ replace conn' uri version line range identifier mod
             -- TODO add import?
             Just { word, range }, _ -> do
                 res <- suggestTypos port' word 2 modules.main defaultCompletionOptions
                 case res of
-                    Right [ TypeInfo { identifier } ] -> [] <$ replace conn' uri version line range identifier
+                    Right [ TypeInfo { identifier, module' } ] -> [] <$ replace conn' uri version line range identifier module'
                     _ -> pure $ map convertRes $ either (pure []) id res
             _, _ -> pure $ []
     _, _, _, _, _ -> pure  []
@@ -119,9 +121,10 @@ fixTypo docs settings state args = do
   where
     emptyRes = toForeign []
     convertRes (TypeInfo { identifier, module' }) = TypoResult { identifier, mod: module' }
-    replace conn uri version line {left, right} word = do 
+    replace conn uri version line {left, right} word mod = do 
       let range = Range { start: Position { line, character: right }
                         , end: Position { line, character: left }
                         }
           edit = makeWorkspaceEdit (DocumentUri uri) version range word
       liftEff $ applyEdit conn edit
+      addCompletionImport log docs settings state [ toForeign word, toForeign mod, toForeign Nothing, toForeign uri ]

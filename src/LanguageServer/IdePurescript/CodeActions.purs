@@ -14,25 +14,26 @@ import Data.Newtype (un)
 import Data.StrMap (lookup)
 import Data.Traversable (traverse)
 import IdePurescript.PscErrors (PscError(..))
-import IdePurescript.QuickFix (getReplacement, getTitle)
+import IdePurescript.QuickFix (getReplacement, getTitle, isUnknownToken)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.IdePurescript.Build (positionToRange)
-import LanguageServer.IdePurescript.Commands (build, replaceSuggestion)
+import LanguageServer.IdePurescript.Commands (build, fixTypo, replaceSuggestion)
 import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
+import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (getTextAtRange, getVersion)
 import LanguageServer.Types (Command, DocumentStore, DocumentUri(..), Position(..), Range(..), Settings, TextDocumentIdentifier(..))
-import LanguageServer.Text (makeWorkspaceEdit)
-
 
 getActions :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> CodeActionParams -> Aff (MainEff eff) (Array Command)
 getActions documents settings (ServerState { diagnostics, conn }) { textDocument, range } =  
-  case lookup (un DocumentUri $ _.uri $ un TextDocumentIdentifier textDocument) diagnostics of
+  case lookup (un DocumentUri $ docUri) diagnostics of
     Just errs -> do 
       replacements <- catMaybes <$> traverse asCommand errs
       pure $ replacements <> mapMaybe commandForCode errs
     _ -> pure []
   where
+    docUri = _.uri $ un TextDocumentIdentifier textDocument
+
     asCommand (PscError { position: Just position, suggestion: Just { replacement, replaceRange }, errorCode })
       | contains range (positionToRange position) = do
       let range' = positionToRange $ fromMaybe position replaceRange
@@ -42,6 +43,8 @@ getActions documents settings (ServerState { diagnostics, conn }) { textDocument
     commandForCode (PscError { position: Just position, errorCode }) | contains range (positionToRange position) =
       case errorCode of
         "ModuleNotFound" -> Just build
+        x | isUnknownToken x
+          , { startLine, startColumn } <- position -> Just $ fixTypo docUri startLine startColumn
         _ -> Nothing
     commandForCode _ = Nothing
 

@@ -59,7 +59,10 @@ searchCmd :: CommandInfo
 searchCmd = CommandInfo "Search identifiers" "search"
 
 fixTypoCmd :: CommandInfo
-fixTypoCmd = CommandInfo "Fix typo" "fixTypo"
+fixTypoCmd = CommandInfo "Fix typo/add import" "fixTypo"
+
+fixTypo :: DocumentUri -> Int -> Int -> Command
+fixTypo uri row char = c fixTypoCmd $ Just [ toForeign uri, toForeign row, toForeign char ] 
 
 commands :: Array String
 commands = cmdName <$> 

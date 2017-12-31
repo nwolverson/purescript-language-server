@@ -224,7 +224,7 @@ main = do
       , Tuple restartPscIdeCmd $ simpleHandler restartPscIdeServer
       , Tuple getAvailableModulesCmd $ getAllModules logError
       , Tuple searchCmd $ search
-      , Tuple fixTypoCmd $ fixTypo
+      , Tuple fixTypoCmd $ fixTypo logError
       ]
 
   onExecuteCommand conn $ \{ command, arguments } -> fromAff do
