@@ -30,7 +30,7 @@ startServer' settings root cb logCb =
     , combinedExe: Config.usePurs settings
     , glob: globs
     , logLevel: Config.logLevel settings
-    , editorMode: true
+    , editorMode: Config.editorMode settings
     } (fromMaybe "" root) (Config.addNpmPath settings) cb logCb
   where
     globs = [Config.srcPath settings <> "/**/*.purs", Config.packagePath settings <> "/**/*.purs"]

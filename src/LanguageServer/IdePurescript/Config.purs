@@ -20,7 +20,7 @@ getConfigMaybe readValue key settings = do
             readValue res
 
 getConfig :: forall a. (Foreign -> F a) -> String -> a -> Foreign -> a
-getConfig readValue key default settings = 
+getConfig readValue key default settings =
     fromMaybe default $ getConfigMaybe readValue key settings
 
 getBoolean :: String -> Boolean -> Foreign -> Boolean
@@ -81,6 +81,9 @@ importsPreferredModules = getConfig (readArray >=> traverse readString) "imports
 
 fastRebuild :: ConfigFn Boolean
 fastRebuild = getBoolean "fastRebuild" true
+
+editorMode :: ConfigFn Boolean
+editorMode = getBoolean "editorMode" false
 
 logLevel :: ConfigFn (Maybe LogLevel)
 logLevel = getString "pscIdelogLevel" "" >>> case _ of
