@@ -61,23 +61,26 @@ getCompletions docs settings state ({ textDocument, position }) = do
       Function -> LS.Function
       Type -> LS.Class
 
-    convert _ (ModuleSuggestion { text, suggestType, prefix }) = completionItem text (convertSuggest suggestType)
+    edit newText prefix = TextEdit
+        { range: Range
+            { start: position # over Position (\pos -> pos { character = pos.character - length prefix })
+            , end: position
+            }
+        , newText
+        }
+
+    convert _ (ModuleSuggestion { text, suggestType, prefix }) =
+        completionItem text (convertSuggest suggestType)
+        # over CompletionItem (_
+          { textEdit = toNullable $ Just $ edit text prefix
+          })
     convert uri (IdentSuggestion { origMod, exportMod, identifier, qualifier, suggestType, prefix, valueType, exportedFrom, documentation }) =
         completionItem identifier (convertSuggest suggestType) 
         # over CompletionItem (_
           { detail = toNullable $ Just valueType
-          , documentation = toNullable $ --Just $ exportText <> fromMaybe "NO_DOCUMENTATION_FOUND" 
-                documentation
+          , documentation = toNullable documentation
           , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri
-        --   , textEdit = toNullable $ Just edit
+          , textEdit = toNullable $ Just $ edit identifier prefix
           })
         where
         exportText = if exportMod == origMod then origMod else exportMod <> " (re-exported from " <> origMod <> ")"
-
-        edit = TextEdit
-            { range: Range
-                { start: position # over Position (\pos -> pos { character = pos.character - length prefix })
-                , end: position
-                }
-            , newText: identifier
-            }
