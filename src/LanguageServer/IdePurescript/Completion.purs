@@ -5,7 +5,7 @@ import Prelude
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Class (liftEff)
 import Data.Array (length) as Arr
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toNullable)
 import Data.String (length)
@@ -78,9 +78,9 @@ getCompletions docs settings state ({ textDocument, position }) = do
         completionItem identifier (convertSuggest suggestType) 
         # over CompletionItem (_
           { detail = toNullable $ Just valueType
-          , documentation = toNullable documentation
+          , documentation = toNullable $ Just $ exportText <> (fromMaybe "" documentation)
           , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri
           , textEdit = toNullable $ Just $ edit identifier prefix
           })
         where
-        exportText = if exportMod == origMod then origMod else exportMod <> " (re-exported from " <> origMod <> ")"
+        exportText = (if exportMod == origMod then origMod else exportMod <> " (re-exported from " <> origMod <> ")") <> "\n"

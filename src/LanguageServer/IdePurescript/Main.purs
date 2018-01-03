@@ -119,7 +119,6 @@ main = do
     writeRef config settings
     readRef gotConfig >>= \c -> when (not c) onConfig
 
-
   log conn "PureScript Language Server started"
   
   documents <- initDocumentStore conn
