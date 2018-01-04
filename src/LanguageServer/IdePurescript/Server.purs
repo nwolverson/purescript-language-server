@@ -5,7 +5,7 @@ import Prelude
 import Control.Monad.Aff (Aff, attempt, delay)
 import Control.Monad.Eff.Class (liftEff)
 import Data.Either (Either(..))
-import Data.Maybe (Maybe, fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Time.Duration (Milliseconds(..))
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import IdePurescript.PscIdeServer as P
@@ -31,6 +31,8 @@ startServer' settings root cb logCb =
     , glob: globs
     , logLevel: Config.logLevel settings
     , editorMode: Config.editorMode settings
+    , polling: Config.polling settings
+    , outputDirectory: Nothing
     } (fromMaybe "" root) (Config.addNpmPath settings) cb logCb
   where
     globs = [Config.srcPath settings <> "/**/*.purs", Config.packagePath settings <> "/**/*.purs"]

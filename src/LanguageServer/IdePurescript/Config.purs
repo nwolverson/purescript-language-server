@@ -85,6 +85,9 @@ fastRebuild = getBoolean "fastRebuild" true
 editorMode :: ConfigFn Boolean
 editorMode = getBoolean "editorMode" false
 
+polling :: ConfigFn Boolean
+polling = getBoolean "polling" false
+
 logLevel :: ConfigFn (Maybe LogLevel)
 logLevel = getString "pscIdelogLevel" "" >>> case _ of
     "all" -> Just All
