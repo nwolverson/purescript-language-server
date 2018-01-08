@@ -4,8 +4,9 @@ import Prelude
 
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Class (liftEff)
+import Data.Array (uncons)
 import Data.Either (either)
-import Data.Maybe (Maybe(Nothing, Just), fromMaybe, isJust)
+import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Newtype (un)
 import Data.Nullable (Nullable, toNullable)
 import Data.String (drop, length, take)
@@ -21,24 +22,24 @@ import LanguageServer.TextDocument (getTextAtRange)
 import LanguageServer.Types (DocumentStore, Hover(..), Position(..), Range(..), Settings, TextDocumentIdentifier(..), markedString)
 import PscIde.Command as C
 
-
 moduleBeforePart :: String
-moduleBeforePart = """(?:^|[^A-Za-z_.])([A-Z][A-Za-z0-9]*(?:\.[A-Z][A-Za-z0-9]*)*)"""
+moduleBeforePart = """(?:^|[^A-Za-z_.])((?:[A-Z][A-Za-z0-9]*(?:\.(?:[A-Z][A-Za-z0-9]*)?)*)?)"""
 
 moduleAfterPart :: String
-moduleAfterPart = """([A-Za-z0-9]*)\.""" 
+moduleAfterPart = """([A-Za-z0-9]*(?:\.[A-Za-z0-9]*)*)\.""" 
 
 afterPart :: String
-afterPart = moduleAfterPart <> identPart -- identPart captures 1
+afterPart = moduleAfterPart <> identPart <> "(?:[^A-Za-z_'.]|$)"-- identPart captures 1
 
 moduleAtPoint :: String -> Int -> Maybe { word :: String, range :: WordRange }
 moduleAtPoint line column =
   let textBefore = take column line
       textAfter = drop column line
       beforeRegex = regex (moduleBeforePart <> "$") noFlags
-      afterRegex = regex ("^" <> "afterPart") noFlags
+      afterRegex = regex ("^" <> afterPart) noFlags
       wordRange left right = { left: column - left, right: column + right }
       match' r t = either (const Nothing) (\r' -> match r' t) r
+      wr = wordRange 0 0
   in
   case match' beforeRegex textBefore, match' afterRegex textAfter of
     Just [_, Just m1], Just [_, Just m2, _] ->
@@ -52,16 +53,18 @@ getTooltips docs settings state ({ textDocument, position }) = do
   let { port, modules, conn } = un ServerState state
       char = _.character $ un Position $ position
   case port, identifierAtPoint text char, moduleAtPoint text char of
+    Just port', _, Just { word, range } -> do
+      let mod = getQualModule word (un ServerState state).modules
+      pure $ toNullable $ case uncons mod of 
+        Just { head } -> 
+          Just $ Hover {
+            contents: { language: "text", value: head }
+          , range: toNullable $ Just $ wordRange position range
+          }
+        _ -> Nothing
     Just port', Just { word, qualifier }, _ -> do
       ty <- getTypeInfo port' word modules.main qualifier (getUnqualActiveModules modules $ Just word) (flip getQualModule modules)
       pure $ toNullable $ map (convertInfo word) ty
-    Just port', _, Just { word } -> do
-      -- ty <- getTypeInfo port' word modules.main qualifier (getUnqualActiveModules modules $ Just word) (flip getQualModule modules)
-      -- pure $ toNullable $ map (convertInfo word) ty
-      pure $ toNullable $ Just $ Hover {
-        contents: markedString "TESTMN"
-      , range: toNullable Nothing
-      }
     _, _, _-> pure $ toNullable Nothing
 
   where
@@ -70,12 +73,24 @@ getTooltips docs settings state ({ textDocument, position }) = do
     {
       contents: markedString $ compactTypeStr <> 
         if showExpanded then "\n" <> expandedTypeStr else ""
-    , range: toNullable $ Nothing -- Just $ Range { start: position, end: position }
+    , range: toNullable $ Nothing
     }
     where
       showExpanded = isJust expandedType && (expandedType /= Just type')
       compactTypeStr = word <> " :: " <> type'
       expandedTypeStr = word <> " :: " <> (fromMaybe "" expandedType)
+
+  wordRange (Position { line }) { left, right } = 
+    Range
+      { start: Position
+        { line
+        , character: left
+        }
+      , end: Position
+        { line
+        , character: right
+        }
+      }
 
   lineRange (Position { line, character }) =
     Range
