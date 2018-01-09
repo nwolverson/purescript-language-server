@@ -88,6 +88,9 @@ editorMode = getBoolean "editorMode" false
 polling :: ConfigFn Boolean
 polling = getBoolean "polling" false
 
+addPscPackageSources :: ConfigFn Boolean
+addPscPackageSources = getBoolean "addPscPackageSources" false
+
 logLevel :: ConfigFn (Maybe LogLevel)
 logLevel = getString "pscIdelogLevel" "" >>> case _ of
     "all" -> Just All

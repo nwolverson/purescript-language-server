@@ -2,15 +2,23 @@ module LanguageServer.IdePurescript.Server where
 
 import Prelude
 
-import Control.Monad.Aff (Aff, attempt, delay)
+import Control.Monad.Aff (Aff, attempt, delay, makeAff)
 import Control.Monad.Eff.Class (liftEff)
+import Data.Array (head)
 import Data.Either (Either(..))
+import Data.Foreign (Foreign)
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.String.Utils (lines)
 import Data.Time.Duration (Milliseconds(..))
+import IdePurescript.Exec (findBins, getPathVar)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import IdePurescript.PscIdeServer as P
 import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.Types (Settings)
+import Node.Buffer (toString)
+import Node.ChildProcess (defaultExecOptions, execFile)
+import Node.Encoding (Encoding(..))
+import PscIde.Server (Executable(..))
 
 retry :: forall eff. (Notify eff) -> Int -> Aff eff Unit -> Aff eff Unit
 retry logError n a | n > 0 = do
@@ -24,11 +32,12 @@ retry logError n a | n > 0 = do
 retry _ _ a = a
 
 startServer' :: forall eff eff'. Settings -> Maybe String -> Notify (P.ServerEff eff) -> Notify (P.ServerEff eff) -> Aff (P.ServerEff eff) { port:: Maybe Int, quit:: P.QuitCallback eff' }
-startServer' settings root cb logCb =
+startServer' settings root cb logCb = do
+  pscpGlob <- getPscPackagePaths settings root
   P.startServer'
     { exe
     , combinedExe: Config.usePurs settings
-    , glob: globs
+    , glob: globs <> pscpGlob
     , logLevel: Config.logLevel settings
     , editorMode: Config.editorMode settings
     , polling: Config.polling settings
@@ -37,3 +46,14 @@ startServer' settings root cb logCb =
   where
     globs = [Config.srcPath settings <> "/**/*.purs", Config.packagePath settings <> "/**/*.purs"]
     exe = if Config.usePurs settings then Config.pursExe settings else Config.serverExe settings
+
+getPscPackagePaths :: forall eff. Foreign -> Maybe String -> Aff (P.ServerEff eff) (Array String)
+getPscPackagePaths settings root = do
+  pathVar <- liftEff $ getPathVar (Config.addNpmPath settings) (fromMaybe "" root)
+  serverBins <- findBins pathVar "psc-package"
+  case head serverBins of
+    Just (Executable bin _) -> makeAff \err succ ->
+      execFile bin [ "sources" ] defaultExecOptions (\{stdout} -> do
+        text <- toString UTF8 stdout
+        succ $ lines text)
+    _ -> pure []
