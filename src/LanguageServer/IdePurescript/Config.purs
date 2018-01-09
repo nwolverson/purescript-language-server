@@ -61,6 +61,9 @@ packagePath = getString "packagePath" "bower_components"
 srcPath :: ConfigFn String
 srcPath = getString "sourcePath" "src"
 
+sourceGlobs :: ConfigFn (Array String)
+sourceGlobs = getConfig (readArray >=> traverse readString) "sourceGlobs" []
+
 censorCodes :: ConfigFn (Array String)
 censorCodes = getConfig (readArray >=> traverse readString) "censorWarnings" []
 
