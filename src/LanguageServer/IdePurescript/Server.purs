@@ -4,10 +4,11 @@ import Prelude
 
 import Control.Monad.Aff (Aff, attempt, delay, makeAff)
 import Control.Monad.Eff.Class (liftEff)
-import Data.Array (head)
+import Data.Array (filter, head)
 import Data.Either (Either(..))
 import Data.Foreign (Foreign)
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.String (null)
 import Data.String.Utils (lines)
 import Data.Time.Duration (Milliseconds(..))
 import IdePurescript.Exec (findBins, getPathVar)
@@ -37,18 +38,21 @@ startServer' settings root cb logCb = do
   P.startServer'
     { exe
     , combinedExe: Config.usePurs settings
-    , glob: globs <> pscpGlob
+    , glob: filter (not <<< null) $ globs <> pscpGlob
     , logLevel: Config.logLevel settings
     , editorMode: Config.editorMode settings
     , polling: Config.polling settings
     , outputDirectory: Nothing
     } (fromMaybe "" root) (Config.addNpmPath settings) cb logCb
   where
-    globs = [Config.srcPath settings <> "/**/*.purs", Config.packagePath settings <> "/**/*.purs"]
+    globs = getGlob Config.srcPath <> getGlob Config.packagePath
+    getGlob fn = fn settings # case _ of 
+      glob | not (null glob) -> [ glob <> "/**/*.purs" ]
+      _ -> []
     exe = if Config.usePurs settings then Config.pursExe settings else Config.serverExe settings
 
 getPscPackagePaths :: forall eff. Foreign -> Maybe String -> Aff (P.ServerEff eff) (Array String)
-getPscPackagePaths settings root = do
+getPscPackagePaths settings root = if not $ Config.addPscPackageSources settings then pure [] else do
   pathVar <- liftEff $ getPathVar (Config.addNpmPath settings) (fromMaybe "" root)
   serverBins <- findBins pathVar "psc-package"
   case head serverBins of
