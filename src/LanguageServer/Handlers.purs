@@ -13,6 +13,7 @@ import LanguageServer.Types (CONN, Command, CompletionItemList, Connection, Diag
 type TextDocumentPositionParams = { textDocument :: TextDocumentIdentifier, position :: Position }
 
 type DocumentSymbolParams = { textDocument :: TextDocumentIdentifier }
+type ReferenceParams = TextDocumentPositionParams
 type WorkspaceSymbolParams = { query :: String }
 
 type CodeActionParams = { textDocument :: TextDocumentIdentifier, range :: Range, context :: CodeActionContext }
@@ -36,6 +37,8 @@ foreign import onHover :: forall eff. Connection -> (TextDocumentPositionParams 
 foreign import onDocumentSymbol :: forall eff. Connection -> (DocumentSymbolParams -> Res eff (Array SymbolInformation)) -> Eff (conn :: CONN | eff) Unit
 
 foreign import onWorkspaceSymbol :: forall eff. Connection -> (WorkspaceSymbolParams -> Res eff (Array SymbolInformation)) -> Eff (conn :: CONN | eff) Unit
+
+foreign import onReferences :: forall eff. Connection -> (ReferenceParams -> Res eff (Array Location)) -> Eff (conn :: CONN | eff) Unit
 
 foreign import onCodeAction :: forall eff. Connection -> (CodeActionParams -> Res eff (Array Command)) -> Eff (conn :: CONN | eff) Unit
 

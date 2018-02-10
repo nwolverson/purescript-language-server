@@ -8,6 +8,7 @@ import Data.Array (filter, head)
 import Data.Either (Either(..))
 import Data.Foreign (Foreign)
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Monoid (mempty)
 import Data.String (null)
 import Data.String.Utils (lines)
 import Data.Time.Duration (Milliseconds(..))
@@ -61,8 +62,9 @@ getPscPackagePaths settings root = if not $ Config.addPscPackageSources settings
   pathVar <- liftEff $ getPathVar (Config.addNpmPath settings) (fromMaybe "" root)
   serverBins <- findBins pathVar "psc-package"
   case head serverBins of
-    Just (Executable bin _) -> makeAff \err succ ->
+    Just (Executable bin _) -> makeAff \cb -> do
       execFile bin [ "sources" ] defaultExecOptions (\{stdout} -> do
         text <- toString UTF8 stdout
-        succ $ lines text)
+        cb $ pure $ lines text)
+      pure mempty
     _ -> pure []

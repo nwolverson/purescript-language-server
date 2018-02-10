@@ -28,7 +28,8 @@ exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeP
                 executeCommandProvider: (params.initializationOptions||{}).executeCommandProvider === false
                     ? undefined : {
                         commands
-                    }
+                    },
+                referencesProvider: true
             }
         };
     });

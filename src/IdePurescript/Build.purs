@@ -15,6 +15,7 @@ import Data.Either (either, Either(..))
 import Data.Foldable (find)
 import Data.List as List
 import Data.Maybe (maybe, Maybe(..))
+import Data.Monoid (mempty)
 import Data.StrMap (fromFoldable)
 import Data.String (Pattern(Pattern), split, indexOf)
 import Data.Traversable (traverse_)
@@ -66,31 +67,32 @@ type BuildEff eff = (cp :: CP.CHILD_PROCESS, buffer :: BUFFER, fs :: FS, ref :: 
 build :: forall eff. Notify (BuildEff eff) -> BuildOptions -> Aff (BuildEff eff) BuildResult
 build logCb buildOptions@{ command: Command cmd args, directory, useNpmDir } = do
   { cmdBins, cp: cp' } <- spawn buildOptions
-  makeAff $ \err succ -> do
+  makeAff $ \cb -> do
     logCb Info $ "Resolved build command (1st is used): "
     traverse_ (\(Executable x vv) -> do
       logCb Info $ x <> maybe "" (": " <> _) vv) cmdBins
     case cp' of
-      Nothing -> err $ error $ "Didn't find command in PATH: " <> cmd
+      Nothing -> cb $ Left $ error $ "Didn't find command in PATH: " <> cmd
       Just cp -> do
-        CP.onError cp (err <<< CP.toStandardError)
+        CP.onError cp (cb <<< Left <<< CP.toStandardError)
         let stderr = CP.stderr cp
         result <- newRef ""
         let res :: String -> Eff (BuildEff (exception :: EXCEPTION | eff)) Unit
             res s = do
               modifyRef result (\acc -> acc<>s)
 
-        catchException err $ S.onDataString stderr UTF8 res
+        catchException (cb <<< Left) $ S.onDataString stderr UTF8 res
         CP.onClose cp (\exit -> case exit of
           CP.Normally n | n == 0 || n == 1 -> do
             pscOutput <- readRef result
             let lines = split (Pattern "\n") pscOutput
                 json = find (\s -> indexOf (Pattern "{\"") s == Just 0) lines
             case parsePscOutput <$> json of
-              Just (Left e) -> err $ error e
-              Just (Right r) -> succ { errors: r, success: n == 0 }
-              Nothing -> err $ error "Didn't find JSON output"
-          _ -> err $ error "Process exited abnormally")
+              Just (Left e) -> cb $ Left $ error e
+              Just (Right r) -> cb $ Right $ { errors: r, success: n == 0 }
+              Nothing -> cb $ Left $ error "Didn't find JSON output"
+          _ -> cb $ Left $ error "Process exited abnormally")
+    pure mempty
 
 rebuild :: forall eff. Int -> String -> Aff (net :: NET | eff) BuildResult
 rebuild port file = do
