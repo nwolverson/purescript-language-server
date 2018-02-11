@@ -90,5 +90,26 @@ See [config defined in vscode plugin](https://github.com/nwolverson/vscode-ide-p
 
 ## Development
 
-See [vscode plugin](https://github.com/nwolverson/vscode-ide-purescript) repo. Common code via
+To develop (rather than use) this language server
+
+1. Clone this repo and `npm install`
+2. Make changes and `npm run build`
+3. Ensure the built module is picked up by your editor
+
+For 3, if the editor integrates using the node module rather than standalone binary, I suggest using `npm link` - this will work for atom and vscode at least.
+
+For atom, clone `atom-ide-purescript` and:
+
+1. In `purescript-language-server` run `npm link`, in `atom-ide-purescript` run `npm link purescript-language-server`
+2. In `atom-ide-purescript` run `apm link` to pick up local changes
+3. In `atom-ide-purescript`, run `npm run bundle` to build the plugin itself
+4. Reload any atom window to pick up changes
+
+For vscode, clone `atom-ide-purescript` and:
+
+1. In `purescript-language-server` run `npm link`, in `vscode-ide-purescript` run `npm link purescript-language-server`
+2. Open `vscode-ide-purescript` in vscode and hit F5 to "launch extension"
+3. Use the newly launched Extension Development Host to test language server changes
+
+See [vscode plugin](https://github.com/nwolverson/vscode-ide-purescript) repo, [atom plugin](https://github.com/nwolverson/atom-ide-purescript). Common code via
 [purescript-ide-purescript-core](https://github.com/nwolverson/purescript-ide-purescript-core).
