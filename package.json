@@ -18,7 +18,8 @@
   "main": "./server.js",
   "bin": "./cli.js",
   "scripts": {
-    "prepublish": "run-s build",
+    "prepare": "run-s install:* build",
+    "install:psc": "psc-package update",
     "build": "run-s build:*",
     "build:tsc": "tsc -p src/LanguageServer/",
     "build:server": "pulp --psc-package build --to server.js -m LanguageServer.IdePurescript.Main"
