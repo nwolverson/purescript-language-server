@@ -2,4 +2,5 @@ bower_components/
 node_modules/
 output/
 server.js
-.psc-package/
+.psc*
+yarn.lock
