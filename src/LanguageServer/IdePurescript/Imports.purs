@@ -7,10 +7,12 @@ import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Except (runExcept)
 import Data.Either (Either(..))
+import Data.Foldable (all)
 import Data.Foreign (Foreign, readString, toForeign)
 import Data.Maybe (Maybe(..))
+import Data.Newtype (unwrap)
 import Data.Nullable (toNullable)
-import IdePurescript.Modules (ImportResult(..), addExplicitImport, addModuleImport)
+import IdePurescript.Modules (ImportResult(..), addExplicitImport, addModuleImport, addQualifiedImport)
 import IdePurescript.PscIde (getAvailableModules)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.DocumentStore (getDocument)
@@ -28,11 +30,16 @@ addCompletionImport log docs config state args = do
   let shouldAddImport = autocompleteAddImport config
       ServerState { port, modules, conn } = state
   case port, (runExcept <<< readString) <$> args, shouldAddImport of
-    Just port', [ Right identifier, mod', qual', Right uri ], true -> do
+    Just port, [ Right identifier, mod, qual, Right uri ], true -> do
       doc <- liftEff $ getDocument docs (DocumentUri uri)
       version <- liftEff $ getVersion doc
       text <- liftEff $ getText doc
-      { state: modulesState', result } <- addExplicitImport modules port' uri text (hush mod') (hush qual') identifier
+      { state: modulesState', result } <-
+        case hush mod, hush qual of
+          Just mod', Just qual' | all (not (isSameQualified mod' qual') <<< unwrap) modules.modules ->
+            addQualifiedImport modules port uri text mod' qual'
+          mod', qual' ->
+            addExplicitImport modules port uri text mod' qual' identifier
       liftEff $ case result of
         UpdatedImports newText -> do
           let edit = makeMinimalWorkspaceEdit (DocumentUri uri) version text newText
@@ -52,6 +59,10 @@ addCompletionImport log docs config state args = do
     where
     successResult = toForeign $ toNullable Nothing
 
+    isSameQualified mod qual = case _ of
+      { moduleName: mod', qualifier: Just qual'} -> mod == mod' && qual == qual'
+      _ -> false
+
 
 addModuleImport' :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Foreign
 addModuleImport' log docs config state args = do
@@ -63,7 +74,7 @@ addModuleImport' log docs config state args = do
       text <- liftEff $ getText doc
       fileName <- liftEff $ uriToFilename $ DocumentUri uri
       res <- addModuleImport modules port' fileName text mod'
-      case res of 
+      case res of
         Just { result } -> do
           let edit = makeMinimalWorkspaceEdit (DocumentUri uri) version text result
           case conn, edit of
