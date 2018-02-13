@@ -5,12 +5,13 @@ import Prelude
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Except (runExcept)
-import Data.Array (intercalate, length, (!!))
+import Data.Array (intercalate, (!!))
 import Data.Either (Either(..), either)
 import Data.Foreign (Foreign, F, readInt, readString, toForeign)
 import Data.Foreign.Index ((!))
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (over)
+import Data.String (trim)
 import IdePurescript.PscIde (eitherToErr)
 import IdePurescript.PscIdeServer (Notify)
 import IdePurescript.Tokens (identifierAtPoint)
@@ -38,7 +39,6 @@ lineRange (pos@ Position { line, character }) = Range
 caseSplit :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Unit
 caseSplit docs settings state args = do
   let ServerState { port, conn } = state
-  liftEff $ maybe (pure unit) (\c -> log c $ show (length args) ) conn
   case port, conn, args of
     Just port', Just conn', [ argUri, argLine, argChar, argType ]
         | Right uri <- runExcept $ readString argUri
@@ -51,9 +51,8 @@ caseSplit docs settings state args = do
             version <- liftEff $ getVersion doc
             case identifierAtPoint lineText char of
                 Just { range: { left, right } } -> do
-                    liftEff $ log conn' $ "Case split: " <> lineText <> " / " <> show left <> " / " <> show right <> " / " <> tyStr
-                    lines <- eitherToErr $ P.caseSplit port' lineText left right true tyStr
-                    let edit = makeWorkspaceEdit (DocumentUri uri) version (lineRange' line char) (intercalate "\n" lines)
+                    lines <- eitherToErr $ P.caseSplit port' lineText left right false tyStr
+                    let edit = makeWorkspaceEdit (DocumentUri uri) version (lineRange' line char) $ intercalate "\n" $ map trim lines
                     liftEff $ applyEdit conn' edit
                 _ -> do liftEff $ log conn' "fail identifier"
                         pure unit
@@ -78,8 +77,8 @@ addClause docs settings state args = do
             version <- liftEff $ getVersion doc
             case identifierAtPoint lineText char of
                 Just { range: { left, right } } -> do
-                    lines <- eitherToErr $ P.addClause port' lineText true
-                    let edit = makeWorkspaceEdit (DocumentUri uri) version (lineRange' line char) (intercalate "\n" lines)
+                    lines <- eitherToErr $ P.addClause port' lineText false
+                    let edit = makeWorkspaceEdit (DocumentUri uri) version (lineRange' line char) $ intercalate "\n" $ map trim lines
                     liftEff $ applyEdit conn' edit
                 _ -> pure unit
             pure unit
