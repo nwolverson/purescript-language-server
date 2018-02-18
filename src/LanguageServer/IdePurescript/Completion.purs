@@ -4,11 +4,14 @@ import Prelude
 
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Class (liftEff)
+import Data.Array (filter)
 import Data.Array (length, null) as Arr
+import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toNullable)
-import Data.String (length)
+import Data.String (Pattern(..), indexOf, joinWith, length, split, toUpper)
+import Data.String.Utils (toCharArray)
 import IdePurescript.Completion (SuggestionResult(..), SuggestionType(..), getSuggestions)
 import IdePurescript.Modules (State, getAllActiveModules, getModuleFromUnknownQualifier, getModuleName, getQualModule, getUnqualActiveModules)
 import IdePurescript.PscIde (getLoadedModules)
@@ -16,7 +19,7 @@ import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (TextDocumentPositionParams)
 import LanguageServer.IdePurescript.Commands (addCompletionImport)
 import LanguageServer.IdePurescript.Config as Config
-import LanguageServer.IdePurescript.SuggestionRank (SuggestionRank)
+import LanguageServer.IdePurescript.SuggestionRank (Ranking(..))
 import LanguageServer.IdePurescript.SuggestionRank as SuggestionRank
 import LanguageServer.IdePurescript.Types (MainEff, ServerState)
 import LanguageServer.TextDocument (getTextAtRange)
@@ -83,18 +86,53 @@ getCompletions docs settings state ({ textDocument, position }) = do
           , documentation = toNullable $ Just $ exportText <> (fromMaybe "" documentation)
           , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri
           , textEdit = toNullable $ Just $ edit identifier prefix
-          , sortText = toNullable $ Just $ SuggestionRank.toString $ rankSuggestion (unwrap state).modules sugg
+          , sortText = toNullable $ Just $ SuggestionRank.toString $ unwrap rankSuggestion { state: (unwrap state).modules, suggestion: sugg }
           })
         where
         exportText = (if exportMod == origMod then origMod else exportMod <> " (re-exported from " <> origMod <> ")") <> "\n"
 
-rankSuggestion :: State -> SuggestionResult -> SuggestionRank
-rankSuggestion state = case _ of
-    IdentSuggestion { qualifier: Just qual, exportMod }
-        | Arr.null (getQualModule qual state) -> rankUnknownQualifiedSuggestion state qual exportMod
+rankSuggestion :: Ranking  { state :: State, suggestion :: SuggestionResult }
+rankSuggestion = Ranking case _ of
+    { state, suggestion: IdentSuggestion { qualifier: Just qualifier, exportMod } }
+        | Arr.null (getQualModule qualifier state) -> unwrap rankUnknownQualified { state, qualifier, mod: exportMod }
     _ -> bottom
 
-rankUnknownQualifiedSuggestion :: State -> String -> String -> SuggestionRank
-rankUnknownQualifiedSuggestion state qual exportMod
-    | Just mod <- getModuleFromUnknownQualifier qual state, getModuleName mod == exportMod = top
-    | otherwise = bottom
+rankUnknownQualified :: Ranking { state :: State, qualifier :: String, mod :: String }
+rankUnknownQualified =
+    rankQualifiedWithType
+    <> rankQualifiedWithSegment
+    <> rankQualifiedWithAbv
+
+rankQualifiedWithType :: Ranking { state :: State, qualifier :: String, mod :: String }
+rankQualifiedWithType = Ranking rank
+    where
+    rank opts
+        | Just mod <- getModuleFromUnknownQualifier opts.qualifier opts.state, getModuleName mod == opts.mod = top
+        | otherwise = bottom
+
+rankQualifiedWithSegment :: Ranking { state :: State, qualifier :: String, mod :: String }
+rankQualifiedWithSegment = Ranking \opts ->
+    split (Pattern ".") opts.mod
+        # foldMapWithIndex (\ix segment -> unwrap rankSegmentPrefix { ix, segment, prefix: opts.qualifier })
+
+rankSegmentPrefix :: Ranking { ix :: Int, segment :: String, prefix :: String }
+rankSegmentPrefix = Ranking \{ ix, segment, prefix } ->
+    case indexOf (Pattern prefix) segment of
+        Just 0 -> SuggestionRank.fromInt ((1 + ix) * (1 + (length segment - length prefix)))
+        _ -> bottom
+
+rankQualifiedWithAbv :: Ranking { state :: State, qualifier :: String, mod :: String }
+rankQualifiedWithAbv = Ranking \opts ->
+    if toUpper opts.qualifier == opts.qualifier
+        then unwrap rankModuleAbv { abv: opts.qualifier, mod: opts.mod }
+        else bottom
+
+rankModuleAbv :: Ranking { abv :: String, mod :: String }
+rankModuleAbv = Ranking \{ abv, mod } ->
+    let
+        modAbv = toCharArray mod
+            # filter (\ch -> ch /= "." && toUpper ch == ch)
+            # joinWith ""
+    in case indexOf (Pattern abv) modAbv of
+        Just ix -> SuggestionRank.fromInt ((1 + ix) * (1 + length modAbv - (length abv + ix)))
+        Nothing -> bottom
