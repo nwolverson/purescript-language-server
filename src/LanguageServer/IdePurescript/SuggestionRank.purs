@@ -3,6 +3,7 @@ module LanguageServer.IdePurescript.SuggestionRank
   , fromInt
   , toString
   , Ranking(..)
+  , cmapRanking
   ) where
 
 import Prelude
@@ -10,9 +11,9 @@ import Prelude
 import Data.Char as Char
 import Data.Enum (class Enum)
 import Data.Functor.Contravariant (class Contravariant)
-import Data.Maybe (Maybe(..))
-import Data.Monoid (class Monoid)
-import Data.Newtype (class Newtype)
+import Data.Maybe (Maybe(..), maybe)
+import Data.Monoid (class Monoid, mempty)
+import Data.Newtype (class Newtype, unwrap)
 import Data.Ordering (invert)
 import Data.String as String
 
@@ -25,14 +26,14 @@ instance ordSuggestionRank :: Ord SuggestionRank where
 
 instance boundedSuggestionRank :: Bounded SuggestionRank where
   top = SuggestionRank 0
-  bottom = SuggestionRank 100
+  bottom = SuggestionRank 25
 
 instance enumSuggestionRank :: Enum SuggestionRank where
   succ (SuggestionRank n)
     | n == 0    = Nothing
     | otherwise = Just (SuggestionRank (n - 1))
   pred (SuggestionRank n)
-    | n == 100  = Nothing
+    | n == 25  = Nothing
     | otherwise = Just (SuggestionRank (n + 1))
 
 instance semigroupSuggestionRank :: Semigroup SuggestionRank where
@@ -42,7 +43,7 @@ instance monoidSuggestionRank :: Monoid SuggestionRank where
   mempty = bottom
 
 fromInt :: Int -> SuggestionRank
-fromInt = SuggestionRank <<< clamp 0 100
+fromInt = SuggestionRank <<< clamp 0 25
 
 toString :: SuggestionRank -> String
 toString (SuggestionRank n) = String.singleton (Char.fromCharCode (65 + n))
@@ -60,3 +61,6 @@ instance monoidRanking :: Monoid (Ranking a) where
 
 instance contravariantRanking :: Contravariant Ranking where
   cmap f (Ranking g) = Ranking (f >>> g)
+
+cmapRanking :: forall a b. (b -> Maybe a) -> Ranking a -> Ranking b
+cmapRanking k r = Ranking (maybe mempty (unwrap r) <<< k)
