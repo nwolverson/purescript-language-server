@@ -8,9 +8,9 @@ import Data.Array (length) as Arr
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toNullable)
-import Data.String (length)
+import Data.String (length, singleton)
 import IdePurescript.Completion (SuggestionResult(..), SuggestionType(..), getSuggestions)
-import IdePurescript.Modules (getAllActiveModules, getQualModule, getUnqualActiveModules)
+import IdePurescript.Modules (State, getAllActiveModules, getModuleFromUnknownQualifier, getModuleName, getQualModule, getUnqualActiveModules)
 import IdePurescript.PscIde (getLoadedModules)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (TextDocumentPositionParams)
@@ -35,7 +35,7 @@ getCompletions docs settings state ({ textDocument, position }) = do
             usedModules <- if autoCompleteAllModules
                 then getLoadedModules port'
                 else pure $ getUnqualActiveModules modules Nothing
-            suggestions <- getSuggestions port' 
+            suggestions <- getSuggestions port'
                 { line
                 , moduleInfo: { modules: usedModules, getQualifiedModule, mainModule: modules.main, importedModules: getAllActiveModules modules }
                 , maxResults: Config.autocompleteLimit settings
@@ -50,7 +50,7 @@ getCompletions docs settings state ({ textDocument, position }) = do
         { items: arr
         , isIncomplete: Config.autocompleteLimit settings == Just (Arr.length arr)
         }
-    mkRange (pos@ Position { line, character }) = Range 
+    mkRange (pos@ Position { line, character }) = Range
         { start: pos # over Position (_ { character = 0 })
         , end: pos
         }
@@ -74,13 +74,21 @@ getCompletions docs settings state ({ textDocument, position }) = do
         # over CompletionItem (_
           { textEdit = toNullable $ Just $ edit text prefix
           })
-    convert uri (IdentSuggestion { origMod, exportMod, identifier, qualifier, suggestType, prefix, valueType, exportedFrom, documentation }) =
-        completionItem identifier (convertSuggest suggestType) 
+    convert uri sugg@(IdentSuggestion { origMod, exportMod, identifier, qualifier, suggestType, prefix, valueType, exportedFrom, documentation }) =
+        completionItem identifier (convertSuggest suggestType)
         # over CompletionItem (_
           { detail = toNullable $ Just valueType
           , documentation = toNullable $ Just $ exportText <> (fromMaybe "" documentation)
           , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri
           , textEdit = toNullable $ Just $ edit identifier prefix
+          , sortText = toNullable $ Just $ singleton $ rankSuggestion (unwrap state).modules sugg
           })
         where
         exportText = (if exportMod == origMod then origMod else exportMod <> " (re-exported from " <> origMod <> ")") <> "\n"
+
+rankSuggestion :: State -> SuggestionResult -> Char
+rankSuggestion state = case _ of
+    IdentSuggestion { qualifier: Just qual, exportMod }
+        | Just mod <- getModuleFromUnknownQualifier qual state
+        , getModuleName mod == exportMod -> 'a'
+    _ -> 'z'
