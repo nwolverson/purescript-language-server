@@ -4,11 +4,11 @@ import Prelude
 
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Class (liftEff)
-import Data.Array (length) as Arr
+import Data.Array (length, null) as Arr
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toNullable)
-import Data.String (length, singleton)
+import Data.String (length)
 import IdePurescript.Completion (SuggestionResult(..), SuggestionType(..), getSuggestions)
 import IdePurescript.Modules (State, getAllActiveModules, getModuleFromUnknownQualifier, getModuleName, getQualModule, getUnqualActiveModules)
 import IdePurescript.PscIde (getLoadedModules)
@@ -16,6 +16,8 @@ import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (TextDocumentPositionParams)
 import LanguageServer.IdePurescript.Commands (addCompletionImport)
 import LanguageServer.IdePurescript.Config as Config
+import LanguageServer.IdePurescript.SuggestionRank (SuggestionRank)
+import LanguageServer.IdePurescript.SuggestionRank as SuggestionRank
 import LanguageServer.IdePurescript.Types (MainEff, ServerState)
 import LanguageServer.TextDocument (getTextAtRange)
 import LanguageServer.Types (CompletionItem(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, CompletionItemList(..))
@@ -81,14 +83,18 @@ getCompletions docs settings state ({ textDocument, position }) = do
           , documentation = toNullable $ Just $ exportText <> (fromMaybe "" documentation)
           , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri
           , textEdit = toNullable $ Just $ edit identifier prefix
-          , sortText = toNullable $ Just $ singleton $ rankSuggestion (unwrap state).modules sugg
+          , sortText = toNullable $ Just $ SuggestionRank.toString $ rankSuggestion (unwrap state).modules sugg
           })
         where
         exportText = (if exportMod == origMod then origMod else exportMod <> " (re-exported from " <> origMod <> ")") <> "\n"
 
-rankSuggestion :: State -> SuggestionResult -> Char
+rankSuggestion :: State -> SuggestionResult -> SuggestionRank
 rankSuggestion state = case _ of
     IdentSuggestion { qualifier: Just qual, exportMod }
-        | Just mod <- getModuleFromUnknownQualifier qual state
-        , getModuleName mod == exportMod -> 'a'
-    _ -> 'z'
+        | Arr.null (getQualModule qual state) -> rankUnknownQualifiedSuggestion state qual exportMod
+    _ -> bottom
+
+rankUnknownQualifiedSuggestion :: State -> String -> String -> SuggestionRank
+rankUnknownQualifiedSuggestion state qual exportMod
+    | Just mod <- getModuleFromUnknownQualifier qual state, getModuleName mod == exportMod = top
+    | otherwise = bottom
