@@ -112,13 +112,13 @@ rankQualifiedWithType = Ranking \opts ->
 
 rankQualifiedWithSegment :: Ranking { state :: State, qualifier :: String, mod :: String }
 rankQualifiedWithSegment = Ranking \opts ->
-    split (Pattern ".") opts.mod
-        # foldMapWithIndex (\ix segment -> unwrap rankSegmentPrefix { ix, segment, prefix: opts.qualifier })
+    let segments = split (Pattern ".") opts.mod
+    in segments # foldMapWithIndex (\ix segment -> unwrap rankSegmentPrefix { len: Arr.length segments, ix, segment, prefix: opts.qualifier })
 
-rankSegmentPrefix :: Ranking { ix :: Int, segment :: String, prefix :: String }
-rankSegmentPrefix = Ranking \{ ix, segment, prefix } ->
+rankSegmentPrefix :: Ranking { len :: Int, ix :: Int, segment :: String, prefix :: String }
+rankSegmentPrefix = Ranking \{ len, ix, segment, prefix } ->
     case indexOf (Pattern prefix) segment of
-        Just 0 -> SuggestionRank.fromInt ((1 + ix) * (1 + (length segment - length prefix)))
+        Just 0 -> SuggestionRank.fromInt $ (1 + ix) * (1 + (length segment - length prefix)) + (len - ix)
         _ -> bottom
 
 rankQualifiedWithAbv :: Ranking { state :: State, qualifier :: String, mod :: String }
