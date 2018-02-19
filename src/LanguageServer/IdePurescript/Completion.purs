@@ -10,7 +10,7 @@ import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toNullable)
-import Data.String (Pattern(..), indexOf, joinWith, length, split, toUpper)
+import Data.String (Pattern(..), Replacement(..), indexOf, joinWith, length, replaceAll, split, toUpper)
 import Data.String.Utils (toCharArray)
 import IdePurescript.Completion (SuggestionResult(..), SuggestionType(..), getSuggestions)
 import IdePurescript.Modules (State, getAllActiveModules, getModuleFromUnknownQualifier, getModuleName, getQualModule, getUnqualActiveModules)
@@ -103,6 +103,7 @@ rankUnknownQualified =
     rankQualifiedWithType
     <> rankQualifiedWithSegment
     <> rankQualifiedWithAbv
+    <> rankQualifiedWithConcat
 
 rankQualifiedWithType :: Ranking { state :: State, qualifier :: String, mod :: String }
 rankQualifiedWithType = Ranking \opts ->
@@ -128,11 +129,22 @@ rankQualifiedWithAbv = flip cmapRanking rankModuleAbv \opts ->
         else Nothing
 
 rankModuleAbv :: Ranking { abv :: String, mod :: String }
-rankModuleAbv = Ranking \{ abv, mod } ->
+rankModuleAbv = flip cmapRanking rankSub \{ abv, mod } ->
     let
-        modAbv = toCharArray mod
-            # filter (\ch -> ch /= "." && toUpper ch == ch)
+        modAbv = mod
+            # replaceAll (Pattern ".") (Replacement "")
+            # toCharArray
+            # filter (\ch -> toUpper ch == ch)
             # joinWith ""
-    in case indexOf (Pattern abv) modAbv of
-        Just ix -> SuggestionRank.fromInt ((1 + ix) * (1 + length modAbv - (length abv + ix)))
+    in
+        Just { sub: abv, str: modAbv }
+
+rankQualifiedWithConcat :: Ranking { state :: State, qualifier :: String, mod :: String }
+rankQualifiedWithConcat = flip cmapRanking rankSub \opts ->
+    Just { sub: opts.qualifier, str: replaceAll (Pattern ".") (Replacement "") opts.mod }
+
+rankSub :: Ranking { sub :: String, str :: String }
+rankSub = Ranking \{ sub, str } ->
+    case indexOf (Pattern sub) str of
+        Just ix -> SuggestionRank.fromInt ((1 + ix) * (1 + length sub - (length str + ix)))
         Nothing -> bottom
