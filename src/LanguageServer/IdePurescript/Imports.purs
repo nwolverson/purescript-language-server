@@ -66,6 +66,8 @@ addCompletionImport log docs config state args = do
       { moduleName: mod', qualifier: Just qual'} -> mod == mod' && qual == qual'
       _ -> false
 
+    -- addModuleImport discards the result data type and wraps it in Maybe. We
+    -- need to add it back for the types to unify.
     addOpenImport modules port uri text mod =
       addModuleImport modules port uri text mod <#> case _ of
         Just r -> r { result = UpdatedImports r.result }
