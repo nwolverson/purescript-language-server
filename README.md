@@ -105,7 +105,7 @@ For atom, clone `atom-ide-purescript` and:
 3. In `atom-ide-purescript`, run `npm run bundle` to build the plugin itself
 4. Reload any atom window to pick up changes
 
-For vscode, clone `atom-ide-purescript` and:
+For vscode, clone `vscode-ide-purescript` and:
 
 1. In `purescript-language-server` run `npm link`, in `vscode-ide-purescript` run `npm link purescript-language-server`
 2. Open `vscode-ide-purescript` in vscode and hit F5 to "launch extension"
