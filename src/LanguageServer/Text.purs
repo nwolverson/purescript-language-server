@@ -40,8 +40,10 @@ makeMinimalWorkspaceEdit uri version oldText newText =
 
   in case firstDiff, lastDiff of
       Just n, Just m
-        | oldLen - m >= n && newLen - m >= n
-          -> e (range oldLines n m) (joinWith "\n" (lines newLines n m) <> if null newLines then "" else "\n")
+        | newLen - m >= n
+          -> 
+          let m' = min m (oldLen - n) in
+          e (range oldLines n m') (joinWith "\n" (lines newLines n m') <> if null newLines then "" else "\n")
       Nothing, Nothing
         | oldLen == newLen -> Nothing
       _, _ -> e (range oldLines 0 0) newText
