@@ -17,7 +17,7 @@ import IdePurescript.PscIde (getAvailableModules)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (applyEdit)
-import LanguageServer.IdePurescript.Config (autocompleteAddImport)
+import LanguageServer.IdePurescript.Config (autocompleteAddImport, preludeModule)
 import LanguageServer.IdePurescript.Types (MainEff, ServerState(..))
 import LanguageServer.Text (makeMinimalWorkspaceEdit)
 import LanguageServer.TextDocument (getText, getVersion)
@@ -28,6 +28,7 @@ import PscIde.Command as C
 addCompletionImport :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Foreign
 addCompletionImport log docs config state args = do
   let shouldAddImport = autocompleteAddImport config
+      prelude = preludeModule config
       ServerState { port, modules, conn } = state
   case port, (runExcept <<< readString) <$> args, shouldAddImport of
     Just port, [ Right identifier, mod, qual, Right uri ], true -> do
@@ -38,6 +39,8 @@ addCompletionImport log docs config state args = do
         case hush mod, hush qual of
           Just mod', Just qual' | all (not (isSameQualified mod' qual') <<< unwrap) modules.modules ->
             addQualifiedImport modules port uri text mod' qual'
+          Just mod', Nothing | mod' == prelude -> do
+            addOpenImport modules port uri text mod'
           mod', qual' ->
             addExplicitImport modules port uri text mod' qual' identifier
       liftEff $ case result of
@@ -62,6 +65,13 @@ addCompletionImport log docs config state args = do
     isSameQualified mod qual = case _ of
       { moduleName: mod', qualifier: Just qual'} -> mod == mod' && qual == qual'
       _ -> false
+
+    -- addModuleImport discards the result data type and wraps it in Maybe. We
+    -- need to add it back for the types to unify.
+    addOpenImport modules port uri text mod =
+      addModuleImport modules port uri text mod <#> case _ of
+        Just r -> r { result = UpdatedImports r.result }
+        Nothing -> { state: modules, result: FailedImport }
 
 
 addModuleImport' :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Foreign
