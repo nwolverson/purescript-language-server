@@ -21,6 +21,11 @@ type MarkedString = { language :: String, value :: String }
 markedString :: String -> MarkedString
 markedString s = { language: "purescript", value: s }
 
+type MarkupContent = {kind :: String, value :: String}
+
+markupContent :: String -> MarkupContent
+markupContent s = {kind: "markdown", value: s} 
+
 derive instance newtypeDocumentUri :: Newtype DocumentUri _
 
 newtype DocumentUri = DocumentUri String
@@ -69,7 +74,7 @@ newtype CompletionItem = CompletionItem
     { label :: String
     , kind :: Nullable Int
     , detail :: Nullable String
-    , documentation :: Nullable String
+    , documentation :: Nullable MarkupContent
     , sortText :: Nullable String
     , filterText :: Nullable String
     , insertText :: Nullable String

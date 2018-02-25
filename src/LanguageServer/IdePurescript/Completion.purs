@@ -23,7 +23,7 @@ import LanguageServer.IdePurescript.SuggestionRank (Ranking(..), cmapRanking)
 import LanguageServer.IdePurescript.SuggestionRank as SuggestionRank
 import LanguageServer.IdePurescript.Types (MainEff, ServerState)
 import LanguageServer.TextDocument (getTextAtRange)
-import LanguageServer.Types (CompletionItem(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, CompletionItemList(..))
+import LanguageServer.Types (CompletionItem(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, CompletionItemList(..), markupContent)
 import LanguageServer.Types as LS
 
 getCompletions :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> TextDocumentPositionParams -> Aff (MainEff eff) CompletionItemList
@@ -83,13 +83,13 @@ getCompletions docs settings state ({ textDocument, position }) = do
         completionItem identifier (convertSuggest suggestType)
         # over CompletionItem (_
           { detail = toNullable $ Just valueType
-          , documentation = toNullable $ Just $ exportText <> (fromMaybe "" documentation)
+          , documentation = toNullable $ Just $ markupContent $ (fromMaybe "" documentation) <> exportText
           , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri
           , textEdit = toNullable $ Just $ edit identifier prefix
           , sortText = toNullable $ Just $ rankText <> "." <> identifier
           })
         where
-        exportText = (if exportMod == origMod then origMod else exportMod <> " (re-exported from " <> origMod <> ")") <> "\n"
+        exportText = "\n*From: " <> (if exportMod == origMod then origMod else exportMod <> " (re-exported from " <> origMod <> ")") <> "*"
         rankText = SuggestionRank.toString $ unwrap rankSuggestion { state: (unwrap state).modules, suggestion: sugg }
 
 rankSuggestion :: Ranking  { state :: State, suggestion :: SuggestionResult }
