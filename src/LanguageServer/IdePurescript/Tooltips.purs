@@ -19,7 +19,7 @@ import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (TextDocumentPositionParams)
 import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
 import LanguageServer.TextDocument (getTextAtRange)
-import LanguageServer.Types (DocumentStore, Hover(..), Position(..), Range(..), Settings, TextDocumentIdentifier(..), markedString)
+import LanguageServer.Types (DocumentStore, Hover(Hover), Position(Position), Range(Range), Settings, TextDocumentIdentifier(TextDocumentIdentifier), markupContent)
 import PscIde.Command as C
 
 moduleBeforePart :: String
@@ -58,7 +58,7 @@ getTooltips docs settings state ({ textDocument, position }) = do
       pure $ toNullable $ case uncons mod of 
         Just { head } -> 
           Just $ Hover {
-            contents: { language: "text", value: head }
+            contents: markupContent head
           , range: toNullable $ Just $ wordRange position range
           }
         _ -> Nothing
@@ -68,14 +68,15 @@ getTooltips docs settings state ({ textDocument, position }) = do
     _, _, _-> pure $ toNullable Nothing
 
   where
-
-  convertInfo word (C.TypeInfo { type', expandedType }) = Hover
+ 
+  convertInfo word (C.TypeInfo { type', expandedType, documentation }) = Hover 
     {
-      contents: markedString $ compactTypeStr <> 
-        if showExpanded then "\n" <> expandedTypeStr else ""
+      contents: 
+        markupContent $ typeStr <> "\n" <> (fromMaybe "" documentation)
     , range: toNullable $ Nothing
     }
     where
+      typeStr = "```purescript\n" <> compactTypeStr <> (if showExpanded then "\n" <> expandedTypeStr else "") <> "\n```"
       showExpanded = isJust expandedType && (expandedType /= Just type')
       compactTypeStr = word <> " :: " <> type'
       expandedTypeStr = word <> " :: " <> (fromMaybe "" expandedType)

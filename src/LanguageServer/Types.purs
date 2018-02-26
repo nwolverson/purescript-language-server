@@ -198,7 +198,7 @@ symbolKindToInt = case _ of
   BooleanSymbolKind -> 17
   ArraySymbolKind -> 18
  
-newtype Hover = Hover { contents :: MarkedString, range :: Nullable Range }
+newtype Hover = Hover { contents :: MarkupContent, range :: Nullable Range }
 
 newtype Command = Command { title :: String, command :: String, arguments :: Nullable (Array Foreign) }
 
