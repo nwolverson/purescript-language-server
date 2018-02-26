@@ -19,6 +19,7 @@ import IdePurescript.PscErrors (PscError(..), PscResult)
 import IdePurescript.PscErrors as PscErrors
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.IdePurescript.Config (addNpmPath, buildCommand, censorCodes)
+import LanguageServer.IdePurescript.Server (loadAll)
 import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
 import LanguageServer.Types (Diagnostic(Diagnostic), DocumentStore, DocumentUri, Position(Position), Range(Range), Settings)
 import LanguageServer.Uri (uriToFilename)
@@ -79,14 +80,16 @@ censorWarnings settings = filter (flip notElem codes <<< getCode)
     codes = censorCodes settings
       
 fullBuild :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) DiagnosticResult
-fullBuild logCb _ settings (ServerState { conn, root }) _ = do
+fullBuild logCb _ settings state _ = do
   let command = buildCommand settings
   let buildCommand = either (const []) (\reg -> (split reg <<< trim) command) (regex "\\s+" noFlags)
-  case conn, root, uncons buildCommand of
-    Just conn', Just directory, Just { head: cmd, tail: args } -> do
+  case state, uncons buildCommand of
+    ServerState { port: Just port, conn: Just conn, root: Just directory }, Just { head: cmd, tail: args } -> do
       res <- build logCb { command: Command cmd args, directory, useNpmDir: addNpmPath settings }
       liftEff $ logCb Info "Build complete"
+      loadAll port
+      liftEff $ logCb Info "Reloaded modules"
       pure $ convertDiagnostics directory settings res.errors
-    _, _, _ -> do
+    _, _ -> do
       liftEff $ logCb Error "Error parsing build command"
       pure emptyDiagnostics
