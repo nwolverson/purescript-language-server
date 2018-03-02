@@ -5,7 +5,7 @@ import Prelude
 import Data.Array (findIndex, last, length, null, reverse, slice, zip)
 import Data.Either (either)
 import Data.Maybe (Maybe(..))
-import Data.String (Pattern(..), joinWith, split)
+import Data.String (joinWith)
 import Data.String.Regex (regex)
 import Data.String.Regex as Regex
 import Data.String.Regex.Flags (noFlags)

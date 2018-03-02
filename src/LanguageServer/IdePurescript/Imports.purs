@@ -26,10 +26,9 @@ import LanguageServer.Uri (uriToFilename)
 import PscIde.Command as C
 
 addCompletionImport :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Foreign
-addCompletionImport log docs config state args = do
+addCompletionImport log docs config state@(ServerState { port, modules, conn }) args = do
   let shouldAddImport = autocompleteAddImport config
       prelude = preludeModule config
-      ServerState { port, modules, conn } = state
   case port, (runExcept <<< readString) <$> args, shouldAddImport of
     Just port, [ Right identifier, mod, qual, Right uri ], true -> do
       doc <- liftEff $ getDocument docs (DocumentUri uri)
@@ -37,9 +36,9 @@ addCompletionImport log docs config state args = do
       text <- liftEff $ getText doc
       { state: modulesState', result } <-
         case hush mod, hush qual of
-          Just mod', Just qual' | all (not (isSameQualified mod' qual') <<< unwrap) modules.modules ->
+          Just mod', Just qual' | noModule (isSameQualified mod' qual') ->
             addQualifiedImport modules port uri text mod' qual'
-          Just mod', Nothing | mod' == prelude -> do
+          Just mod', Nothing | mod' == prelude && noModule (isSameUnqualified prelude) ->
             addOpenImport modules port uri text mod'
           mod', qual' ->
             addExplicitImport modules port uri text mod' qual' identifier
@@ -62,8 +61,13 @@ addCompletionImport log docs config state args = do
     where
     successResult = toForeign $ toNullable Nothing
 
+    noModule f = all (not f <<< unwrap) modules.modules
     isSameQualified mod qual = case _ of
       { moduleName: mod', qualifier: Just qual'} -> mod == mod' && qual == qual'
+      _ -> false
+
+    isSameUnqualified mod = case _ of
+      { moduleName, qualifier: Nothing } -> mod == moduleName
       _ -> false
 
     -- addModuleImport discards the result data type and wraps it in Maybe. We

@@ -43,7 +43,6 @@ import LanguageServer.TextDocument (getText, getUri)
 import LanguageServer.Types (Diagnostic, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
 import LanguageServer.Uri (filenameToUri, uriToFilename)
 import Node.Process (argv, cwd)
-import PscIde (load)
 
 defaultServerState :: forall eff. ServerState eff
 defaultServerState = ServerState
