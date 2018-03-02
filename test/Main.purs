@@ -49,3 +49,12 @@ main = runTest do
     test "last line changed" do
       let edit = makeMinimalWorkspaceEdit (DocumentUri "uri") 1.0 "A\nB\nC\n" "A\nB\nX\n"
       Assert.equal (Just [ mkEdit 2 3 "X\n"]) (getEdit <$> edit)
+
+    test "CRLF" do
+      let edit = makeMinimalWorkspaceEdit (DocumentUri "uri") 1.0 "A\r\nC\r\n" "A\r\nB\r\nC\r\n"
+      Assert.equal (Just [ mkEdit 1 1 "B\n"]) (getEdit <$> edit)
+
+    test "CRLF old-only" do
+      -- If I have a CRLF file for some reason but IDE server gives me back LF
+      let edit = makeMinimalWorkspaceEdit (DocumentUri "uri") 1.0 "A\r\nC\r\n" "A\nB\nC\n"
+      Assert.equal (Just [ mkEdit 1 1 "B\n"]) (getEdit <$> edit)
