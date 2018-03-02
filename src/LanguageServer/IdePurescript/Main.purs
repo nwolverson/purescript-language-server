@@ -34,7 +34,7 @@ import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config (fastRebuild)
 import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules)
 import LanguageServer.IdePurescript.Search (search)
-import LanguageServer.IdePurescript.Server (retry, startServer')
+import LanguageServer.IdePurescript.Server (loadAll, retry, startServer')
 import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, getWorkspaceSymbols)
 import LanguageServer.IdePurescript.Tooltips (getTooltips)
 import LanguageServer.IdePurescript.Types (ServerState(..), MainEff, CommandHandler)
@@ -43,7 +43,6 @@ import LanguageServer.TextDocument (getText, getUri)
 import LanguageServer.Types (Diagnostic, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
 import LanguageServer.Uri (filenameToUri, uriToFilename)
 import Node.Process (argv, cwd)
-import PscIde (load)
 
 defaultServerState :: forall eff. ServerState eff
 defaultServerState = ServerState
@@ -93,7 +92,7 @@ main = do
         startRes <- startServer' settings rootPath logError logError
         retry logError 6 case startRes of
           { port: Just port, quit } -> do
-            _ <- load port [] []
+            loadAll port
             liftEff $ modifyRef state (over ServerState $ _ { port = Just port, deactivate = quit })
             liftEff $ logError Success "Started IDE server"
           _ -> pure unit

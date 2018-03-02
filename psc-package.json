@@ -3,9 +3,10 @@
     "set": "ide-0.12-dev-9",
     "source": "https://github.com/nwolverson/package-sets.git",
     "depends": [
-      "aff-promise",
-      "errors",
-      "foreign-generic",
-      "ide-purescript-core"
+        "test-unit",
+        "aff-promise",
+        "errors",
+        "foreign-generic",
+        "ide-purescript-core"
     ]
 }

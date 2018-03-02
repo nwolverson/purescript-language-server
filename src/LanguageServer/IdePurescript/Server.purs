@@ -2,7 +2,7 @@ module LanguageServer.IdePurescript.Server where
 
 import Prelude
 
-import Control.Monad.Aff (Aff, attempt, delay, makeAff)
+import Control.Monad.Aff (Aff, apathize, attempt, delay, makeAff)
 import Control.Monad.Eff.Class (liftEff)
 import Data.Array (filter, head)
 import Data.Either (Either(..))
@@ -19,7 +19,11 @@ import LanguageServer.Types (Settings)
 import Node.Buffer (toString)
 import Node.ChildProcess (defaultExecOptions, execFile)
 import Node.Encoding (Encoding(..))
+import PscIde (NET, load)
 import PscIde.Server (Executable(..))
+
+loadAll :: forall e. Int -> Aff (net :: NET | e) Unit
+loadAll port = apathize $ load port [] []
 
 retry :: forall eff. (Notify eff) -> Int -> Aff eff Unit -> Aff eff Unit
 retry logError n a | n > 0 = do

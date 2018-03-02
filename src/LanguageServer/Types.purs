@@ -35,8 +35,7 @@ derive newtype instance eqDocumentUri :: Eq DocumentUri
 newtype Position = Position { line :: Int, character :: Int }
 
 instance eqPosition :: Eq Position where
-  eq (Position { line, character }) (Position { line: line', character: character' }) =
-    line == line' && character == character'
+  eq (Position { line, character }) (Position { line: line', character: character'}) = line == line' && character == character'
 
 instance positionOrd :: Ord Position where
   compare (Position { line: line, character: character }) (Position { line: line', character: character' })
@@ -51,6 +50,9 @@ instance showPosition :: Show Position where
   show (Position { line, character }) = "Position(" <> show line <> "," <> show character <> ")"
 
 newtype Range = Range { start :: Position, end :: Position }
+
+instance eqRange :: Eq Range where
+  eq (Range {start, end}) (Range {start: start', end: end'}) = start == start' && end == end'
 
 instance showRange :: Show Range where
   show (Range { start, end }) = "Range(" <> show start <> "," <> show end <> ")"
@@ -205,6 +207,14 @@ newtype Command = Command { title :: String, command :: String, arguments :: Nul
 derive instance newtypeCommand :: Newtype Command _
 
 newtype TextEdit = TextEdit { range :: Range, newText :: String }
+
+derive instance newtypeTextEdit :: Newtype TextEdit _
+
+instance eqTextEdit :: Eq TextEdit where
+  eq (TextEdit {range, newText}) (TextEdit {range: range', newText: newText'}) = range == range' && newText == newText'
+
+instance showTextEdit :: Show TextEdit where
+  show (TextEdit {range, newText}) = ("TextEdit(" <> show range <> ", " <> show newText <> ")")
 
 newtype WorkspaceEdit = WorkspaceEdit
   { documentChanges :: Nullable (Array TextDocumentEdit)

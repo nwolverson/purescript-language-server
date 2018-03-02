@@ -3,8 +3,12 @@ module LanguageServer.Text where
 import Prelude
 
 import Data.Array (findIndex, last, length, null, reverse, slice, zip)
+import Data.Either (either)
 import Data.Maybe (Maybe(..))
-import Data.String (Pattern(..), joinWith, split)
+import Data.String (joinWith)
+import Data.String.Regex (regex)
+import Data.String.Regex as Regex
+import Data.String.Regex.Flags (noFlags)
 import Data.Tuple (uncurry)
 import LanguageServer.Types (DocumentUri, Position(..), Range(..), TextDocumentEdit(..), TextDocumentIdentifier(..), TextEdit(..), WorkspaceEdit, workspaceEdit)
 
@@ -19,17 +23,18 @@ makeWorkspaceEdit uri version range newText = workspaceEdit [ edit ]
 -- | In particular the scenario of inserting text in the middle AC -> ABC becomes an edit of B only.
 makeMinimalWorkspaceEdit :: DocumentUri -> Number -> String -> String -> Maybe WorkspaceEdit
 makeMinimalWorkspaceEdit uri version oldText newText =
-  let newLines = split (Pattern "\n") newText
-      oldLines = case split (Pattern "\n") oldText of
+  let splitLines t = either (const [t]) (\r -> Regex.split r t) $ regex "\r?\n" noFlags
+      newLines = splitLines newText
+      oldLines = case splitLines oldText of
         -- Add imports adds a newline to the end of the file always, giving bad diffs
         xs | last xs /= Just "" && last newLines == Just "" -> xs <> [""]
         xs -> xs
 
       range text l1 l2 = Range
         { start: Position { line: l1, character: 0 },
-          end: Position { line: length text - l2 + 1, character: 0 }
+          end: Position { line: length text - l2 , character: 0 }
         }
-      lines text l1 l2 = slice l1 (length text - l2 + 1) text
+      lines text l1 l2 = slice l1 (length text - l2 ) text
 
       firstDiff = findIndex (uncurry (/=)) (zip oldLines newLines)
       lastDiff = findIndex (uncurry (/=)) (zip (reverse oldLines) (reverse newLines))
