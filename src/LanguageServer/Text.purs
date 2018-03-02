@@ -27,9 +27,9 @@ makeMinimalWorkspaceEdit uri version oldText newText =
 
       range text l1 l2 = Range
         { start: Position { line: l1, character: 0 },
-          end: Position { line: length text - l2 + 1, character: 0 }
+          end: Position { line: length text - l2 , character: 0 }
         }
-      lines text l1 l2 = slice l1 (length text - l2 + 1) text
+      lines text l1 l2 = slice l1 (length text - l2 ) text
 
       firstDiff = findIndex (uncurry (/=)) (zip oldLines newLines)
       lastDiff = findIndex (uncurry (/=)) (zip (reverse oldLines) (reverse newLines))
