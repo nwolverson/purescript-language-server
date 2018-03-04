@@ -3,7 +3,6 @@ module Test.Main where
 import Prelude
 
 import Data.Array (concat)
-import Data.Lens.Lens.Product (_1)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Nullable (toMaybe)
 import LanguageServer.Text (makeMinimalWorkspaceEdit)
@@ -12,7 +11,7 @@ import Test.Unit (suite, test)
 import Test.Unit.Assert as Assert
 import Test.Unit.Main (runTest)
 
-getEdit :: WorkspaceEdit -> Array  _
+getEdit :: WorkspaceEdit -> Array TextEdit
 getEdit (WorkspaceEdit {documentChanges}) = concat $ map go $ changes
   where
   go (TextDocumentEdit {edits}) = edits
