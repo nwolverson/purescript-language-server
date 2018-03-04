@@ -12,9 +12,13 @@ import Data.Foreign.Index ((!))
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (un)
 import Data.StrMap (lookup)
+import Data.String (null, trim)
+import Data.String.Regex (regex)
+import Data.String.Regex.Flags (global, noFlags)
 import Data.Traversable (traverse)
 import IdePurescript.PscErrors (PscError(..))
 import IdePurescript.QuickFix (getReplacement, getTitle, isUnknownToken)
+import IdePurescript.Regex (replace', test')
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.IdePurescript.Build (positionToRange)
@@ -70,6 +74,13 @@ afterEnd (Range { end: end@(Position { line, character }) }) =
     , end: Position { line, character: character + 10 }
     }
 
+toNextLine :: Range -> Range
+toNextLine (Range { start, end: end@(Position { line, character }) }) = 
+  Range
+    { start
+    , end: Position { line: line+1, character: 0 }
+    }
+
 onReplaceSuggestion :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Unit
 onReplaceSuggestion docs config (ServerState { conn }) args =
   case conn, args of 
@@ -81,10 +92,25 @@ onReplaceSuggestion docs config (ServerState { conn }) args =
         doc <- getDocument docs (DocumentUri uri)
         version <- getVersion doc
         origText <- getTextAtRange doc range
-        afterText <- getTextAtRange doc (afterEnd range)
+        afterText <- replace' (regex "\n$" noFlags) "" <$> getTextAtRange doc (afterEnd range)
 
-        let edit = makeWorkspaceEdit (DocumentUri uri) version range $ getReplacement replacement afterText
+        let newText = getReplacement replacement afterText
+        
+        let range' = if newText == "" && afterText == "" then
+                      toNextLine range
+                     else
+                      range
+        let edit = makeWorkspaceEdit (DocumentUri uri) version range' newText
 
         -- TODO: Check original & expected text ?
         applyEdit conn' edit
     _, _ -> pure unit
+  where
+    -- | Modify suggestion replacement text, removing extraneous newlines
+    getReplacement :: String -> String -> String
+    getReplacement replacement extraText =
+      (trim $ replace' (regex "\\s+\n" global) "\n" replacement)
+      <> if addNewline then "\n" else ""
+      where
+      trailingNewline = test' (regex "\n\\s+$" noFlags) replacement
+      addNewline = trailingNewline && (not $ null extraText)
