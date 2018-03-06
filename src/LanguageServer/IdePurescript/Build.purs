@@ -14,9 +14,8 @@ import Data.String (trim)
 import Data.String.Regex (regex, split)
 import Data.String.Regex.Flags (noFlags)
 import Data.Tuple (Tuple(..))
-import IdePurescript.Build (Command(..), build, rebuild)
-import IdePurescript.PscErrors (PscError(..), PscResult)
-import IdePurescript.PscErrors as PscErrors
+import IdePurescript.Build (Command(Command), build, rebuild)
+import IdePurescript.PscErrors (PscResult(..))
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.IdePurescript.Config (addNpmPath, buildCommand, censorCodes)
 import LanguageServer.IdePurescript.Server (loadAll)
@@ -24,13 +23,15 @@ import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
 import LanguageServer.Types (Diagnostic(Diagnostic), DocumentStore, DocumentUri, Position(Position), Range(Range), Settings)
 import LanguageServer.Uri (uriToFilename)
 import Node.Path (resolve)
+import PscIde.Command (RebuildError(RebuildError))
+import PscIde.Command as PC
 
-positionToRange :: PscErrors.Position -> Range
+positionToRange :: PC.RangePosition -> Range
 positionToRange ({ startLine, startColumn, endLine, endColumn}) =
   Range { start: Position { line: startLine-1, character: startColumn-1 }
         , end:   Position { line: endLine-1, character: endColumn-1 } }
 
-type DiagnosticResult = { pscErrors :: Array PscError, diagnostics :: StrMap (Array Diagnostic) }
+type DiagnosticResult = { pscErrors :: Array RebuildError, diagnostics :: StrMap (Array Diagnostic) }
 
 emptyDiagnostics :: DiagnosticResult
 emptyDiagnostics = { pscErrors: [], diagnostics: empty }
@@ -42,7 +43,7 @@ collectByFirst x = fromFoldableWith (<>) $ mapMaybe f x
   f _ = Nothing
 
 convertDiagnostics :: String -> Settings -> PscResult -> DiagnosticResult
-convertDiagnostics projectRoot settings { warnings, errors } =
+convertDiagnostics projectRoot settings (PscResult { warnings, errors }) =
   { diagnostics
   , pscErrors: errors <> warnings'
   }
@@ -54,7 +55,7 @@ convertDiagnostics projectRoot settings { warnings, errors } =
   dummyRange = 
       Range { start: Position { line: 1, character: 1 }
             , end:   Position { line: 1, character: 1 } }
-  convertDiagnostic isError (PscError { errorCode, position, message, filename }) = Tuple 
+  convertDiagnostic isError (RebuildError { errorCode, position, message, filename }) = Tuple 
     (resolve [ projectRoot ] <$> filename)
     (Diagnostic
       { range: maybe dummyRange positionToRange position
@@ -73,10 +74,10 @@ getDiagnostics uri settings state = do
       pure $ convertDiagnostics root settings errors
     _ -> pure emptyDiagnostics
 
-censorWarnings :: Settings -> Array PscError -> Array PscError
+censorWarnings :: Settings -> Array RebuildError -> Array RebuildError
 censorWarnings settings = filter (flip notElem codes <<< getCode)
   where
-    getCode (PscError { errorCode }) = errorCode
+    getCode (RebuildError { errorCode }) = errorCode
     codes = censorCodes settings
       
 fullBuild :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) DiagnosticResult

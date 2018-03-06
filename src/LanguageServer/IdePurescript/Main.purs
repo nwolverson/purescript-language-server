@@ -21,7 +21,6 @@ import Data.StrMap (StrMap, empty, fromFoldable, insert, lookup, toUnfoldable, k
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import IdePurescript.Modules (Module, getModulesForFileTemp, initialModulesState)
-import IdePurescript.PscErrors (PscError(..))
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.Console (error, info, log, warn)
 import LanguageServer.DocumentStore (getDocument, onDidChangeContent, onDidSaveDocument)
@@ -43,6 +42,7 @@ import LanguageServer.TextDocument (getText, getUri)
 import LanguageServer.Types (Diagnostic, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
 import LanguageServer.Uri (filenameToUri, uriToFilename)
 import Node.Process (argv, cwd)
+import PscIde.Command (RebuildError(..))
 
 defaultServerState :: forall eff. ServerState eff
 defaultServerState = ServerState
@@ -191,7 +191,7 @@ main = do
         { pscErrors, diagnostics } <- fullBuild logError docs c s arguments
         liftEff do
           log conn $ "Built with " <> (show $ length pscErrors) <> " issues"
-          pscErrorsMap <- collectByFirst <$> traverse (\(e@PscError { filename }) -> do
+          pscErrorsMap <- collectByFirst <$> traverse (\(e@RebuildError { filename }) -> do
             uri <- maybe (pure Nothing) (\f -> Just <$> un DocumentUri <$> filenameToUri f) filename
             pure $ Tuple uri e)
               pscErrors

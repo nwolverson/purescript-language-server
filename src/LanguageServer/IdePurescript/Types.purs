@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.Types where
 
 import Prelude
+
 import Control.Monad.Aff (Aff)
 import Control.Monad.Aff.AVar (AVAR)
 import Control.Monad.Eff.Console (CONSOLE)
@@ -12,13 +13,13 @@ import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 import Data.StrMap (StrMap)
 import IdePurescript.Modules (State)
-import IdePurescript.PscErrors (PscError)
 import LanguageServer.Types (CONN, Connection, DocumentStore, DocumentUri, Settings)
 import Node.Buffer (BUFFER)
 import Node.ChildProcess (CHILD_PROCESS)
 import Node.FS (FS)
 import Node.Process (PROCESS)
 import PscIde (NET)
+import PscIde.Command (RebuildError)
 
 type MainEff eff =
     ( process :: PROCESS
@@ -40,7 +41,7 @@ newtype ServerState eff = ServerState
   , conn :: Maybe Connection
   , modules :: State
   , modulesFile :: Maybe DocumentUri
-  , diagnostics :: StrMap (Array PscError)
+  , diagnostics :: StrMap (Array RebuildError)
   }
 
 derive instance newtypeServerState :: Newtype (ServerState eff) _

@@ -9,7 +9,7 @@ import Control.Monad.Eff.Exception (EXCEPTION, error, catchException)
 import Control.Monad.Eff.Ref (readRef, REF, modifyRef, newRef)
 import Control.Monad.Eff.Unsafe (unsafeCoerceEff)
 import Control.Monad.Error.Class (throwError)
-import Data.Array (uncons, singleton)
+import Data.Array (uncons)
 import Data.Bifunctor (bimap)
 import Data.Either (either, Either(..))
 import Data.Foldable (find)
@@ -20,7 +20,7 @@ import Data.String (Pattern(Pattern), split, indexOf)
 import Data.Traversable (traverse_)
 import Data.Tuple (Tuple(Tuple))
 import IdePurescript.Exec (findBins, getPathVar)
-import IdePurescript.PscErrors (PscError(PscError), RebuildResult(RebuildError, RebuildResult), PscResult, parsePscOutput)
+import IdePurescript.PscErrors (PscResult(..), parsePscOutput)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import Node.Buffer (BUFFER)
 import Node.ChildProcess (ChildProcess, CHILD_PROCESS)
@@ -31,7 +31,7 @@ import Node.Process (PROCESS)
 import Node.Stream as S
 import PscIde (NET)
 import PscIde as P
-import PscIde.Command as PC
+import PscIde.Command (RebuildResult(..))
 import PscIde.Server (Executable(Executable))
 
 type BuildOptions =
@@ -42,7 +42,6 @@ type BuildOptions =
 
 data Command = Command String (Array String)
 
-newtype BuildError = BuildError {}
 type BuildResult =
   { errors :: PscResult
   , success :: Boolean
@@ -95,30 +94,29 @@ build logCb buildOptions@{ command: Command cmd args, directory, useNpmDir } = d
 
 rebuild :: forall eff. Int -> String -> Aff (net :: NET | eff) BuildResult
 rebuild port file = do
-  res <- rebuild'
+  res <- P.rebuild port file (Just file)
   either
     (throwError <<< error)
     (pure <<< onResult)
     res
   where
-  wrapError :: RebuildResult -> Array PscError
-  wrapError (RebuildError s) = singleton $ PscError
-    { moduleName: Nothing
-    , errorCode: "RebuildStringError"
-    , message: s
-    , filename: Just file
-    , position: Nothing
-    , errorLink: ""
-    , suggestion: Nothing
-    }
-  wrapError (RebuildResult errs) = errs
+  -- wrapError :: RebuildResult -> Array PscError
+  -- wrapError (RebuildError s) = singleton $ PscError
+  --   { moduleName: Nothing
+  --   , errorCode: "RebuildStringError"
+  --   , message: s
+  --   , filename: Just file
+  --   , position: Nothing
+  --   , errorLink: ""
+  --   , suggestion: Nothing
+  --   }
+  -- wrapError (RebuildResult errs) = errs
 
   onResult :: Either RebuildResult RebuildResult -> BuildResult
   onResult =
-    either (\errors -> { errors: { errors, warnings: [] }, success: true })
-           (\warnings -> { errors: { errors: [], warnings }, success: true  })
+    either (\errors -> { errors: PscResult { errors, warnings: [] }, success: true })
+           (\warnings -> { errors: PscResult { errors: [], warnings }, success: true  })
     <<<
-    bimap wrapError wrapError
-
-  rebuild' :: P.CmdR RebuildResult RebuildResult
-  rebuild' = P.sendCommandR port (PC.RebuildCmd file (Just file))
+    bimap unwrap unwrap -- wrapError wrapError
+    where
+    unwrap (RebuildResult r) = r

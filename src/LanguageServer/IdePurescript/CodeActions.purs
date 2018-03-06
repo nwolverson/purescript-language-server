@@ -16,7 +16,6 @@ import Data.String (null, trim)
 import Data.String.Regex (regex)
 import Data.String.Regex.Flags (global, noFlags)
 import Data.Traversable (traverse)
-import IdePurescript.PscErrors (PscError(..))
 import IdePurescript.QuickFix (getTitle, isUnknownToken)
 import IdePurescript.Regex (replace', test')
 import LanguageServer.DocumentStore (getDocument)
@@ -27,6 +26,7 @@ import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (getTextAtRange, getVersion)
 import LanguageServer.Types (Command, DocumentStore, DocumentUri(..), Position(..), Range(..), Settings, TextDocumentIdentifier(..))
+import PscIde.Command (PscSuggestion(..), RebuildError(..))
 
 getActions :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> CodeActionParams -> Aff (MainEff eff) (Array Command)
 getActions documents settings (ServerState { diagnostics, conn }) { textDocument, range } =  
@@ -38,13 +38,13 @@ getActions documents settings (ServerState { diagnostics, conn }) { textDocument
   where
     docUri = _.uri $ un TextDocumentIdentifier textDocument
 
-    asCommand (PscError { position: Just position, suggestion: Just { replacement, replaceRange }, errorCode })
+    asCommand (RebuildError { position: Just position, suggestion: Just (PscSuggestion { replacement, replaceRange }), errorCode })
       | contains range (positionToRange position) = do
       let range' = positionToRange $ fromMaybe position replaceRange
       pure $ Just $ replaceSuggestion (getTitle errorCode) (_.uri $ un TextDocumentIdentifier textDocument) replacement range'
     asCommand _ = pure Nothing
 
-    commandForCode (PscError { position: Just position, errorCode }) | contains range (positionToRange position) =
+    commandForCode (RebuildError { position: Just position, errorCode }) | contains range (positionToRange position) =
       case errorCode of
         "ModuleNotFound" -> Just build
         x | isUnknownToken x
