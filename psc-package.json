@@ -3,10 +3,14 @@
     "set": "ide-0.12-dev-10",
     "source": "https://github.com/nwolverson/package-sets.git",
     "depends": [
+        "node-fs-aff",
+        "node-process",
+        "stringutils",
+        "psc-ide",
+        "node-child-process",
         "test-unit",
         "aff-promise",
         "errors",
-        "foreign-generic",
-        "ide-purescript-core"
+        "foreign-generic"
     ]
 }
