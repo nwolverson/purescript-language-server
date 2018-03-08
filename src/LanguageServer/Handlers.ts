@@ -29,7 +29,7 @@ export const onDidChangeConfiguration = (conn: IConnection) => registerNotificat
 
 export const publishDiagnostics = (conn: IConnection) => (params: PublishDiagnosticsParams) => () => conn.sendDiagnostics(params);
 
-export const applyEdit = (conn: IConnection) => (edit: WorkspaceEdit) => () => conn.workspace.applyEdit(edit);
+export const applyEditImpl = (conn: IConnection) => (edit: WorkspaceEdit) => () => conn.workspace.applyEdit(edit).then(x => x.applied);
 
 export const sendDiagnosticsBegin = (conn: IConnection) => () => conn.sendNotification(new NotificationType0('textDocument/diagnosticsBegin'));
 

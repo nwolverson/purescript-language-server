@@ -5,11 +5,13 @@ import Prelude
 import Control.Monad.Eff (kind Effect)
 import Data.Array (concat, groupBy, sortWith, (:))
 import Data.Foreign (Foreign)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Monoid (class Monoid)
 import Data.Newtype (class Newtype, over)
-import Data.NonEmpty ((:|))
-import Data.Nullable (Nullable, toNullable)
-import Data.StrMap (StrMap, fromFoldable)
+import Data.NonEmpty (foldl1, (:|))
+import Data.Nullable (Nullable, toMaybe, toNullable)
+import Data.StrMap (StrMap, empty, fromFoldable)
+import Data.StrMap as StrMap
 import Data.Tuple (Tuple(..))
 
 foreign import data CONN :: Effect
@@ -221,6 +223,27 @@ newtype WorkspaceEdit = WorkspaceEdit
   , changes :: Nullable (StrMap (Array TextEdit))
   }
 
+instance semigroupWorkspaceEdit :: Semigroup WorkspaceEdit where
+  append (WorkspaceEdit { documentChanges, changes }) (WorkspaceEdit { documentChanges: documentChanges', changes: changes' }) =
+    WorkspaceEdit
+      { documentChanges: toNullable $ Just $ 
+          map (foldl1 combine) $
+          groupBy (\d1 d2 -> docId d1 == docId d2)
+            (fromNullableArray documentChanges <> fromNullableArray documentChanges')
+      , changes: toNullable $ Just $ StrMap.fromFoldableWith (<>) (goStrMap changes <> goStrMap changes')
+      }
+    where
+      combine (TextDocumentEdit { textDocument, edits }) (TextDocumentEdit { edits: edits' }) =
+        TextDocumentEdit { textDocument, edits: edits <> edits' }
+      docId (TextDocumentEdit { textDocument }) = textDocument
+      fromNullableArray :: forall a. Nullable (Array a) -> Array a
+      fromNullableArray a = fromMaybe [] $ toMaybe a
+      goStrMap :: forall a. Nullable (StrMap a) -> Array (Tuple String a)
+      goStrMap a = StrMap.toUnfoldable $ fromMaybe empty $ toMaybe a
+  
+instance monoidWorkspaceEdit :: Monoid WorkspaceEdit where
+  mempty = WorkspaceEdit { documentChanges: toNullable $ Just [], changes: toNullable $ Just $ empty }
+
 -- | Create workspace edit, supporting both documentChanges and older changes property for v2 clients
 workspaceEdit :: Array TextDocumentEdit -> WorkspaceEdit
 workspaceEdit edits = WorkspaceEdit
@@ -239,6 +262,8 @@ newtype TextDocumentEdit = TextDocumentEdit { textDocument :: TextDocumentIdenti
 newtype TextDocumentIdentifier = TextDocumentIdentifier { uri :: DocumentUri, version :: Number }
 
 derive instance newtypeTextDocumentIdentifier :: Newtype TextDocumentIdentifier _
+derive instance eqTextDocumentIdentifier :: Eq TextDocumentIdentifier
+
 
 type Settings = Foreign
 newtype FileChangeTypeCode = FileChangeTypeCode Int

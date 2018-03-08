@@ -5,9 +5,9 @@ import Prelude
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Except (runExcept)
-import Data.Array (intercalate, (!!))
+import Data.Array (fold, intercalate, (!!))
 import Data.Either (Either(..), either)
-import Data.Foreign (Foreign, F, readInt, readString, toForeign)
+import Data.Foreign (F, Foreign, readInt, readString, toForeign, unsafeFromForeign)
 import Data.Foreign.Index ((!))
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (over)
@@ -18,10 +18,11 @@ import IdePurescript.Tokens (identifierAtPoint)
 import LanguageServer.Console (log)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (applyEdit)
-import LanguageServer.IdePurescript.Imports (addCompletionImport)
+import LanguageServer.IdePurescript.CodeActions (readRange)
+import LanguageServer.IdePurescript.Imports (addCompletionImport, addCompletionImportEdit)
 import LanguageServer.IdePurescript.Types (MainEff, ServerState(..))
 import LanguageServer.Text (makeWorkspaceEdit)
-import LanguageServer.TextDocument (getTextAtRange, getVersion)
+import LanguageServer.TextDocument (getText, getTextAtRange, getVersion)
 import LanguageServer.Types (DocumentStore, DocumentUri(..), Position(..), Range(..), Settings)
 import PscIde (defaultCompletionOptions, suggestTypos)
 import PscIde as P
@@ -53,7 +54,7 @@ caseSplit docs settings state args = do
                 Just { range: { left, right } } -> do
                     lines <- eitherToErr $ P.caseSplit port' lineText left right false tyStr
                     let edit = makeWorkspaceEdit (DocumentUri uri) version (lineRange' line char) $ intercalate "\n" $ map trim lines
-                    liftEff $ applyEdit conn' edit
+                    void $ applyEdit conn' edit
                 _ -> do liftEff $ log conn' "fail identifier"
                         pure unit
             pure unit
@@ -79,7 +80,7 @@ addClause docs settings state args = do
                 Just { range: { left, right } } -> do
                     lines <- eitherToErr $ P.addClause port' lineText false
                     let edit = makeWorkspaceEdit (DocumentUri uri) version (lineRange' line char) $ intercalate "\n" $ map trim lines
-                    liftEff $ applyEdit conn' edit
+                    void $ applyEdit conn' edit
                 _ -> pure unit
             pure unit
     _, _, _ -> pure unit
@@ -125,5 +126,35 @@ fixTypo log docs settings state args = do
                         , end: Position { line, character: left }
                         }
           edit = makeWorkspaceEdit (DocumentUri uri) version range word
-      liftEff $ applyEdit conn edit
+      void $ applyEdit conn edit
       addCompletionImport log docs settings state [ toForeign word, toForeign mod, toForeign Nothing, toForeign uri ]
+
+fillTypedHole :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Unit
+fillTypedHole logFn docs settings state args = do
+  let ServerState { port, conn } = state
+  case port, conn, args of
+    Just port', Just conn', [ _, argUri, range', argChoice ]
+      | Right range <- runExcept $ readRange range'
+      , Right uri <- runExcept $ readString argUri
+      , TypeInfo { identifier, module': mod } <- readTypeInfo argChoice
+     -> do
+      doc <- liftEff $ getDocument docs (DocumentUri uri)
+      version <- liftEff $ getVersion doc
+      text <- liftEff $ getText doc
+      let edit = makeWorkspaceEdit (DocumentUri uri) version range identifier
+      edit' <- either (const []) id <$> addCompletionImportEdit logFn docs settings state 
+         { identifier, mod: Just mod , qual: Nothing, uri: DocumentUri uri }
+        doc version text
+      let edit2 = edit <> fold edit'
+      applyRes <- applyEdit conn' $ edit2 -- edit <> fold edit'
+      liftEff $ log conn' $ "Applied: " <> show applyRes
+      -- -- Seems that even after waiting for the edit response, changes will be lost 
+      -- delay $ Milliseconds 300.0
+      _ <- addCompletionImport logFn docs settings state [ toForeign identifier, toForeign mod, toForeign Nothing, toForeign uri ]
+      pure unit
+    _, _, _ -> do 
+      liftEff $ maybe (pure unit) (flip log "fial match") conn
+      pure unit
+  where
+    readTypeInfo :: Foreign -> TypeInfo
+    readTypeInfo obj = unsafeFromForeign obj

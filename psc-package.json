@@ -1,6 +1,6 @@
 {
     "name": "purescript-language-server",
-    "set": "ide-0.12-dev-10",
+    "set": "ide-0.12-dev-11",
     "source": "https://github.com/nwolverson/package-sets.git",
     "depends": [
         "node-fs-aff",

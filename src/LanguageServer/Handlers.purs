@@ -1,8 +1,11 @@
 module LanguageServer.Handlers where
   
 import Prelude
+
+import Control.Monad.Aff (Aff)
 import Control.Monad.Eff (Eff, kind Effect)
 import Control.Promise (Promise)
+import Control.Promise as Promise
 import Data.Foreign (Foreign)
 import Data.Nullable (Nullable)
 import LanguageServer.Types (CONN, Command, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, WorkspaceEdit)
@@ -44,7 +47,10 @@ foreign import onExecuteCommand :: forall eff. Connection -> (ExecuteCommandPara
 
 foreign import publishDiagnostics :: forall eff. Connection -> PublishDiagnosticParams -> Eff (conn :: CONN | eff) Unit
 
-foreign import applyEdit :: forall eff. Connection -> WorkspaceEdit -> Eff (conn :: CONN | eff) Unit
+foreign import applyEditImpl :: forall eff. Connection -> WorkspaceEdit -> Res eff Boolean
+
+applyEdit :: forall eff. Connection -> WorkspaceEdit -> Aff (conn :: CONN | eff) Boolean
+applyEdit conn edit = Promise.toAffE $ applyEditImpl conn edit
 
 foreign import sendDiagnosticsBegin :: forall eff. Connection -> Eff (conn :: CONN | eff) Unit
 

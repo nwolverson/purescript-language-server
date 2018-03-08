@@ -21,12 +21,12 @@ import IdePurescript.Regex (replace', test')
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.IdePurescript.Build (positionToRange)
-import LanguageServer.IdePurescript.Commands (build, fixTypo, replaceSuggestion)
+import LanguageServer.IdePurescript.Commands (build, fixTypo, replaceSuggestion, typedHole)
 import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (getTextAtRange, getVersion)
-import LanguageServer.Types (Command, DocumentStore, DocumentUri(..), Position(..), Range(..), Settings, TextDocumentIdentifier(..))
-import PscIde.Command (PscSuggestion(..), RebuildError(..))
+import LanguageServer.Types (Command, DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentIdentifier(TextDocumentIdentifier))
+import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 getActions :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> CodeActionParams -> Aff (MainEff eff) (Array Command)
 getActions documents settings (ServerState { diagnostics, conn }) { textDocument, range } =  
@@ -44,9 +44,13 @@ getActions documents settings (ServerState { diagnostics, conn }) { textDocument
       pure $ Just $ replaceSuggestion (getTitle errorCode) (_.uri $ un TextDocumentIdentifier textDocument) replacement range'
     asCommand _ = pure Nothing
 
-    commandForCode (RebuildError { position: Just position, errorCode }) | contains range (positionToRange position) =
+    commandForCode (err@RebuildError { position: Just position, errorCode }) | contains range (positionToRange position) =
       case errorCode of
         "ModuleNotFound" -> Just build
+        "HoleInferredType" -> case err of
+          RebuildError { pursIde: Just (PursIdeInfo { name, completions }) } ->
+            Just $ typedHole name docUri (positionToRange position) completions
+          _ -> Nothing
         x | isUnknownToken x
           , { startLine, startColumn } <- position -> Just $ fixTypo docUri startLine startColumn
         _ -> Nothing
@@ -88,11 +92,11 @@ onReplaceSuggestion docs config (ServerState { conn }) args =
       | Right uri <- runExcept $ readString uri'
       , Right replacement <- runExcept $ readString replacement'
       , Right range <- runExcept $ readRange range'
-      -> liftEff do
-        doc <- getDocument docs (DocumentUri uri)
-        version <- getVersion doc
-        origText <- getTextAtRange doc range
-        afterText <- replace' (regex "\n$" noFlags) "" <$> getTextAtRange doc (afterEnd range)
+      -> do
+        doc <- liftEff $ getDocument docs (DocumentUri uri)
+        version <- liftEff $ getVersion doc
+        origText <- liftEff $ getTextAtRange doc range
+        afterText <- liftEff $ replace' (regex "\n$" noFlags) "" <$> getTextAtRange doc (afterEnd range)
 
         let newText = getReplacement replacement afterText
         
@@ -103,7 +107,7 @@ onReplaceSuggestion docs config (ServerState { conn }) args =
         let edit = makeWorkspaceEdit (DocumentUri uri) version range' newText
 
         -- TODO: Check original & expected text ?
-        applyEdit conn' edit
+        void $ applyEdit conn' edit
     _, _ -> pure unit
   where
     -- | Modify suggestion replacement text, removing extraneous newlines

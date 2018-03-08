@@ -65,6 +65,16 @@ No arguments. Get list of available modules.
 
 Arguments: document URI, replacement, replacement range.
 
+### `purescript.search`
+
+Flex search for identifier.
+
+Arguments: search text.
+
+### `purescript.fixTypo`
+
+Arguments: document URI, line, character.
+
 ### `purescript.caseSplit-explicit`
 
 (Used to back the case split command in VS Code UI).
@@ -76,6 +86,12 @@ Arguments: document URI, line, character, type.
 (Used to back the add clause command in VS Code UI).
 
 Arguments: document URI, line, character.
+
+### `purescript.typedHole-explicit`
+
+(Used to back the `purescript.typedHole` code action triggered in the VS Code UI)
+
+Arguments: hole name, document URI, hole range, `PscIde.Command.TypeInfo` of chosen replacement option
 
 ## Usage
 

@@ -100,23 +100,12 @@ rebuild port file = do
     (pure <<< onResult)
     res
   where
-  -- wrapError :: RebuildResult -> Array PscError
-  -- wrapError (RebuildError s) = singleton $ PscError
-  --   { moduleName: Nothing
-  --   , errorCode: "RebuildStringError"
-  --   , message: s
-  --   , filename: Just file
-  --   , position: Nothing
-  --   , errorLink: ""
-  --   , suggestion: Nothing
-  --   }
-  -- wrapError (RebuildResult errs) = errs
 
   onResult :: Either RebuildResult RebuildResult -> BuildResult
   onResult =
     either (\errors -> { errors: PscResult { errors, warnings: [] }, success: true })
            (\warnings -> { errors: PscResult { errors: [], warnings }, success: true  })
     <<<
-    bimap unwrap unwrap -- wrapError wrapError
+    bimap unwrap unwrap
     where
     unwrap (RebuildResult r) = r
