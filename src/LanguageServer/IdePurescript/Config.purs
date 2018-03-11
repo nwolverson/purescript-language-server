@@ -91,6 +91,9 @@ fastRebuild = getBoolean "fastRebuild" true
 editorMode :: ConfigFn Boolean
 editorMode = getBoolean "editorMode" false
 
+outputDirectory :: ConfigFn (Maybe String)
+outputDirectory = getConfigMaybe readString "outputDirectory"
+
 polling :: ConfigFn Boolean
 polling = getBoolean "polling" false
 

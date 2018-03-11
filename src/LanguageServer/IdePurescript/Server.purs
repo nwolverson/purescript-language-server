@@ -46,7 +46,7 @@ startServer' settings root cb logCb = do
     , logLevel: Config.logLevel settings
     , editorMode: Config.editorMode settings
     , polling: Config.polling settings
-    , outputDirectory: Nothing
+    , outputDirectory: Config.outputDirectory settings
     } (fromMaybe "" root) (Config.addNpmPath settings) cb logCb
   where
     globs = getGlob Config.srcPath <> getGlob Config.packagePath
