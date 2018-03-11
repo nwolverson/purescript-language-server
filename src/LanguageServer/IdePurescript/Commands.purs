@@ -1,10 +1,13 @@
 module LanguageServer.IdePurescript.Commands where
 
 import Prelude
+
+import Data.Array ((:))
 import Data.Foreign (Foreign, toForeign)
 import Data.Maybe (Maybe(..))
 import Data.Nullable (toNullable)
 import LanguageServer.Types (Command(..), DocumentUri, Range)
+import PscIde.Command (TypeInfo)
 
 cmdName :: CommandInfo -> String
 cmdName (CommandInfo _ command) = "purescript." <> command
@@ -43,6 +46,15 @@ buildCmd = CommandInfo "Build" "build"
 build :: Command
 build = c buildCmd Nothing
 
+typedHoleCmd :: CommandInfo
+typedHoleCmd = CommandInfo "Insert typed hole suggestion" "typedHole"
+
+typedHole :: String -> DocumentUri -> Range -> Array TypeInfo -> Command
+typedHole name url range options = c typedHoleCmd (Just $ toForeign name : toForeign url : toForeign range : (toForeign <$> options) )
+
+typedHoleExplicitCmd :: CommandInfo
+typedHoleExplicitCmd = CommandInfo "Insert typed hole suggestion" "typedHole-explicit"
+
 startPscIdeCmd :: CommandInfo
 startPscIdeCmd = CommandInfo "Start Psc-Ide-Server" "startPscIde"
 
@@ -74,5 +86,6 @@ commands = cmdName <$>
   , startPscIdeCmd
   , stopPscIdeCmd
   , restartPscIdeCmd
+  , typedHoleExplicitCmd
   ]
 
