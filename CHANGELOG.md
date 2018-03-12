@@ -1,10 +1,11 @@
 # Changelog
 
-### next
+### 0.10.0
 
 - Replace typed hole command & code action (requires LSP client support) https://github.com/nwolverson/purescript-language-server/issues/14
 - Move dependencies from purescript-ide-purescript-core
 - Configurable output directory #30
+- Fix all suggestions commands https://github.com/nwolverson/purescript-language-server/issues/12
 
 ### 0.9.0
 
