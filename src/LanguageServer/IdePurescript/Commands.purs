@@ -40,6 +40,15 @@ replaceSuggestion :: String -> DocumentUri -> String -> Range -> Command
 replaceSuggestion title uri replacement fixRange = c (CommandInfo title "replaceSuggestion") $ 
   Just [ toForeign uri, toForeign replacement, toForeign fixRange ]
 
+replaceAllSuggestionsCmd :: CommandInfo
+replaceAllSuggestionsCmd = CommandInfo "Replace all suggestions" "replaceAllSuggestions"
+
+type Replacement = { replacement:: String, range :: Range }
+
+replaceAllSuggestions :: String -> DocumentUri -> Array Replacement -> Command
+replaceAllSuggestions text uri replacements = c (CommandInfo text "replaceAllSuggestions") $ 
+  Just [ toForeign uri, toForeign replacements ]
+
 buildCmd :: CommandInfo
 buildCmd = CommandInfo "Build" "build"
 
@@ -87,5 +96,6 @@ commands = cmdName <$>
   , stopPscIdeCmd
   , restartPscIdeCmd
   , typedHoleExplicitCmd
+  , replaceAllSuggestionsCmd
   ]
 

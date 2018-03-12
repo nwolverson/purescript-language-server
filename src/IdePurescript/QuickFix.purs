@@ -2,6 +2,7 @@ module IdePurescript.QuickFix where
 
 import Prelude
 
+import Data.Foldable (elem)
 import Data.String (null)
 import Data.String.Regex (regex)
 import Data.String.Regex.Flags (global, noFlags)
@@ -25,15 +26,26 @@ getTitle code = case code of
   "DeprecatedQualifiedSyntax"   -> "Remove qualified keyword"
   "ImplicitImport"              -> "Make import explicit"
   "UnusedExplicitImport"        -> "Remove unused references"
-  _                             -> "Apply Suggestion"
+  _                             -> "Apply suggestion"
 
 -- | Determine whether an error code represents an unknown token (unknown identifier or missing import)
 isUnknownToken :: String -> Boolean
-isUnknownToken code = case code of
-  "UnknownValue" -> true
-  "UnknownType" -> true
-  "UnknownDataConstructor" -> true
-  "UnknownTypeConstructor" -> true
+isUnknownToken = flip elem
+  [ "UnknownValue"
+  , "UnknownType"
+  , "UnknownDataConstructor"
+  , "UnknownTypeConstructor"
     -- In later compiler versions UnknownName covers all of the above
-  "UnknownName" -> true
-  _ -> false
+  , "UnknownName" ]
+
+isImport :: String -> Boolean
+isImport = flip elem
+  [ "UnusedImport" 
+  , "DuplicateImport"
+  , "HidingImport"
+  , "ImplicitImport"
+  , "ImplicitQualifiedImport"
+  , "UnusedDctorExplicitImport"
+  , "UnusedDctorImport"
+  , "UnusedExplicitImport"
+  ]

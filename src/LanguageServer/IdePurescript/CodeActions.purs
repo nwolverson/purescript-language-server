@@ -5,9 +5,9 @@ import Prelude
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Except (runExcept)
-import Data.Array (catMaybes, mapMaybe)
+import Data.Array (catMaybes, filter, length, mapMaybe)
 import Data.Either (Either(..))
-import Data.Foreign (F, Foreign, readInt, readString)
+import Data.Foreign (F, Foreign, readArray, readInt, readString)
 import Data.Foreign.Index ((!))
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (un)
@@ -16,33 +16,45 @@ import Data.String (null, trim)
 import Data.String.Regex (regex)
 import Data.String.Regex.Flags (global, noFlags)
 import Data.Traversable (traverse)
-import IdePurescript.QuickFix (getTitle, isUnknownToken)
+import IdePurescript.QuickFix (getTitle, isImport, isUnknownToken)
 import IdePurescript.Regex (replace', test')
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.IdePurescript.Build (positionToRange)
-import LanguageServer.IdePurescript.Commands (build, fixTypo, replaceSuggestion, typedHole)
+import LanguageServer.IdePurescript.Commands (Replacement, build, fixTypo, replaceAllSuggestions, replaceSuggestion, typedHole)
 import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
 import LanguageServer.Text (makeWorkspaceEdit)
-import LanguageServer.TextDocument (getTextAtRange, getVersion)
-import LanguageServer.Types (Command, DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentIdentifier(TextDocumentIdentifier))
+import LanguageServer.TextDocument (TextDocument, getTextAtRange, getVersion)
+import LanguageServer.Types (Command, DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 getActions :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> CodeActionParams -> Aff (MainEff eff) (Array Command)
 getActions documents settings (ServerState { diagnostics, conn }) { textDocument, range } =  
   case lookup (un DocumentUri $ docUri) diagnostics of
-    Just errs -> do 
-      replacements <- catMaybes <$> traverse asCommand errs
-      pure $ replacements <> mapMaybe commandForCode errs
+    Just errs -> pure $
+      (catMaybes $ map asCommand errs)
+      <> fixAllCommand "Apply all suggestions" errs
+      <> fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode }) -> isImport errorCode) errs)
+      <> mapMaybe commandForCode errs
     _ -> pure []
   where
     docUri = _.uri $ un TextDocumentIdentifier textDocument
 
-    asCommand (RebuildError { position: Just position, suggestion: Just (PscSuggestion { replacement, replaceRange }), errorCode })
-      | contains range (positionToRange position) = do
-      let range' = positionToRange $ fromMaybe position replaceRange
-      pure $ Just $ replaceSuggestion (getTitle errorCode) (_.uri $ un TextDocumentIdentifier textDocument) replacement range'
-    asCommand _ = pure Nothing
+    asCommand error@(RebuildError { position: Just position, errorCode })
+      | Just { replacement, range: replaceRange } <- getReplacementRange error
+      , contains range (positionToRange position) = do
+      Just $ replaceSuggestion (getTitle errorCode) docUri replacement replaceRange
+    asCommand _ = Nothing
+
+    getReplacementRange (RebuildError { position: Just position, suggestion: Just (PscSuggestion { replacement, replaceRange }) }) =
+      Just $ { replacement, range }
+      where
+      range = positionToRange $ fromMaybe position replaceRange
+    getReplacementRange _ = Nothing
+
+    fixAllCommand text rebuildErrors = if length replacements > 0 then [ replaceAllSuggestions text docUri replacements ] else [ ]
+      where
+      replacements = mapMaybe getReplacementRange rebuildErrors
 
     commandForCode (err@RebuildError { position: Just position, errorCode }) | contains range (positionToRange position) =
       case errorCode of
@@ -95,20 +107,26 @@ onReplaceSuggestion docs config (ServerState { conn }) args =
       -> do
         doc <- liftEff $ getDocument docs (DocumentUri uri)
         version <- liftEff $ getVersion doc
-        origText <- liftEff $ getTextAtRange doc range
-        afterText <- liftEff $ replace' (regex "\n$" noFlags) "" <$> getTextAtRange doc (afterEnd range)
-
-        let newText = getReplacement replacement afterText
-        
-        let range' = if newText == "" && afterText == "" then
-                      toNextLine range
-                     else
-                      range
+        TextEdit { range: range', newText } <- getReplacementEdit doc { replacement, range }
         let edit = makeWorkspaceEdit (DocumentUri uri) version range' newText
 
         -- TODO: Check original & expected text ?
         void $ applyEdit conn' edit
     _, _ -> pure unit
+
+
+getReplacementEdit :: forall eff. TextDocument -> Replacement -> Aff (MainEff eff) TextEdit
+getReplacementEdit doc { replacement, range } = do
+  origText <- liftEff $ getTextAtRange doc range
+  afterText <- liftEff $ replace' (regex "\n$" noFlags) "" <$> getTextAtRange doc (afterEnd range)
+
+  let newText = getReplacement replacement afterText
+  
+  let range' = if newText == "" && afterText == "" then
+                toNextLine range
+                else
+                range
+  pure $ TextEdit { range: range', newText }
   where
     -- | Modify suggestion replacement text, removing extraneous newlines
     getReplacement :: String -> String -> String
@@ -118,3 +136,28 @@ onReplaceSuggestion docs config (ServerState { conn }) args =
       where
       trailingNewline = test' (regex "\n\\s+$" noFlags) replacement
       addNewline = trailingNewline && (not $ null extraText)
+
+onReplaceAllSuggestions :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Unit
+onReplaceAllSuggestions docs config (ServerState { conn }) args =
+  case conn, args of 
+    Just conn', [ uri', suggestions' ]
+      | Right uri <- runExcept $ readString uri'
+      , Right suggestions <- runExcept $ readArray suggestions' >>= traverse readSuggestion
+      -> do
+          doc <- liftEff $ getDocument docs (DocumentUri uri)
+          version <- liftEff $ getVersion doc
+          edits <- traverse (getReplacementEdit doc) suggestions
+          void $ applyEdit conn' $ workspaceEdit
+            [ TextDocumentEdit
+              { textDocument: TextDocumentIdentifier { uri: DocumentUri uri, version } 
+              , edits
+              }
+            ]
+    _, _ -> pure unit
+
+readSuggestion :: Foreign -> F Replacement
+readSuggestion o = do
+  replacement <- o ! "replacement" >>= readString
+  range <- o ! "range" >>= readRange
+  pure $ { replacement, range }
+

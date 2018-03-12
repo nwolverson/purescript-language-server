@@ -27,8 +27,8 @@ import LanguageServer.DocumentStore (getDocument, onDidChangeContent, onDidSaveD
 import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentSymbol, onExecuteCommand, onHover, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fillTypedHole, fixTypo)
 import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnostics)
-import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceSuggestion)
-import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
+import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
+import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
 import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config (fastRebuild)
 import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules)
@@ -214,6 +214,7 @@ main = do
       [ Tuple caseSplitCmd $ voidHandler caseSplit
       , Tuple addClauseCmd $ voidHandler addClause
       , Tuple replaceSuggestionCmd $ voidHandler onReplaceSuggestion
+      , Tuple replaceAllSuggestionsCmd $ voidHandler onReplaceAllSuggestions
       , Tuple buildCmd $ voidHandler onBuild
       , Tuple addCompletionImportCmd $ addCompletionImport logError
       , Tuple addModuleImportCmd $ voidHandler $ addModuleImport' logError
