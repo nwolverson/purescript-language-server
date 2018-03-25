@@ -21,7 +21,7 @@ import Control.Monad.Eff.Random (RANDOM)
 import Data.Array (length, head)
 import Data.Either (either)
 import Data.Int (fromNumber)
-import Data.Maybe (Maybe(Just, Nothing), fromMaybe)
+import Data.Maybe (Maybe(Just, Nothing), fromMaybe, isNothing, maybe)
 import Data.String (Pattern(Pattern), split, toLower)
 import Data.Traversable (traverse, traverse_)
 import Global (readInt)
@@ -80,6 +80,7 @@ type ServerSettings =
   , editorMode :: Boolean
   , polling :: Boolean
   , outputDirectory :: Maybe String
+  , port :: Maybe Int
   }
 
 -- | Start a psc-ide server instance, or find one already running on the expected port, checking if it has the right path.
@@ -129,26 +130,35 @@ startServer' settings@({ exe: server, glob }) path addNpmBin cb logCb = do
 
 -- | Start a psc-ide server instance, or find one already running on the expected port, checking if it has the right path.
 startServer :: forall eff. Notify (ServerEff eff) -> ServerSettings -> String -> Aff (ServerEff eff) ServerStartResult
-startServer logCb { exe, combinedExe, glob, logLevel, editorMode, polling, outputDirectory } rootPath = do
-  port <- liftEff $ getSavedPort rootPath
-  case port of
-    Just p -> do
-      workingDir <- attempt $ PscIde.cwd p
-      liftEff $ logCb Info $ "Found existing port from file: " <> show p <> (either (const "") (", cwd: " <> _) workingDir)
-      either (const launchServer) (gotPath p) workingDir
-    Nothing -> launchServer
+startServer logCb { exe, combinedExe, glob, logLevel, editorMode, polling, outputDirectory, port: configuredPort } rootPath = do
+  case configuredPort of 
+    -- Connect to existing server or launch one on this port
+    Just port -> joinServer port configuredPort "Using configured port"
+    Nothing -> (liftEff $ getSavedPort rootPath) >>= case _ of
+      -- Connect to existing server on this port or launch one on new port
+      Just port -> joinServer port Nothing "Found existing port from file"
+      -- Launch on new port
+      Nothing -> launchServer Nothing
 
   where
-  launchServer = do
-    newPort <- liftEff pickFreshPort
+    
+  joinServer :: Int -> Maybe Int -> String -> Aff (ServerEff eff) ServerStartResult
+  joinServer port launchPort message = do
+    workingDir <- attempt $ PscIde.cwd port
+    liftEff $ logCb Info $ message <> ": " <> show port <> (either (const "") (", cwd: " <> _) workingDir)
+    either (const $ launchServer launchPort) (gotPath port) workingDir
+
+  launchServer connectPort = do
+    port <- maybe (liftEff pickFreshPort) pure connectPort
     liftEff $ do
-      logCb Info $ "Starting IDE server on port " <> show newPort <> " with cwd " <> rootPath
-      savePort newPort rootPath
-    r newPort <$> S.startServer (defaultServerArgs
+      logCb Info $ "Starting IDE server on port " <> show port <> " with cwd " <> rootPath
+      -- Save it just if we picked it
+      when (isNothing connectPort) $ savePort port rootPath
+    r port <$> S.startServer (defaultServerArgs
       { exe = exe
       , combinedExe = combinedExe
       , cwd = Just rootPath
-      , port = Just newPort
+      , port = Just port
       , source = glob
       , logLevel = logLevel
       , editorMode = editorMode
@@ -156,7 +166,7 @@ startServer logCb { exe, combinedExe, glob, logLevel, editorMode, polling, outpu
       , outputDirectory = outputDirectory
       })
     where
-      r newPort (S.Started cp) = Started newPort cp
+      r port (S.Started cp) = Started port cp
       r _ (S.Closed) = Closed
       r _ (S.StartError s) = StartError s
 

@@ -47,6 +47,7 @@ startServer' settings root cb logCb = do
     , editorMode: Config.editorMode settings
     , polling: Config.polling settings
     , outputDirectory: Config.outputDirectory settings
+    , port: Config.pscIdePort settings
     } (fromMaybe "" root) (Config.addNpmPath settings) cb logCb
   where
     globs = getGlob Config.srcPath <> getGlob Config.packagePath

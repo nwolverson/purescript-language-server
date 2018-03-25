@@ -2,7 +2,7 @@ module LanguageServer.IdePurescript.Main where
 
 import Prelude
 
-import Control.Monad.Aff (Aff, runAff)
+import Control.Monad.Aff (Aff, apathize, runAff)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Ref (modifyRef, newRef, readRef, writeRef)
@@ -30,7 +30,7 @@ import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnos
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
 import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
 import LanguageServer.IdePurescript.Completion (getCompletions)
-import LanguageServer.IdePurescript.Config (fastRebuild)
+import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules)
 import LanguageServer.IdePurescript.Search (search)
 import LanguageServer.IdePurescript.Server (loadAll, retry, startServer')
@@ -94,11 +94,10 @@ main = do
           { port: Just port, quit } -> do
             loadAll port
             liftEff $ modifyRef state (over ServerState $ _ { port = Just port, deactivate = quit })
-            liftEff $ logError Success "Started IDE server"
           _ -> pure unit
 
       restartPscIdeServer = do
-        stopPscIdeServer
+        apathize stopPscIdeServer
         startPscIdeServer
 
   conn <- initConnection commands $ \({ params: InitParams { rootPath }, conn }) ->  do
@@ -109,7 +108,8 @@ main = do
 
   let onConfig = do
         writeRef gotConfig true
-        launchAffLog startPscIdeServer
+        c <- readRef config
+        when (Config.autoStartPscIde c) $ launchAffLog startPscIdeServer
 
   readRef gotConfig >>= (_ `when` onConfig)
 
@@ -173,7 +173,7 @@ main = do
     c <- liftEff $ readRef config
     s <- liftEff $ readRef state
 
-    when (fastRebuild c) do 
+    when (Config.fastRebuild c) do 
       liftEff $ sendDiagnosticsBegin conn
       { pscErrors, diagnostics } <- getDiagnostics uri c s
       filename <- liftEff $ uriToFilename uri

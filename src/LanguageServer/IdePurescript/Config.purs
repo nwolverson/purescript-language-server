@@ -40,8 +40,8 @@ serverExe = getString "pscIdeServerExe" "psc-ide-server"
 pursExe :: ConfigFn String
 pursExe = getString "pursExe" "purs"
 
-pscIdePort :: ConfigFn Int
-pscIdePort = getInt "pscIdePort" 4242
+pscIdePort :: ConfigFn (Maybe Int)
+pscIdePort = getConfigMaybe readInt "pscIdePort"
 
 autoCompleteAllModules :: ConfigFn Boolean
 autoCompleteAllModules = getBoolean "autocompleteAllModules" true
