@@ -97,5 +97,6 @@ commands = cmdName <$>
   , restartPscIdeCmd
   , typedHoleExplicitCmd
   , replaceAllSuggestionsCmd
+  , fixTypoCmd
   ]
 

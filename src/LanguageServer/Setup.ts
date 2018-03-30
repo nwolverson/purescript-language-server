@@ -10,6 +10,7 @@ exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeP
             params,
             conn
         })();
+
         return {
             capabilities: {
                 // Tell the client that the server works in FULL text document sync mode
@@ -24,9 +25,10 @@ exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeP
                 workspaceSymbolProvider: true,
                 documentSymbolProvider: true,
                 codeActionProvider: true,
-                executeCommandProvider: {
-                    commands
-                }
+                executeCommandProvider: params.initializationOptions.executeCommandProvider === false
+                    ? undefined : {
+                        commands
+                    }
             }
         };
     });

@@ -24,7 +24,8 @@ exports.initConnection = function (commands) { return function (cb) { return fun
                 workspaceSymbolProvider: true,
                 documentSymbolProvider: true,
                 codeActionProvider: true,
-                executeCommandProvider: {
+                executeCommandProvider: params.initializationOptions.executeCommandProvider === false
+                    ? undefined : {
                     commands: commands
                 }
             }
