@@ -64,11 +64,9 @@ getActions documents settings (ServerState { diagnostics, conn }) { textDocument
             Just $ typedHole name docUri (positionToRange position) completions
           _ -> Nothing
         x | isUnknownToken x
-          , { startLine, startColumn } <- position -> Just $ fixTypo docUri startLine startColumn
+          , { startLine, startColumn } <- position -> Just $ fixTypo docUri (startLine-1) (startColumn-1)
         _ -> Nothing
     commandForCode _ = Nothing
-
-    -- TODO if isUnknownToken errorCode -> then add quick fix action
 
     contains (Range { start, end }) (Range { start: start', end: end' }) = start <= start' && end >= end'
 
