@@ -91,8 +91,13 @@ fastRebuild = getBoolean "fastRebuild" true
 editorMode :: ConfigFn Boolean
 editorMode = getBoolean "editorMode" false
 
+-- | Output directory - if specified, passed to purs, otherwise no argument is passed (purs default to 'output')
 outputDirectory :: ConfigFn (Maybe String)
 outputDirectory = getConfigMaybe readString "outputDirectory"
+
+-- | Effective output directory (taking account of purs default)
+effectiveOutputDirectory :: ConfigFn String
+effectiveOutputDirectory = fromMaybe "output" <<< outputDirectory
 
 polling :: ConfigFn Boolean
 polling = getBoolean "polling" false

@@ -2,7 +2,7 @@ module LanguageServer.IdePurescript.Main where
 
 import Prelude
 
-import Control.Monad.Aff (Aff, apathize, runAff)
+import Control.Monad.Aff (Aff, apathize, forkAff, runAff)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Ref (modifyRef, newRef, readRef, writeRef)
@@ -41,6 +41,8 @@ import LanguageServer.Setup (InitParams(..), initConnection, initDocumentStore)
 import LanguageServer.TextDocument (getText, getUri)
 import LanguageServer.Types (Diagnostic, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
 import LanguageServer.Uri (filenameToUri, uriToFilename)
+import LanguageServer.Window (showWarningWithActions)
+import Node.FS.Aff as FS
 import Node.Process (argv, cwd)
 import PscIde.Command (RebuildError(..))
 
@@ -105,20 +107,6 @@ main = do
     argv >>= \args -> log conn $ "Starting with args: " <> show args
     modifyRef state (over ServerState $ _ { root = toMaybe rootPath })
   modifyRef state (over ServerState $ _ { conn = Just conn })
-
-  let onConfig = do
-        writeRef gotConfig true
-        c <- readRef config
-        when (Config.autoStartPscIde c) $ launchAffLog startPscIdeServer
-
-  readRef gotConfig >>= (_ `when` onConfig)
-
-  onDidChangeConfiguration conn $ \{settings} -> do 
-    log conn "Got updated settings"
-    writeRef config settings
-    readRef gotConfig >>= \c -> when (not c) onConfig
-
-  log conn "PureScript Language Server started"
   
   documents <- initDocumentStore conn
 
@@ -235,3 +223,29 @@ main = do
       Nothing -> do
         liftEff $ error conn $ "Unknown command: " <> command
         pure noResult
+
+  let onConfig = launchAffLog do
+        liftEff $ writeRef gotConfig true
+        c <- liftEff $ readRef config
+        when (Config.autoStartPscIde c) $ do
+          startPscIdeServer
+          let outputDir = Config.effectiveOutputDirectory c
+          exists <- FS.exists outputDir
+          liftEff $ log conn $ "Onconfig: " <> show exists
+          when (not exists) $ void $ forkAff do
+            let message = "Output directory does not exist at '" <> outputDir <> "'"
+            liftEff $ info conn message
+            let buildOption = "Build project"
+            action <- showWarningWithActions conn (message <> ". Ensure project is built, or check configuration of output directory and build command.") [ buildOption ]
+            when (action == Just buildOption) do
+              s <- liftEff $ readRef state
+              onBuild documents c s []
+
+  readRef gotConfig >>= (_ `when` onConfig)
+
+  onDidChangeConfiguration conn $ \{settings} -> do 
+    log conn "Got updated settings"
+    writeRef config settings
+    readRef gotConfig >>= \c -> when (not c) onConfig
+
+  log conn "PureScript Language Server started"

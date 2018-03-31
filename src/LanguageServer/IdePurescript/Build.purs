@@ -91,6 +91,9 @@ fullBuild logCb _ settings state _ = do
       loadAll port
       liftEff $ logCb Info "Reloaded modules"
       pure $ convertDiagnostics directory settings res.errors
-    _, _ -> do
+    _, Nothing -> do
       liftEff $ logCb Error "Error parsing build command"
+      pure emptyDiagnostics
+    ServerState { port, conn, root }, _ -> do
+      liftEff $ logCb Error $ "Error running build: " <> show port <> " : " <> show root
       pure emptyDiagnostics
