@@ -25,7 +25,7 @@ exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeP
                 workspaceSymbolProvider: true,
                 documentSymbolProvider: true,
                 codeActionProvider: true,
-                executeCommandProvider: params.initializationOptions.executeCommandProvider === false
+                executeCommandProvider: (params.initializationOptions||{}).executeCommandProvider === false
                     ? undefined : {
                         commands
                     }
