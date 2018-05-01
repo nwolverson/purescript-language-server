@@ -1,5 +1,9 @@
 # Changelog
 
+### 0.11.0
+
+- Add find references command (requires purs 0.12). Currently works at the value level
+
 ### 0.10.2
 
 - Add warning/build option on missing output directory - https://github.com/nwolverson/purescript-language-server/commit/83e7f2b884915100318bb6a06eb5b59fd7e39354
