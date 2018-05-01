@@ -23,6 +23,8 @@ export const onDocumentSymbol = (conn: IConnection) => registerHandler(conn.onDo
 
 export const onWorkspaceSymbol = (conn: IConnection) => registerHandler(conn.onWorkspaceSymbol);
 
+export const onReferences = (conn: IConnection) => registerHandler(conn.onReferences);
+
 export const onCodeAction = (conn: IConnection) => registerHandler(conn.onCodeAction);
 
 export const onDidChangeConfiguration = (conn: IConnection) => registerNotificationHandler(conn.onDidChangeConfiguration);

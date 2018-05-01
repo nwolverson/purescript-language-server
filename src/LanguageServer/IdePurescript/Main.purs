@@ -2,7 +2,7 @@ module LanguageServer.IdePurescript.Main where
 
 import Prelude
 
-import Control.Monad.Aff (Aff, apathize, forkAff, runAff)
+import Control.Monad.Aff (Aff, apathize, forkAff, runAff, runAff_)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Ref (modifyRef, newRef, readRef, writeRef)
@@ -24,14 +24,17 @@ import IdePurescript.Modules (Module, getModulesForFileTemp, initialModulesState
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.Console (error, info, log, warn)
 import LanguageServer.DocumentStore (getDocument, onDidChangeContent, onDidSaveDocument)
+import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentSymbol, onExecuteCommand, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentSymbol, onExecuteCommand, onHover, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fillTypedHole, fixTypo)
+import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fixTypo)
 import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnostics)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
 import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
 import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules)
+import LanguageServer.IdePurescript.References (getReferences)
 import LanguageServer.IdePurescript.Search (search)
 import LanguageServer.IdePurescript.Server (loadAll, retry, startServer')
 import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, getWorkspaceSymbols)
@@ -78,7 +81,7 @@ main = do
             Info -> info conn s
             Warning -> warn conn s
             Error -> error conn s)
-  let launchAffLog = void <<< runAff (logError Error <<< show) (const $ pure unit)
+  let launchAffLog = runAff_ (either (logError Error <<< show) (const $ pure unit))
 
   let stopPscIdeServer :: Aff (MainEff eff) Unit
       stopPscIdeServer = do
@@ -142,6 +145,8 @@ main = do
   onDefinition conn $ runHandler "onDefinition" getTextDocUri (getDefinition documents)
   onDocumentSymbol conn $ runHandler "onDocumentSymbol" getTextDocUri getDocumentSymbols
   onWorkspaceSymbol conn $ runHandler "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
+
+  onReferences conn $ runHandler "onReferences" (const Nothing) (getReferences documents)
   onHover conn $ runHandler "onHover" getTextDocUri (getTooltips documents)
   onCodeAction conn $ runHandler "onCodeAction" getTextDocUri (getActions documents)
   onShutdown conn $ fromAff stopPscIdeServer

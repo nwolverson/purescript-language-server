@@ -4,10 +4,8 @@ import Prelude
 
 import Control.Monad.Aff (Aff, liftEff')
 import Control.Monad.Eff.Class (liftEff)
-import Control.Monad.Error.Class (throwError)
 import Data.Array (catMaybes, singleton)
 import Data.Char (toUpper)
-import Data.Either (either)
 import Data.Maybe (Maybe(Nothing, Just), maybe)
 import Data.Newtype (over, un)
 import Data.Nullable (toNullable, Nullable)
@@ -77,7 +75,7 @@ getSymbols :: forall eff. String -> Int -> String -> Array String -> Aff (net ::
 getSymbols root port prefix modules = do
   let opts = CompletionOptions { maxResults: Nothing, groupReexports: true }
   completions <- getCompletion port prefix Nothing Nothing modules (const []) opts
-  res <- either throwError pure =<< (liftEff' $ traverse getInfo completions)
+  res <- liftEff' $ traverse getInfo completions
   pure $ catMaybes res
 
   where

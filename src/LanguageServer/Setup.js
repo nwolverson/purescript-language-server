@@ -27,7 +27,8 @@ exports.initConnection = function (commands) { return function (cb) { return fun
                 executeCommandProvider: (params.initializationOptions || {}).executeCommandProvider === false
                     ? undefined : {
                     commands: commands
-                }
+                },
+                referencesProvider: true
             }
         };
     });

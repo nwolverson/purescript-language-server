@@ -18,6 +18,7 @@ exports.onCompletion = function (conn) { return registerHandler(conn.onCompletio
 exports.onHover = function (conn) { return registerHandler(conn.onHover); };
 exports.onDocumentSymbol = function (conn) { return registerHandler(conn.onDocumentSymbol); };
 exports.onWorkspaceSymbol = function (conn) { return registerHandler(conn.onWorkspaceSymbol); };
+exports.onReferences = function (conn) { return registerHandler(conn.onReferences); };
 exports.onCodeAction = function (conn) { return registerHandler(conn.onCodeAction); };
 exports.onDidChangeConfiguration = function (conn) { return registerNotificationHandler(conn.onDidChangeConfiguration); };
 exports.publishDiagnostics = function (conn) { return function (params) { return function () { return conn.sendDiagnostics(params); }; }; };
