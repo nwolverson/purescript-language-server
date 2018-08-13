@@ -3,45 +3,45 @@ module LanguageServer.IdePurescript.Imports where
 import Prelude
 
 import Control.Error.Util (hush)
-import Control.Monad.Aff (Aff)
-import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Except (runExcept)
 import Data.Array (fold, singleton)
 import Data.Either (Either(..))
 import Data.Foldable (all)
-import Data.Foreign (Foreign, readString, toForeign)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (un, unwrap)
 import Data.Nullable (toNullable)
+import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
+import Foreign (Foreign, readString, unsafeToForeign)
 import IdePurescript.Modules (ImportResult(..), addExplicitImport, addModuleImport, addQualifiedImport)
 import IdePurescript.PscIde (getAvailableModules)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (applyEdit)
 import LanguageServer.IdePurescript.Config (autocompleteAddImport, preludeModule)
-import LanguageServer.IdePurescript.Types (MainEff, ServerState(..))
+import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeMinimalWorkspaceEdit)
 import LanguageServer.TextDocument (TextDocument, getText, getVersion)
 import LanguageServer.Types (DocumentStore, DocumentUri(DocumentUri), Settings, WorkspaceEdit)
 import LanguageServer.Uri (uriToFilename)
 import PscIde.Command as C
 
-addCompletionImport :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Foreign
+addCompletionImport :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 addCompletionImport log docs config state@(ServerState { port, modules, conn }) args = do
   let shouldAddImport = autocompleteAddImport config
   case conn, (runExcept <<< readString) <$> args, shouldAddImport of
     Just conn, [ Right identifier, mod, qual, Right uriRaw ], true -> do
       let uri = DocumentUri uriRaw
-      doc <- liftEff $ getDocument docs uri
-      version <- liftEff $ getVersion doc
-      text <- liftEff $ getText doc
+      doc <- liftEffect $ getDocument docs uri
+      version <- liftEffect $ getVersion doc
+      text <- liftEffect $ getText doc
       edit <- addCompletionImportEdit log docs config state { identifier, mod: hush mod, qual: hush qual, uri } doc version text
       case edit of
         Right edits -> do
           void $ applyEdit conn (fold edits)
-          pure $ toForeign $ toNullable Nothing
+          pure $ unsafeToForeign $ toNullable Nothing
         Left res -> pure res
-    _, _, _ -> pure $ toForeign $ toNullable Nothing
+    _, _, _ -> pure $ unsafeToForeign $ toNullable Nothing
 
 type CompletionImportArgs =
   {
@@ -51,9 +51,9 @@ type CompletionImportArgs =
   , uri :: DocumentUri
   }
 
-addCompletionImportEdit :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) 
+addCompletionImportEdit :: Notify -> DocumentStore -> Settings -> ServerState
  -> CompletionImportArgs -> TextDocument -> Number -> String
- -> Aff (MainEff eff) (Either Foreign (Array WorkspaceEdit))
+ -> Aff (Either Foreign (Array WorkspaceEdit))
 addCompletionImportEdit log docs config state@(ServerState { port, modules, conn }) { identifier, mod, qual, uri } doc version text = do
   let prelude = preludeModule config
   case port of
@@ -70,9 +70,9 @@ addCompletionImportEdit log docs config state@(ServerState { port, modules, conn
         UpdatedImports newText -> do
           let edit = makeMinimalWorkspaceEdit uri version text newText
           pure $ Right $ maybe [] singleton edit
-        AmbiguousImport imps -> liftEff do
+        AmbiguousImport imps -> liftEffect do
           log Warning "Found ambiguous imports"
-          pure $ Left $ toForeign $ (\(C.TypeInfo { module' }) -> module') <$> imps
+          pure $ Left $ unsafeToForeign $ (\(C.TypeInfo { module' }) -> module') <$> imps
         -- Failed import is not unusual - e.g. already existing import will hit this case.
         FailedImport -> pure $ Right []
     _ -> pure $ Right [] 
@@ -96,15 +96,15 @@ addCompletionImportEdit log docs config state@(ServerState { port, modules, conn
         Nothing -> { state: modules, result: FailedImport }
 
 
-addModuleImport' :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Foreign
+addModuleImport' :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 addModuleImport' log docs config state args = do
   let ServerState { port, modules, conn } = state
   case port, (runExcept <<< readString) <$> args of
     Just port', [ Right mod', qual', Right uri ] -> do
-      doc <- liftEff $ getDocument docs (DocumentUri uri)
-      version <- liftEff $ getVersion doc
-      text <- liftEff $ getText doc
-      fileName <- liftEff $ uriToFilename $ DocumentUri uri
+      doc <- liftEffect $ getDocument docs (DocumentUri uri)
+      version <- liftEffect $ getVersion doc
+      text <- liftEffect $ getText doc
+      fileName <- liftEffect $ uriToFilename $ DocumentUri uri
       res <- addModuleImport modules port' fileName text mod'
       case res of
         Just { result } -> do
@@ -116,18 +116,18 @@ addModuleImport' log docs config state args = do
       pure successResult
 
     _, args'-> do
-      liftEff $ log Info $ show args'
+      liftEffect $ log Info $ show args'
       pure successResult
 
     where
-    successResult = toForeign $ toNullable Nothing
+    successResult = unsafeToForeign $ toNullable Nothing
 
 
-getAllModules :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Foreign
+getAllModules :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 getAllModules log docs config state args =
   case state of
     ServerState { port: Just port, modules, conn } ->
-      toForeign <$> getAvailableModules port
+      unsafeToForeign <$> getAvailableModules port
     _ -> do
-      liftEff $ log Error "Fail case"
-      pure $ toForeign []
+      liftEffect $ log Error "Fail case"
+      pure $ unsafeToForeign []

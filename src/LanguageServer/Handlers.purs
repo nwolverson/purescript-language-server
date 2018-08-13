@@ -2,13 +2,13 @@ module LanguageServer.Handlers where
   
 import Prelude
 
-import Control.Monad.Aff (Aff)
-import Control.Monad.Eff (Eff, kind Effect)
 import Control.Promise (Promise)
 import Control.Promise as Promise
-import Data.Foreign (Foreign)
 import Data.Nullable (Nullable)
-import LanguageServer.Types (CONN, Command, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, WorkspaceEdit)
+import Effect (Effect)
+import Effect.Aff (Aff)
+import Foreign (Foreign)
+import LanguageServer.Types (Command, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, WorkspaceEdit)
 
 type TextDocumentPositionParams = { textDocument :: TextDocumentIdentifier, position :: Position }
 
@@ -26,39 +26,39 @@ type ExecuteCommandParams = { command :: String, arguments :: Array Foreign }
 
 type DidChangeWatchedFilesParams = { changes :: Array FileEvent }
 
-type Res eff a = Eff (conn :: CONN | eff) (Promise a)
+type Res a = Effect (Promise a)
 
-foreign import onDefinition :: forall eff. Connection -> (TextDocumentPositionParams -> Res eff (Nullable Location)) -> Eff (conn :: CONN | eff) Unit
+foreign import onDefinition :: Connection -> (TextDocumentPositionParams -> Res (Nullable Location)) -> Effect Unit
 
-foreign import onCompletion :: forall eff. Connection -> (TextDocumentPositionParams -> Res eff CompletionItemList) -> Eff (conn :: CONN | eff) Unit
+foreign import onCompletion :: Connection -> (TextDocumentPositionParams -> Res CompletionItemList) -> Effect Unit
 
-foreign import onHover :: forall eff. Connection -> (TextDocumentPositionParams -> Res eff (Nullable Hover)) -> Eff (conn :: CONN | eff) Unit
+foreign import onHover :: Connection -> (TextDocumentPositionParams -> Res (Nullable Hover)) -> Effect Unit
 
-foreign import onDocumentSymbol :: forall eff. Connection -> (DocumentSymbolParams -> Res eff (Array SymbolInformation)) -> Eff (conn :: CONN | eff) Unit
+foreign import onDocumentSymbol :: Connection -> (DocumentSymbolParams -> Res (Array SymbolInformation)) -> Effect Unit
 
-foreign import onWorkspaceSymbol :: forall eff. Connection -> (WorkspaceSymbolParams -> Res eff (Array SymbolInformation)) -> Eff (conn :: CONN | eff) Unit
+foreign import onWorkspaceSymbol :: Connection -> (WorkspaceSymbolParams -> Res (Array SymbolInformation)) -> Effect Unit
 
-foreign import onReferences :: forall eff. Connection -> (ReferenceParams -> Res eff (Array Location)) -> Eff (conn :: CONN | eff) Unit
+foreign import onReferences :: Connection -> (ReferenceParams -> Res (Array Location)) -> Effect Unit
 
-foreign import onCodeAction :: forall eff. Connection -> (CodeActionParams -> Res eff (Array Command)) -> Eff (conn :: CONN | eff) Unit
+foreign import onCodeAction :: Connection -> (CodeActionParams -> Res (Array Command)) -> Effect Unit
 
-foreign import onDidChangeConfiguration :: forall eff. Connection -> (DidChangeConfigurationParams -> Eff (conn :: CONN | eff) Unit) -> Eff (conn :: CONN | eff) Unit
+foreign import onDidChangeConfiguration :: Connection -> (DidChangeConfigurationParams -> Effect Unit) -> Effect Unit
 
-foreign import onDidChangeWatchedFiles ::  forall eff. Connection -> (DidChangeWatchedFilesParams -> Eff (conn :: CONN | eff) Unit) -> Eff (conn :: CONN | eff) Unit
+foreign import onDidChangeWatchedFiles ::  Connection -> (DidChangeWatchedFilesParams -> Effect Unit) -> Effect Unit
 
-foreign import onExecuteCommand :: forall eff. Connection -> (ExecuteCommandParams -> Eff (conn :: CONN | eff) (Promise Foreign)) -> Eff (conn :: CONN | eff) Unit
+foreign import onExecuteCommand :: Connection -> (ExecuteCommandParams -> Effect (Promise Foreign)) -> Effect Unit
 
-foreign import publishDiagnostics :: forall eff. Connection -> PublishDiagnosticParams -> Eff (conn :: CONN | eff) Unit
+foreign import publishDiagnostics :: Connection -> PublishDiagnosticParams -> Effect Unit
 
-foreign import applyEditImpl :: forall eff. Connection -> WorkspaceEdit -> Res eff Boolean
+foreign import applyEditImpl :: Connection -> WorkspaceEdit -> Res Boolean
 
-applyEdit :: forall eff. Connection -> WorkspaceEdit -> Aff (conn :: CONN | eff) Boolean
+applyEdit :: Connection -> WorkspaceEdit -> Aff Boolean
 applyEdit conn edit = Promise.toAffE $ applyEditImpl conn edit
 
-foreign import sendDiagnosticsBegin :: forall eff. Connection -> Eff (conn :: CONN | eff) Unit
+foreign import sendDiagnosticsBegin :: Connection -> Effect Unit
 
-foreign import sendDiagnosticsEnd :: forall eff. Connection -> Eff (conn :: CONN | eff) Unit
+foreign import sendDiagnosticsEnd :: Connection -> Effect Unit
 
-foreign import onExit :: forall eff. Connection -> (Eff (conn :: CONN | eff) Unit) -> Eff (conn :: CONN | eff) Unit
+foreign import onExit :: Connection -> (Effect Unit) -> Effect Unit
 
-foreign import onShutdown :: forall eff. Connection -> (Res eff Unit) -> Eff (conn :: CONN | eff) Unit
+foreign import onShutdown :: Connection -> (Res Unit) -> Effect Unit

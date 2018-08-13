@@ -1,10 +1,11 @@
 module LanguageServer.Console where
 
 import Prelude
-import LanguageServer.Types (CONN, Connection)
-import Control.Monad.Eff (Eff)
 
-foreign import log :: forall eff. Connection -> String -> Eff (conn :: CONN | eff) Unit
-foreign import info :: forall eff. Connection -> String -> Eff (conn :: CONN | eff) Unit
-foreign import warn :: forall eff. Connection -> String -> Eff (conn :: CONN | eff) Unit
-foreign import error :: forall eff. Connection -> String -> Eff (conn :: CONN | eff) Unit
+import Effect (Effect)
+import LanguageServer.Types (Connection)
+
+foreign import log :: Connection -> String -> Effect Unit
+foreign import info :: Connection -> String -> Effect Unit
+foreign import warn :: Connection -> String -> Effect Unit
+foreign import error :: Connection -> String -> Effect Unit

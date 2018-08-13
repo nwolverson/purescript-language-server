@@ -11,11 +11,10 @@ import Prelude
 import Data.Char as Char
 import Data.Enum (class Enum)
 import Data.Functor.Contravariant (class Contravariant)
-import Data.Maybe (Maybe(..), maybe)
-import Data.Monoid (class Monoid, mempty)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (class Newtype, unwrap)
 import Data.Ordering (invert)
-import Data.String as String
+import Data.String as CodePoint
 
 newtype SuggestionRank = SuggestionRank Int
 
@@ -46,7 +45,7 @@ fromInt :: Int -> SuggestionRank
 fromInt = SuggestionRank <<< clamp 0 25
 
 toString :: SuggestionRank -> String
-toString (SuggestionRank n) = String.singleton (Char.fromCharCode (65 + n))
+toString (SuggestionRank n) = CodePoint.singleton $ CodePoint.codePointFromChar $ fromMaybe ' ' (Char.fromCharCode (65 + n))
 
 newtype Ranking a = Ranking (a -> SuggestionRank)
 

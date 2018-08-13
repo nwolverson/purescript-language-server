@@ -2,49 +2,26 @@ module LanguageServer.IdePurescript.Types where
 
 import Prelude
 
-import Control.Monad.Aff (Aff)
-import Control.Monad.Aff.AVar (AVAR)
-import Control.Monad.Eff.Console (CONSOLE)
-import Control.Monad.Eff.Exception (EXCEPTION)
-import Control.Monad.Eff.Random (RANDOM)
-import Control.Monad.Eff.Ref (REF)
-import Data.Foreign (Foreign)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
-import Data.StrMap (StrMap)
+import Effect.Aff (Aff)
+import Foreign (Foreign)
+import Foreign.Object (Object)
 import IdePurescript.Modules (State)
-import LanguageServer.Types (CONN, Connection, DocumentStore, DocumentUri, Settings)
-import Node.Buffer (BUFFER)
-import Node.ChildProcess (CHILD_PROCESS)
-import Node.FS (FS)
-import Node.Process (PROCESS)
-import PscIde (NET)
+import LanguageServer.Types (Connection, DocumentStore, DocumentUri, Settings)
 import PscIde.Command (RebuildError)
 
-type MainEff eff =
-    ( process :: PROCESS
-    , conn :: CONN
-    , ref :: REF
-    , avar :: AVAR
-    , buffer :: BUFFER
-    , console :: CONSOLE
-    , cp :: CHILD_PROCESS
-    , exception :: EXCEPTION
-    , fs :: FS
-    , net :: NET
-    , random :: RANDOM | eff)
-
-newtype ServerState eff = ServerState
+newtype ServerState = ServerState
   { port :: Maybe Int
-  , deactivate :: Aff eff Unit
+  , deactivate :: Aff Unit
   , root :: Maybe String
   , conn :: Maybe Connection
   , modules :: State
   , modulesFile :: Maybe DocumentUri
-  , diagnostics :: StrMap (Array RebuildError)
+  , diagnostics :: Object (Array RebuildError)
   }
 
-derive instance newtypeServerState :: Newtype (ServerState eff) _
+derive instance newtypeServerState :: Newtype ServerState _
 
-type CommandHandler eff a = DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) a
+type CommandHandler a = DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff a
 

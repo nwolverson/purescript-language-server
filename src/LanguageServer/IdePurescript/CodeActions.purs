@@ -2,35 +2,35 @@ module LanguageServer.IdePurescript.CodeActions where
 
 import Prelude
 
-import Control.Monad.Aff (Aff)
-import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Except (runExcept)
 import Data.Array (catMaybes, filter, length, mapMaybe)
 import Data.Either (Either(..))
-import Data.Foreign (F, Foreign, readArray, readInt, readString)
-import Data.Foreign.Index ((!))
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (un)
-import Data.StrMap (lookup)
 import Data.String (null, trim)
 import Data.String.Regex (regex)
 import Data.String.Regex.Flags (global, noFlags)
 import Data.Traversable (traverse)
+import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
+import Foreign (F, Foreign, readArray, readInt, readString)
+import Foreign.Index ((!))
+import Foreign.Object as Object
 import IdePurescript.QuickFix (getTitle, isImport, isUnknownToken)
 import IdePurescript.Regex (replace', test')
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.IdePurescript.Build (positionToRange)
 import LanguageServer.IdePurescript.Commands (Replacement, build, fixTypo, replaceAllSuggestions, replaceSuggestion, typedHole)
-import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
+import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (TextDocument, getTextAtRange, getVersion)
 import LanguageServer.Types (Command, DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
-getActions :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> CodeActionParams -> Aff (MainEff eff) (Array Command)
+getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array Command)
 getActions documents settings (ServerState { diagnostics, conn }) { textDocument, range } =  
-  case lookup (un DocumentUri $ docUri) diagnostics of
+  case Object.lookup (un DocumentUri $ docUri) diagnostics of
     Just errs -> pure $
       (catMaybes $ map asCommand errs)
       <> fixAllCommand "Apply all suggestions" errs
@@ -95,7 +95,7 @@ toNextLine (Range { start, end: end@(Position { line, character }) }) =
     , end: Position { line: line+1, character: 0 }
     }
 
-onReplaceSuggestion :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Unit
+onReplaceSuggestion :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 onReplaceSuggestion docs config (ServerState { conn }) args =
   case conn, args of 
     Just conn', [ uri', replacement', range' ]
@@ -103,8 +103,8 @@ onReplaceSuggestion docs config (ServerState { conn }) args =
       , Right replacement <- runExcept $ readString replacement'
       , Right range <- runExcept $ readRange range'
       -> do
-        doc <- liftEff $ getDocument docs (DocumentUri uri)
-        version <- liftEff $ getVersion doc
+        doc <- liftEffect $ getDocument docs (DocumentUri uri)
+        version <- liftEffect $ getVersion doc
         TextEdit { range: range', newText } <- getReplacementEdit doc { replacement, range }
         let edit = makeWorkspaceEdit (DocumentUri uri) version range' newText
 
@@ -113,10 +113,10 @@ onReplaceSuggestion docs config (ServerState { conn }) args =
     _, _ -> pure unit
 
 
-getReplacementEdit :: forall eff. TextDocument -> Replacement -> Aff (MainEff eff) TextEdit
+getReplacementEdit :: TextDocument -> Replacement -> Aff TextEdit
 getReplacementEdit doc { replacement, range } = do
-  origText <- liftEff $ getTextAtRange doc range
-  afterText <- liftEff $ replace' (regex "\n$" noFlags) "" <$> getTextAtRange doc (afterEnd range)
+  origText <- liftEffect $ getTextAtRange doc range
+  afterText <- liftEffect $ replace' (regex "\n$" noFlags) "" <$> getTextAtRange doc (afterEnd range)
 
   let newText = getReplacement replacement afterText
   
@@ -135,15 +135,15 @@ getReplacementEdit doc { replacement, range } = do
       trailingNewline = test' (regex "\n\\s+$" noFlags) replacement
       addNewline = trailingNewline && (not $ null extraText)
 
-onReplaceAllSuggestions :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) Unit
+onReplaceAllSuggestions :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 onReplaceAllSuggestions docs config (ServerState { conn }) args =
   case conn, args of 
     Just conn', [ uri', suggestions' ]
       | Right uri <- runExcept $ readString uri'
       , Right suggestions <- runExcept $ readArray suggestions' >>= traverse readSuggestion
       -> do
-          doc <- liftEff $ getDocument docs (DocumentUri uri)
-          version <- liftEff $ getVersion doc
+          doc <- liftEffect $ getDocument docs (DocumentUri uri)
+          version <- liftEffect $ getVersion doc
           edits <- traverse (getReplacementEdit doc) suggestions
           void $ applyEdit conn' $ workspaceEdit
             [ TextDocumentEdit

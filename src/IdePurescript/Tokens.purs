@@ -1,11 +1,13 @@
 module IdePurescript.Tokens where
 
-import Data.Either
+import Prelude
+
+import Data.Array.NonEmpty as NEA
+import Data.Either (Either, either)
 import Data.Maybe (Maybe(..))
 import Data.String (length, take, drop)
 import Data.String.Regex (Regex, match, regex)
 import Data.String.Regex.Flags (noFlags)
-import Prelude (const, (<>), (-), (+))
 
 type WordRange = { left :: Int, right :: Int }
 
@@ -32,9 +34,11 @@ identifierAtPoint line column =
       match' r t = either (const Nothing) (\r' -> match r' t) r
   in
   case match' beforeRegex textBefore, match' afterRegex textAfter of
-    Just [Just s], Just [Just s'] ->
+    Just ss, Just ss'
+      | Just s <- NEA.head ss
+      , Just s' <- NEA.head ss'  ->
         let qualifier = case match' moduleEndRegex (take (length textBefore - length s) textBefore) of
-                            Just [ _, mm ] -> mm
+                            Just arr | [ _, mm ] <- NEA.toArray arr -> mm
                             _ -> Nothing
         in
           Just { word : s<>s', range : wordRange (length s) (length s'), qualifier }

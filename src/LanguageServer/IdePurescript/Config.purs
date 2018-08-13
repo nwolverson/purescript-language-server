@@ -4,8 +4,8 @@ import Prelude
 
 import Control.Monad.Except (runExcept)
 import Data.Either (either)
-import Data.Foreign (F, Foreign, readArray, readBoolean, readInt, readString)
-import Data.Foreign.Index ((!))
+import Foreign (F, Foreign, readArray, readBoolean, readInt, readString)
+import Foreign.Index ((!))
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Traversable (traverse)
 import PscIde.Server (LogLevel(..))

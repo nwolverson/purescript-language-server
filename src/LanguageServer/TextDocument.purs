@@ -1,19 +1,20 @@
 module LanguageServer.TextDocument where
 
 import Prelude
-import Control.Monad.Eff (Eff)
+
 import Data.String (drop, take)
-import LanguageServer.Types (CONN, DocumentUri, Position, Range(Range))
+import Effect (Effect)
+import LanguageServer.Types (DocumentUri, Position, Range(..))
 
 foreign import data TextDocument :: Type
 
-foreign import offsetAtPosition :: forall eff. TextDocument -> Position -> Eff (conn :: CONN | eff) Int
+foreign import offsetAtPosition :: TextDocument -> Position -> Effect Int
 
-foreign import positionAtOffset :: forall eff. TextDocument -> Int -> Eff (conn :: CONN | eff) Position
+foreign import positionAtOffset :: TextDocument -> Int -> Effect Position
 
-foreign import getText :: forall eff. TextDocument -> Eff (conn :: CONN | eff) String
+foreign import getText :: TextDocument -> Effect String
 
-getTextAtVersion :: forall eff. TextDocument -> Eff (conn :: CONN | eff) { text :: String, version :: Number }
+getTextAtVersion :: TextDocument -> Effect { text :: String, version :: Number }
 getTextAtVersion doc = do
     text <- getText doc
     version <- getVersion doc
@@ -21,10 +22,10 @@ getTextAtVersion doc = do
 
 foreign import getUri :: TextDocument -> DocumentUri
 foreign import getLanguageId :: TextDocument -> String
-foreign import getVersion :: forall eff. TextDocument -> Eff (conn :: CONN | eff) Number
-foreign import getLineCount :: forall eff. TextDocument -> Eff (conn :: CONN | eff) Int
+foreign import getVersion :: TextDocument -> Effect Number
+foreign import getLineCount :: TextDocument -> Effect Int
 
-getTextAtRange :: forall eff. TextDocument -> Range -> Eff (conn :: CONN | eff) String
+getTextAtRange :: TextDocument -> Range -> Effect String
 getTextAtRange doc (Range { start, end }) = do
     i <- offsetAtPosition doc start
     j <- offsetAtPosition doc end

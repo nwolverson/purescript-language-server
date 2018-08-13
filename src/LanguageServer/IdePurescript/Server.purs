@@ -2,16 +2,15 @@ module LanguageServer.IdePurescript.Server where
 
 import Prelude
 
-import Control.Monad.Aff (Aff, apathize, attempt, delay, makeAff)
-import Control.Monad.Eff.Class (liftEff)
 import Data.Array (filter, head)
 import Data.Either (Either(..))
-import Data.Foreign (Foreign)
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Monoid (mempty)
 import Data.String (null)
 import Data.String.Utils (lines)
 import Data.Time.Duration (Milliseconds(..))
+import Effect.Aff (Aff, apathize, attempt, delay, makeAff)
+import Effect.Class (liftEffect)
+import Foreign (Foreign)
 import IdePurescript.Exec (findBins, getPathVar)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import IdePurescript.PscIdeServer as P
@@ -20,24 +19,24 @@ import LanguageServer.Types (Settings)
 import Node.Buffer (toString)
 import Node.ChildProcess (defaultExecOptions, execFile)
 import Node.Encoding (Encoding(..))
-import PscIde (NET, load)
+import PscIde (load)
 import PscIde.Server (Executable(..))
 
-loadAll :: forall e. Int -> Aff (net :: NET | e) Unit
+loadAll :: Int -> Aff Unit
 loadAll port = apathize $ load port [] []
 
-retry :: forall eff. (Notify eff) -> Int -> Aff eff Unit -> Aff eff Unit
+retry :: Notify-> Int -> Aff Unit -> Aff Unit
 retry logError n a | n > 0 = do
     res <- attempt a
     case res of
         Right r -> pure r
         Left err -> do
-            liftEff $ logError Info $ "Retrying starting server after 500ms: " <> show err
+            liftEffect $ logError Info $ "Retrying starting server after 500ms: " <> show err
             delay (Milliseconds 500.0)
             retry logError (n - 1) a
 retry _ _ a = a
 
-startServer' :: forall eff eff'. Settings -> Maybe String -> Notify (P.ServerEff eff) -> Notify (P.ServerEff eff) -> Aff (P.ServerEff eff) { port:: Maybe Int, quit:: P.QuitCallback eff' }
+startServer' :: Settings -> Maybe String -> Notify -> Notify -> Aff { port :: Maybe Int, quit :: Aff Unit }
 startServer' settings root cb logCb = do
   pscpGlob <- getPscPackagePaths settings root
   P.startServer'
@@ -57,13 +56,13 @@ startServer' settings root cb logCb = do
       _ -> []
     exe = if Config.usePurs settings then Config.pursExe settings else Config.serverExe settings
 
-getPscPackagePaths :: forall eff. Foreign -> Maybe String -> Aff (P.ServerEff eff) (Array String)
+getPscPackagePaths :: Foreign -> Maybe String -> Aff (Array String)
 getPscPackagePaths settings root = if not $ Config.addPscPackageSources settings then pure [] else do
-  pathVar <- liftEff $ getPathVar (Config.addNpmPath settings) (fromMaybe "" root)
+  pathVar <- liftEffect $ getPathVar (Config.addNpmPath settings) (fromMaybe "" root)
   serverBins <- findBins pathVar "psc-package"
   case head serverBins of
     Just (Executable bin _) -> makeAff \cb -> do
-      execFile bin [ "sources" ] defaultExecOptions (\{stdout} -> do
+      void $ execFile bin [ "sources" ] defaultExecOptions (\{stdout} -> do
         text <- toString UTF8 stdout
         cb $ pure $ lines text)
       pure mempty

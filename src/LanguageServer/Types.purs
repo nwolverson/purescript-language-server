@@ -2,19 +2,17 @@ module LanguageServer.Types where
 
 import Prelude
 
-import Control.Monad.Eff (kind Effect)
 import Data.Array (concat, groupBy, sortWith, (:))
-import Data.Foreign (Foreign)
+import Data.Array.NonEmpty (toNonEmpty)
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Monoid (class Monoid)
 import Data.Newtype (class Newtype, over)
 import Data.NonEmpty (foldl1, (:|))
 import Data.Nullable (Nullable, toMaybe, toNullable)
-import Data.StrMap (StrMap, empty, fromFoldable)
-import Data.StrMap as StrMap
 import Data.Tuple (Tuple(..))
+import Foreign (Foreign)
+import Foreign.Object (Object)
+import Foreign.Object as Object
 
-foreign import data CONN :: Effect
 foreign import data Connection :: Type
 foreign import data DocumentStore :: Type
 
@@ -220,7 +218,7 @@ instance showTextEdit :: Show TextEdit where
 
 newtype WorkspaceEdit = WorkspaceEdit
   { documentChanges :: Nullable (Array TextDocumentEdit)
-  , changes :: Nullable (StrMap (Array TextEdit))
+  , changes :: Nullable (Object (Array TextEdit))
   }
 
 instance semigroupWorkspaceEdit :: Semigroup WorkspaceEdit where
@@ -228,9 +226,10 @@ instance semigroupWorkspaceEdit :: Semigroup WorkspaceEdit where
     WorkspaceEdit
       { documentChanges: toNullable $ Just $ 
           map (foldl1 combine) $
+          map toNonEmpty $
           groupBy (\d1 d2 -> docId d1 == docId d2)
             (fromNullableArray documentChanges <> fromNullableArray documentChanges')
-      , changes: toNullable $ Just $ StrMap.fromFoldableWith (<>) (goStrMap changes <> goStrMap changes')
+      , changes: toNullable $ Just $ Object.fromFoldableWith (<>) (goStrMap changes <> goStrMap changes')
       }
     where
       combine (TextDocumentEdit { textDocument, edits }) (TextDocumentEdit { edits: edits' }) =
@@ -238,24 +237,25 @@ instance semigroupWorkspaceEdit :: Semigroup WorkspaceEdit where
       docId (TextDocumentEdit { textDocument }) = textDocument
       fromNullableArray :: forall a. Nullable (Array a) -> Array a
       fromNullableArray a = fromMaybe [] $ toMaybe a
-      goStrMap :: forall a. Nullable (StrMap a) -> Array (Tuple String a)
-      goStrMap a = StrMap.toUnfoldable $ fromMaybe empty $ toMaybe a
+      goStrMap :: forall a. Nullable (Object a) -> Array (Tuple String a)
+      goStrMap a = Object.toUnfoldable $ fromMaybe Object.empty $ toMaybe a
   
 instance monoidWorkspaceEdit :: Monoid WorkspaceEdit where
-  mempty = WorkspaceEdit { documentChanges: toNullable $ Just [], changes: toNullable $ Just $ empty }
+  mempty = WorkspaceEdit { documentChanges: toNullable $ Just [], changes: toNullable $ Just $ Object.empty }
 
 -- | Create workspace edit, supporting both documentChanges and older changes property for v2 clients
 workspaceEdit :: Array TextDocumentEdit -> WorkspaceEdit
 workspaceEdit edits = WorkspaceEdit
   { documentChanges: toNullable $ Just edits
   , changes: toNullable $ Just $ 
-      fromFoldable $
+      Object.fromFoldable $
       map (\(h :| t) -> Tuple (uri h) (concat $ edit h : map edit t) ) $
+        map toNonEmpty $
         groupBy (\a b -> uri a == uri b) $ sortWith uri edits
   }
   where
-  uri (TextDocumentEdit { textDocument: TextDocumentIdentifier { uri: DocumentUri uri } }) = uri
-  edit (TextDocumentEdit { edits }) = edits
+  uri (TextDocumentEdit { textDocument: TextDocumentIdentifier { uri: DocumentUri uri' } }) = uri'
+  edit (TextDocumentEdit { edits: edits' }) = edits'
 
 newtype TextDocumentEdit = TextDocumentEdit { textDocument :: TextDocumentIdentifier, edits :: Array TextEdit }
 

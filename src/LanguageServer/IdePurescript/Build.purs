@@ -2,24 +2,27 @@ module LanguageServer.IdePurescript.Build where
 
 import Prelude
 
-import Control.Monad.Aff (Aff)
-import Control.Monad.Eff.Class (liftEff)
 import Data.Array (filter, mapMaybe, notElem, uncons)
 import Data.Either (either)
-import Data.Foreign (Foreign)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Nullable (toNullable)
-import Data.StrMap (StrMap, empty, fromFoldableWith)
 import Data.String (trim)
 import Data.String.Regex (regex, split)
 import Data.String.Regex.Flags (noFlags)
+import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
+import Effect (Effect)
+import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
+import Foreign (Foreign)
+import Foreign.Object (Object)
+import Foreign.Object as Object
 import IdePurescript.Build (Command(Command), build, rebuild)
 import IdePurescript.PscErrors (PscResult(..))
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.IdePurescript.Config (addNpmPath, buildCommand, censorCodes)
 import LanguageServer.IdePurescript.Server (loadAll)
-import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
+import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Types (Diagnostic(Diagnostic), DocumentStore, DocumentUri, Position(Position), Range(Range), Settings)
 import LanguageServer.Uri (uriToFilename)
 import Node.Path (resolve)
@@ -31,47 +34,58 @@ positionToRange ({ startLine, startColumn, endLine, endColumn}) =
   Range { start: Position { line: startLine-1, character: startColumn-1 }
         , end:   Position { line: endLine-1, character: endColumn-1 } }
 
-type DiagnosticResult = { pscErrors :: Array RebuildError, diagnostics :: StrMap (Array Diagnostic) }
+type DiagnosticResult = { pscErrors :: Array RebuildError, diagnostics :: Object (Array Diagnostic) }
 
 emptyDiagnostics :: DiagnosticResult
-emptyDiagnostics = { pscErrors: [], diagnostics: empty }
+emptyDiagnostics = { pscErrors: [], diagnostics: Object.empty }
 
-collectByFirst :: forall a. Array (Tuple (Maybe String) a) -> StrMap (Array a)
-collectByFirst x = fromFoldableWith (<>) $ mapMaybe f x
+collectByFirst :: forall a. Array (Tuple (Maybe String) a) -> Object (Array a)
+collectByFirst x = Object.fromFoldableWith (<>) $ mapMaybe f x
   where
   f (Tuple (Just a) b) = Just (Tuple a [b])
   f _ = Nothing
 
-convertDiagnostics :: String -> Settings -> PscResult -> DiagnosticResult
+convertDiagnostics :: String -> Settings -> PscResult -> Effect DiagnosticResult
 convertDiagnostics projectRoot settings (PscResult { warnings, errors }) =
-  { diagnostics
-  , pscErrors: errors <> warnings'
-  }
+    diagnostics <#>
+      { diagnostics: _
+      , pscErrors: errors <> warnings'
+      }
   where
-  diagnostics = collectByFirst allDiagnostics
+  diagnostics :: Effect (Object (Array Diagnostic))
+  diagnostics = do
+    diags <- allDiagnostics
+    pure $ collectByFirst diags
 
-  allDiagnostics = (convertDiagnostic true <$> errors) <> (convertDiagnostic false <$> warnings')
+  allDiagnostics :: Effect (Array (Tuple (Maybe String) Diagnostic))
+  allDiagnostics =
+      traverse (convertDiagnostic true) errors <>
+      traverse (convertDiagnostic false) warnings'
+
   warnings' = censorWarnings settings warnings
   dummyRange = 
       Range { start: Position { line: 1, character: 1 }
             , end:   Position { line: 1, character: 1 } }
-  convertDiagnostic isError (RebuildError { errorCode, position, message, filename }) = Tuple 
-    (resolve [ projectRoot ] <$> filename)
-    (Diagnostic
-      { range: maybe dummyRange positionToRange position
-      , severity: toNullable $ Just $ if isError then 1 else 2 
-      , code: toNullable $ Just $ errorCode
-      , source: toNullable $ Just "PureScript"
-      , message
-      })
 
-getDiagnostics :: forall eff. DocumentUri -> Settings -> ServerState (MainEff eff) -> Aff (MainEff eff) DiagnosticResult
+  convertDiagnostic :: Boolean -> RebuildError -> Effect (Tuple (Maybe String) Diagnostic)
+  convertDiagnostic isError (RebuildError { errorCode, position, message, filename }) = do
+    resolvedFile <- traverse (resolve [ projectRoot ]) filename
+    pure $ Tuple resolvedFile 
+      (Diagnostic
+        { range: maybe dummyRange positionToRange position
+        , severity: toNullable $ Just $ if isError then 1 else 2 
+        , code: toNullable $ Just $ errorCode
+        , source: toNullable $ Just "PureScript"
+        , message
+        })
+
+getDiagnostics :: DocumentUri -> Settings -> ServerState -> Aff DiagnosticResult
 getDiagnostics uri settings state = do 
-  filename <- liftEff $ uriToFilename uri
+  filename <- liftEffect $ uriToFilename uri
   case state of
     ServerState { port: Just port, root: Just root } -> do
       { errors, success } <- rebuild port filename
-      pure $ convertDiagnostics root settings errors
+      liftEffect $ convertDiagnostics root settings errors
     _ -> pure emptyDiagnostics
 
 censorWarnings :: Settings -> Array RebuildError -> Array RebuildError
@@ -80,20 +94,20 @@ censorWarnings settings = filter (flip notElem codes <<< getCode)
     getCode (RebuildError { errorCode }) = errorCode
     codes = censorCodes settings
       
-fullBuild :: forall eff. Notify (MainEff eff) -> DocumentStore -> Settings -> ServerState (MainEff eff) -> Array Foreign -> Aff (MainEff eff) DiagnosticResult
+fullBuild :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff DiagnosticResult
 fullBuild logCb _ settings state _ = do
   let command = buildCommand settings
   let buildCommand = either (const []) (\reg -> (split reg <<< trim) command) (regex "\\s+" noFlags)
   case state, uncons buildCommand of
     ServerState { port: Just port, conn: Just conn, root: Just directory }, Just { head: cmd, tail: args } -> do
       res <- build logCb { command: Command cmd args, directory, useNpmDir: addNpmPath settings }
-      liftEff $ logCb Info "Build complete"
+      liftEffect $ logCb Info "Build complete"
       loadAll port
-      liftEff $ logCb Info "Reloaded modules"
-      pure $ convertDiagnostics directory settings res.errors
+      liftEffect do logCb Info "Reloaded modules"
+                    convertDiagnostics directory settings res.errors
     _, Nothing -> do
-      liftEff $ logCb Error "Error parsing build command"
+      liftEffect $ logCb Error "Error parsing build command"
       pure emptyDiagnostics
     ServerState { port, conn, root }, _ -> do
-      liftEff $ logCb Error $ "Error running build: " <> show port <> " : " <> show root
+      liftEffect $ logCb Error $ "Error running build: " <> show port <> " : " <> show root
       pure emptyDiagnostics

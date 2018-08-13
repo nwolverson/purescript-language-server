@@ -2,32 +2,31 @@ module LanguageServer.IdePurescript.Main where
 
 import Prelude
 
-import Control.Monad.Aff (Aff, apathize, forkAff, runAff, runAff_)
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Class (liftEff)
-import Control.Monad.Eff.Ref (modifyRef, newRef, readRef, writeRef)
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise, fromAff)
 import Data.Array ((\\), length)
 import Data.Either (either)
 import Data.Foldable (for_)
-import Data.Foreign (Foreign, toForeign)
-import Data.Foreign.JSON (parseJSON)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toMaybe, toNullable)
 import Data.Profunctor.Strong (first)
-import Data.StrMap (StrMap, empty, fromFoldable, insert, lookup, toUnfoldable, keys)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
+import Effect (Effect)
+import Effect.Aff (Aff, apathize, forkAff, runAff_)
+import Effect.Class (liftEffect)
+import Effect.Ref as Ref
+import Foreign (Foreign, unsafeToForeign)
+import Foreign.JSON (parseJSON)
+import Foreign.Object (Object)
+import Foreign.Object as Object
 import IdePurescript.Modules (Module, getModulesForFileTemp, initialModulesState)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.Console (error, info, log, warn)
 import LanguageServer.DocumentStore (getDocument, onDidChangeContent, onDidSaveDocument)
 import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentSymbol, onExecuteCommand, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendDiagnosticsBegin, sendDiagnosticsEnd)
-import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentSymbol, onExecuteCommand, onHover, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fillTypedHole, fixTypo)
-import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fixTypo)
 import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnostics)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
 import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
@@ -39,7 +38,7 @@ import LanguageServer.IdePurescript.Search (search)
 import LanguageServer.IdePurescript.Server (loadAll, retry, startServer')
 import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, getWorkspaceSymbols)
 import LanguageServer.IdePurescript.Tooltips (getTooltips)
-import LanguageServer.IdePurescript.Types (ServerState(..), MainEff, CommandHandler)
+import LanguageServer.IdePurescript.Types (ServerState(..), CommandHandler)
 import LanguageServer.Setup (InitParams(..), initConnection, initDocumentStore)
 import LanguageServer.TextDocument (getText, getUri)
 import LanguageServer.Types (Diagnostic, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
@@ -49,7 +48,7 @@ import Node.FS.Aff as FS
 import Node.Process (argv, cwd)
 import PscIde.Command (RebuildError(..))
 
-defaultServerState :: forall eff. ServerState eff
+defaultServerState :: ServerState
 defaultServerState = ServerState
   { port: Nothing
   , deactivate: pure unit
@@ -57,25 +56,25 @@ defaultServerState = ServerState
   , conn: Nothing
   , modules: initialModulesState
   , modulesFile: Nothing
-  , diagnostics: empty
+  , diagnostics: Object.empty
   }
 
-main :: forall eff. Eff (MainEff eff) Unit
+main :: Effect Unit
 main = do
-  state <- newRef defaultServerState
-  config <- newRef (toForeign {})
-  gotConfig <- newRef false
+  state <- Ref.new defaultServerState
+  config <- Ref.new (unsafeToForeign {})
+  gotConfig <- Ref.new false
 
   argv >>= case _ of 
     [ _, _, "--stdio", "--config", c ] -> either (const $ pure unit) (\cc -> do
-        writeRef config cc
-        writeRef gotConfig true
+        Ref.write cc config
+        Ref.write true gotConfig
     ) $ runExcept $ parseJSON c
     _ -> pure unit
 
-  let logError :: Notify (MainEff eff)
+  let logError :: Notify
       logError l s = do
-        (_.conn <$> unwrap <$> readRef state) >>=
+        (_.conn <$> unwrap <$> Ref.read state) >>=
           maybe (pure unit) (\conn -> case l of 
             Success -> log conn s
             Info -> info conn s
@@ -83,22 +82,23 @@ main = do
             Error -> error conn s)
   let launchAffLog = runAff_ (either (logError Error <<< show) (const $ pure unit))
 
-  let stopPscIdeServer :: Aff (MainEff eff) Unit
+  let stopPscIdeServer :: Aff Unit
       stopPscIdeServer = do
-        quit <- liftEff (_.deactivate <$> unwrap <$> readRef state)
+        quit <- liftEffect (_.deactivate <$> unwrap <$> Ref.read state)
         quit
-        liftEff $ modifyRef state (over ServerState $ _ { port = Nothing, deactivate = pure unit })
-        liftEff $ logError Success "Stopped IDE server"
+        liftEffect do
+          Ref.modify_ (over ServerState $ _ { port = Nothing, deactivate = pure unit }) state
+          logError Success "Stopped IDE server"
 
       startPscIdeServer = do
-        liftEff $ logError Info "Starting IDE server"
-        rootPath <- liftEff $ (_.root <<< unwrap) <$> readRef state
-        settings <- liftEff $ readRef config
+        liftEffect $ logError Info "Starting IDE server"
+        rootPath <- liftEffect $ (_.root <<< unwrap) <$> Ref.read state
+        settings <- liftEffect $ Ref.read config
         startRes <- startServer' settings rootPath logError logError
         retry logError 6 case startRes of
           { port: Just port, quit } -> do
             loadAll port
-            liftEff $ modifyRef state (over ServerState $ _ { port = Just port, deactivate = quit })
+            liftEffect $ Ref.modify_ (over ServerState $ _ { port = Just port, deactivate = quit }) state
           _ -> pure unit
 
       restartPscIdeServer = do
@@ -108,8 +108,8 @@ main = do
   conn <- initConnection commands $ \({ params: InitParams { rootPath }, conn }) ->  do
     cwd >>= \dir -> log conn ("Starting with cwd: " <> dir)
     argv >>= \args -> log conn $ "Starting with args: " <> show args
-    modifyRef state (over ServerState $ _ { root = toMaybe rootPath })
-  modifyRef state (over ServerState $ _ { conn = Just conn })
+    Ref.modify_ (over ServerState $ _ { root = toMaybe rootPath }) state
+  Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
   
   documents <- initDocumentStore conn
 
@@ -117,24 +117,22 @@ main = do
       showModule = unwrap >>> case _ of
          { moduleName, importType, qualifier } -> moduleName <> maybe "" (" as " <> _) qualifier
 
-  let updateModules :: DocumentUri -> Aff (MainEff eff) Unit
+  let updateModules :: DocumentUri -> Aff Unit
       updateModules uri = 
-        liftEff (readRef state) >>= case _ of 
+        liftEffect (Ref.read state) >>= case _ of 
           ServerState { port: Just port, modulesFile } 
             | modulesFile /= Just uri -> do
-            text <- liftEff $ getDocument documents uri >>= getText
-            path <- liftEff $ uriToFilename uri
+            text <- liftEffect $ getDocument documents uri >>= getText
+            path <- liftEffect $ uriToFilename uri
             modules <- getModulesForFileTemp port path text
-            liftEff $ modifyRef state $ over ServerState (_ { modules = modules, modulesFile = Just uri })
-            -- liftEff $ info conn $ "Updated modules to: " <> show modules.main <> " / " <> show (showModule <$> modules.modules)
+            liftEffect $ Ref.modify_ (over ServerState (_ { modules = modules, modulesFile = Just uri })) state
           _ -> pure unit
 
-  let runHandler :: forall a b . String -> (b -> Maybe DocumentUri) -> (Settings -> ServerState (MainEff eff) -> b -> Aff (MainEff eff) a) -> b -> Eff (MainEff eff) (Promise a)
+  let runHandler :: forall a b . String -> (b -> Maybe DocumentUri) -> (Settings -> ServerState -> b -> Aff a) -> b -> Effect (Promise a)
       runHandler handlerName docUri f b =
         fromAff do
-          c <- liftEff $ readRef config
-          s <- liftEff $ readRef state
-          liftEff $ maybe (pure unit) (\con -> log con $ "handler " <> handlerName) (_.conn $ unwrap s)
+          c <- liftEffect $ Ref.read config
+          s <- liftEffect $ Ref.read state
           maybe (pure unit) updateModules (docUri b)          
           f c s b
 
@@ -159,51 +157,52 @@ main = do
         _ -> pure unit
 
   onDidChangeContent documents $ \_ ->
-    liftEff $ modifyRef state $ over ServerState (_ { modulesFile = Nothing })
+    liftEffect $ Ref.modify_ (over ServerState (_ { modulesFile = Nothing })) state
 
   onDidSaveDocument documents \{ document } -> launchAffLog do
     let uri = getUri document
-    c <- liftEff $ readRef config
-    s <- liftEff $ readRef state
+    c <- liftEffect $ Ref.read config
+    s <- liftEffect $ Ref.read state
 
     when (Config.fastRebuild c) do 
-      liftEff $ sendDiagnosticsBegin conn
+      liftEffect $ sendDiagnosticsBegin conn
       { pscErrors, diagnostics } <- getDiagnostics uri c s
-      filename <- liftEff $ uriToFilename uri
-      let fileDiagnostics = fromMaybe [] $ lookup filename diagnostics
-      liftEff $ log conn $ "Built with " <> show (length pscErrors) <> " issues for file: " <> show filename <> ", all diagnostic files: " <> show (keys diagnostics)
-      liftEff $ writeRef state $ over ServerState (\s1 -> s1 { 
-        diagnostics = insert (un DocumentUri uri) pscErrors (s1.diagnostics)
-      , modulesFile = Nothing -- Force reload of modules on next request
-      }) s
-      liftEff $ publishDiagnostics conn { uri, diagnostics: fileDiagnostics }
-      liftEff $ sendDiagnosticsEnd conn
+      filename <- liftEffect $ uriToFilename uri
+      let fileDiagnostics = fromMaybe [] $ Object.lookup filename diagnostics
+      liftEffect do
+        log conn $ "Built with " <> show (length pscErrors) <> " issues for file: " <> show filename <> ", all diagnostic files: " <> show (Object.keys diagnostics)
+        Ref.write (over ServerState (\s1 -> s1 { 
+          diagnostics = Object.insert (un DocumentUri uri) pscErrors (s1.diagnostics)
+        , modulesFile = Nothing -- Force reload of modules on next request
+        }) s) state
+        publishDiagnostics conn { uri, diagnostics: fileDiagnostics }
+        sendDiagnosticsEnd conn
 
   let onBuild docs c s arguments = do
-        liftEff $ sendDiagnosticsBegin conn
+        liftEffect $ sendDiagnosticsBegin conn
         { pscErrors, diagnostics } <- fullBuild logError docs c s arguments
-        liftEff do
+        liftEffect do
           log conn $ "Built with " <> (show $ length pscErrors) <> " issues"
           pscErrorsMap <- collectByFirst <$> traverse (\(e@RebuildError { filename }) -> do
             uri <- maybe (pure Nothing) (\f -> Just <$> un DocumentUri <$> filenameToUri f) filename
             pure $ Tuple uri e)
               pscErrors
-          prevErrors <- _.diagnostics <$> un ServerState <$> readRef state
+          prevErrors <- _.diagnostics <$> un ServerState <$> Ref.read state
           let nonErrorFiles :: Array String
-              nonErrorFiles = keys prevErrors \\ keys pscErrorsMap
-          writeRef state $ over ServerState (_ { diagnostics = pscErrorsMap }) s
-          for_ (toUnfoldable diagnostics :: Array (Tuple String (Array Diagnostic))) \(Tuple filename fileDiagnostics) -> do
+              nonErrorFiles = Object.keys prevErrors \\ Object.keys pscErrorsMap
+          Ref.write (over ServerState (_ { diagnostics = pscErrorsMap }) s) state
+          for_ (Object.toUnfoldable diagnostics :: Array (Tuple String (Array Diagnostic))) \(Tuple filename fileDiagnostics) -> do
             uri <- filenameToUri filename
             publishDiagnostics conn { uri, diagnostics: fileDiagnostics }
           for_ (map DocumentUri nonErrorFiles) \uri -> publishDiagnostics conn { uri, diagnostics: [] }
           sendDiagnosticsEnd conn
 
-  let noResult = toForeign $ toNullable Nothing
-  let voidHandler :: forall a. CommandHandler eff a -> CommandHandler eff Foreign
+  let noResult = unsafeToForeign $ toNullable Nothing
+  let voidHandler :: forall a. CommandHandler a -> CommandHandler Foreign
       voidHandler h d c s a = h d c s a $> noResult
       simpleHandler h d c s a = h $> noResult
-  let handlers :: StrMap (CommandHandler eff Foreign)
-      handlers = fromFoldable $ first cmdName <$>
+  let handlers :: Object (CommandHandler Foreign)
+      handlers = Object.fromFoldable $ first cmdName <$>
       [ Tuple caseSplitCmd $ voidHandler caseSplit
       , Tuple addClauseCmd $ voidHandler addClause
       , Tuple replaceSuggestionCmd $ voidHandler onReplaceSuggestion
@@ -221,36 +220,36 @@ main = do
       ]
 
   onExecuteCommand conn $ \{ command, arguments } -> fromAff do
-    c <- liftEff $ readRef config
-    s <- liftEff $ readRef state
-    case lookup command handlers of 
+    c <- liftEffect $ Ref.read config
+    s <- liftEffect $ Ref.read state
+    case Object.lookup command handlers of 
       Just handler -> handler documents c s arguments
       Nothing -> do
-        liftEff $ error conn $ "Unknown command: " <> command
+        liftEffect $ error conn $ "Unknown command: " <> command
         pure noResult
 
   let onConfig = launchAffLog do
-        liftEff $ writeRef gotConfig true
-        c <- liftEff $ readRef config
+        liftEffect $ Ref.write true gotConfig
+        c <- liftEffect $ Ref.read config
         when (Config.autoStartPscIde c) $ do
           startPscIdeServer
           let outputDir = Config.effectiveOutputDirectory c
           exists <- FS.exists outputDir
-          liftEff $ log conn $ "Onconfig: " <> show exists
+          liftEffect $ log conn $ "Onconfig: " <> show exists
           when (not exists) $ void $ forkAff do
             let message = "Output directory does not exist at '" <> outputDir <> "'"
-            liftEff $ info conn message
+            liftEffect $ info conn message
             let buildOption = "Build project"
             action <- showWarningWithActions conn (message <> ". Ensure project is built, or check configuration of output directory and build command.") [ buildOption ]
             when (action == Just buildOption) do
-              s <- liftEff $ readRef state
+              s <- liftEffect $ Ref.read state
               onBuild documents c s []
 
-  readRef gotConfig >>= (_ `when` onConfig)
+  Ref.read gotConfig >>= (_ `when` onConfig)
 
   onDidChangeConfiguration conn $ \{settings} -> do 
     log conn "Got updated settings"
-    writeRef config settings
-    readRef gotConfig >>= \c -> when (not c) onConfig
+    Ref.write settings config 
+    Ref.read gotConfig >>= \c -> when (not c) onConfig
 
   log conn "PureScript Language Server started"

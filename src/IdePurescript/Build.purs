@@ -2,12 +2,6 @@ module IdePurescript.Build where
 
 import Prelude
 
-import Control.Monad.Aff (Aff, makeAff)
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Class (liftEff)
-import Control.Monad.Eff.Exception (EXCEPTION, error, catchException)
-import Control.Monad.Eff.Ref (readRef, REF, modifyRef, newRef)
-import Control.Monad.Eff.Unsafe (unsafeCoerceEff)
 import Control.Monad.Error.Class (throwError)
 import Data.Array (uncons)
 import Data.Bifunctor (bimap)
@@ -15,22 +9,22 @@ import Data.Either (either, Either(..))
 import Data.Foldable (find)
 import Data.List as List
 import Data.Maybe (maybe, Maybe(..))
-import Data.Monoid (mempty)
-import Data.StrMap (fromFoldable)
 import Data.String (Pattern(Pattern), split, indexOf)
 import Data.Traversable (traverse_)
 import Data.Tuple (Tuple(Tuple))
+import Effect (Effect)
+import Effect.Aff (Aff, error, makeAff)
+import Effect.Class (liftEffect)
+import Effect.Exception (catchException)
+import Effect.Ref as Ref
+import Foreign.Object as Object
 import IdePurescript.Exec (findBins, getPathVar)
 import IdePurescript.PscErrors (PscResult(..), parsePscOutput)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
-import Node.Buffer (BUFFER)
-import Node.ChildProcess (ChildProcess, CHILD_PROCESS)
+import Node.ChildProcess (ChildProcess)
 import Node.ChildProcess as CP
-import Node.Encoding (Encoding(UTF8))
-import Node.FS (FS)
-import Node.Process (PROCESS)
+import Node.Encoding as Encoding
 import Node.Stream as S
-import PscIde (NET)
 import PscIde as P
 import PscIde.Command (RebuildResult(..))
 import PscIde.Server (Executable(Executable))
@@ -48,23 +42,17 @@ type BuildResult =
   , success :: Boolean
   }
 
-addExceptionEffect :: forall eff a. Eff eff a -> Eff (exception :: EXCEPTION | eff) a
-addExceptionEffect = unsafeCoerceEff
-
-spawn :: forall eff. BuildOptions
-  -> Aff (cp :: CHILD_PROCESS, buffer :: BUFFER, fs :: FS, process :: PROCESS | eff)
-      { cmdBins :: Array Executable, cp :: Maybe ChildProcess }
+spawn :: BuildOptions -> Aff { cmdBins :: Array Executable, cp :: Maybe ChildProcess }
 spawn { command: Command cmd args, directory, useNpmDir } = do
-  pathVar <- liftEff $ getPathVar useNpmDir directory
+  pathVar <- liftEffect $ getPathVar useNpmDir directory
   cmdBins <- findBins pathVar cmd
-  cp <- liftEff $ case uncons cmdBins of
+  cp <- liftEffect $ case uncons cmdBins of
     Just { head: Executable cmdBin _ } -> Just <$>
-      CP.spawn cmdBin args (CP.defaultSpawnOptions { cwd = Just directory, env = Just (fromFoldable $ List.singleton $ Tuple "PATH" $ either id id pathVar) })
+      CP.spawn cmdBin args (CP.defaultSpawnOptions { cwd = Just directory, env = Just (Object.fromFoldable $ List.singleton $ Tuple "PATH" $ either identity identity pathVar) })
     _ -> pure Nothing
   pure { cmdBins, cp }
 
-type BuildEff eff = (cp :: CP.CHILD_PROCESS, buffer :: BUFFER, fs :: FS, ref :: REF, process :: PROCESS | eff)
-build :: forall eff. Notify (BuildEff eff) -> BuildOptions -> Aff (BuildEff eff) BuildResult
+build :: Notify -> BuildOptions -> Aff BuildResult
 build logCb buildOptions@{ command: Command cmd args, directory, useNpmDir } = do
   { cmdBins, cp: cp' } <- spawn buildOptions
   makeAff $ \cb -> do
@@ -76,15 +64,14 @@ build logCb buildOptions@{ command: Command cmd args, directory, useNpmDir } = d
       Just cp -> do
         CP.onError cp (cb <<< Left <<< CP.toStandardError)
         let stderr = CP.stderr cp
-        result <- newRef ""
-        let res :: String -> Eff (BuildEff (exception :: EXCEPTION | eff)) Unit
-            res s = do
-              modifyRef result (\acc -> acc<>s)
+        result <- Ref.new ""
+        let res :: String -> Effect Unit
+            res s = Ref.modify_ (\acc -> acc<>s) result
 
-        catchException (cb <<< Left) $ S.onDataString stderr UTF8 res
+        catchException (cb <<< Left) $ S.onDataString stderr Encoding.UTF8 res
         CP.onClose cp (\exit -> case exit of
           CP.Normally n | n == 0 || n == 1 -> do
-            pscOutput <- readRef result
+            pscOutput <- Ref.read result
             let lines = split (Pattern "\n") pscOutput
                 json = find (\s -> indexOf (Pattern "{\"") s == Just 0) lines
             case parsePscOutput <$> json of
@@ -94,7 +81,7 @@ build logCb buildOptions@{ command: Command cmd args, directory, useNpmDir } = d
           _ -> cb $ Left $ error "Process exited abnormally")
     pure mempty
 
-rebuild :: forall eff. Int -> String -> Aff (net :: NET | eff) BuildResult
+rebuild :: Int -> String -> Aff BuildResult
 rebuild port file = do
   res <- P.rebuild port file (Just file)
   either

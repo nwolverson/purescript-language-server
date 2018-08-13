@@ -2,8 +2,6 @@ module LanguageServer.IdePurescript.Completion where
 
 import Prelude
 
-import Control.Monad.Aff (Aff)
-import Control.Monad.Eff.Class (liftEff)
 import Data.Array (filter)
 import Data.Array (length, null) as Arr
 import Data.FoldableWithIndex (foldMapWithIndex)
@@ -12,6 +10,8 @@ import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toNullable)
 import Data.String (Pattern(..), Replacement(..), indexOf, joinWith, length, replaceAll, split, toUpper)
 import Data.String.Utils (toCharArray)
+import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
 import IdePurescript.Completion (SuggestionResult(..), SuggestionType(..), getSuggestions)
 import IdePurescript.Modules (State, getAllActiveModules, getModuleFromUnknownQualifier, getModuleName, getQualModule, getUnqualActiveModules)
 import IdePurescript.PscIde (getLoadedModules)
@@ -21,16 +21,16 @@ import LanguageServer.IdePurescript.Commands (addCompletionImport)
 import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.IdePurescript.SuggestionRank (Ranking(..), cmapRanking)
 import LanguageServer.IdePurescript.SuggestionRank as SuggestionRank
-import LanguageServer.IdePurescript.Types (MainEff, ServerState)
+import LanguageServer.IdePurescript.Types (ServerState)
 import LanguageServer.TextDocument (getTextAtRange)
 import LanguageServer.Types (CompletionItem(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, CompletionItemList(..), markupContent)
 import LanguageServer.Types as LS
 
-getCompletions :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> TextDocumentPositionParams -> Aff (MainEff eff) CompletionItemList
+getCompletions :: DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams -> Aff CompletionItemList
 getCompletions docs settings state ({ textDocument, position }) = do
     let uri = _.uri $ un TextDocumentIdentifier textDocument
-    doc <- liftEff $ getDocument docs uri
-    line <- liftEff $ getTextAtRange doc (mkRange position)
+    doc <- liftEffect $ getDocument docs uri
+    line <- liftEffect $ getTextAtRange doc (mkRange position)
     let autoCompleteAllModules = Config.autoCompleteAllModules settings
         { port, modules } = unwrap state
         getQualifiedModule = (flip getQualModule) modules

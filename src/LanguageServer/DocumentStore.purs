@@ -1,17 +1,18 @@
 module LanguageServer.DocumentStore where
 
 import Prelude
-import Control.Monad.Eff (Eff)
+
+import Effect (Effect)
 import LanguageServer.TextDocument (TextDocument)
-import LanguageServer.Types (CONN, DocumentStore, DocumentUri)
+import LanguageServer.Types (DocumentStore, DocumentUri)
 
-foreign import getDocuments :: forall eff. DocumentStore ->  Eff (conn :: CONN | eff) (Array TextDocument)
+foreign import getDocuments :: DocumentStore ->  Effect (Array TextDocument)
 
-foreign import getDocument :: forall eff. DocumentStore -> DocumentUri -> Eff (conn :: CONN | eff) TextDocument
+foreign import getDocument :: DocumentStore -> DocumentUri -> Effect TextDocument
 
 type TextDocumentChangeEvent = { document :: TextDocument }
 
-foreign import onDidSaveDocument :: forall eff. DocumentStore -> (TextDocumentChangeEvent -> Eff (conn :: CONN | eff) Unit) -> Eff (conn :: CONN | eff) Unit
-foreign import onDidOpenDocument :: forall eff. DocumentStore -> (TextDocumentChangeEvent -> Eff (conn :: CONN | eff) Unit) -> Eff (conn :: CONN | eff) Unit
-foreign import onDidCloseDocument :: forall eff. DocumentStore -> (TextDocumentChangeEvent -> Eff (conn :: CONN | eff) Unit) -> Eff (conn :: CONN | eff) Unit
-foreign import onDidChangeContent :: forall eff. DocumentStore -> (TextDocumentChangeEvent -> Eff (conn :: CONN | eff) Unit) -> Eff (conn :: CONN | eff) Unit
+foreign import onDidSaveDocument :: DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit
+foreign import onDidOpenDocument :: DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit
+foreign import onDidCloseDocument :: DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit
+foreign import onDidChangeContent :: DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit

@@ -20,22 +20,21 @@ module IdePurescript.Modules (
 import Prelude
 
 import Control.Alt ((<|>))
-import Control.Monad.Aff (Aff, attempt)
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Class (liftEff)
 import Data.Array (findLastIndex, filter, singleton, concatMap, (:))
 import Data.Either (either, Either(..))
 import Data.Foldable (all, notElem, elem)
 import Data.Maybe (Maybe(..), maybe, fromMaybe)
 import Data.Newtype (class Newtype)
-import Data.StrMap as SM
 import Data.String (Pattern(Pattern), split)
 import Data.String.Regex (regex) as R
 import Data.String.Regex.Flags (global, noFlags, multiline) as R
 import Data.Tuple (Tuple(..))
+import Effect (Effect)
+import Effect.Aff (Aff, attempt)
+import Effect.Class (liftEffect)
+import Foreign.Object as Object
 import IdePurescript.Regex (replace', match', test')
 import Node.Encoding (Encoding(..))
-import Node.FS (FS)
 import Node.FS.Aff as FS
 import Node.Path (sep)
 import PscIde as P
@@ -69,7 +68,7 @@ type State =
   { main :: Maybe String
   , modules :: Array Module
   , identifiers :: Array String
-  , identToModule :: SM.StrMap Module
+  , identToModule :: Object.Object Module
   }
 
 type Path = String
@@ -82,13 +81,13 @@ getMainModule text =
   where
   regex = R.regex """module\s+([\w.]+)""" $ R.multiline
 
-getModulesForFile :: forall eff. Int -> Path -> String -> Aff (net :: P.NET | eff) State
+getModulesForFile :: Int -> Path -> String -> Aff State
 getModulesForFile port file fullText = do
-  C.ImportList { moduleName, imports } <- either (const default) id <$> P.listImports port file
+  C.ImportList { moduleName, imports } <- either (const default) identity <$> P.listImports port file
   let modules = map mod imports
       main = maybe (getMainModule fullText) Just moduleName
-      identToModule = SM.fromFoldable $ concatMap idents modules
-      identifiers = SM.keys identToModule
+      identToModule = Object.fromFoldable $ concatMap idents modules
+      identifiers = Object.keys identToModule
   pure { main, modules, identifiers, identToModule }
   where
   default = C.ImportList { moduleName: Nothing, imports: [] }
@@ -96,7 +95,7 @@ getModulesForFile port file fullText = do
   idents m@(Module { importType: Explicit ids }) = flip Tuple m <$> ids
   idents _ = []
 
-getModulesForFileTemp :: forall eff. Int -> Path -> String -> Aff (net :: P.NET, fs :: FS | eff) State
+getModulesForFileTemp :: Int -> Path -> String -> Aff State
 getModulesForFileTemp port file fullText = do
   tmpFile <- makeTempFile file fullText
   res <- getModulesForFile port tmpFile fullText
@@ -130,10 +129,10 @@ getQualModule qualifier {modules} =
 
 getModuleFromUnknownQualifier :: String -> State -> Maybe Module
 getModuleFromUnknownQualifier qual { identToModule } =
-  SM.lookup qual identToModule <|> SM.lookup ("class " <> qual) identToModule
+  Object.lookup qual identToModule <|> Object.lookup ("class " <> qual) identToModule
 
 initialModulesState :: State
-initialModulesState =  { main: Nothing, modules: [], identifiers: [], identToModule: SM.empty }
+initialModulesState =  { main: Nothing, modules: [], identifiers: [], identToModule: Object.empty }
 
 findImportInsertPos :: String -> Int
 findImportInsertPos text =
@@ -142,20 +141,20 @@ findImportInsertPos text =
       res = fromMaybe 0 $ findLastIndex (test' regex) lines
   in res+1
 
-foreign import tmpDir :: forall eff. Eff (fs :: FS | eff) String
+foreign import tmpDir :: Effect String
 
 data ImportResult = UpdatedImports String | AmbiguousImport (Array C.TypeInfo) | FailedImport
 
-makeTempFile :: forall eff. Path -> String -> Aff (fs :: FS | eff) Path
+makeTempFile :: Path -> String -> Aff Path
 makeTempFile fileName text = do
-  dir <- liftEff tmpDir
+  dir <- liftEffect tmpDir
   let name = replace' (R.regex "[\\/\\\\:]" R.global) "-" fileName
       tmpFile = dir <> sep <> "ide-purescript-" <> name
   FS.writeTextFile UTF8 tmpFile text
   pure tmpFile
 
-withTempFile :: forall eff. String -> String -> (String -> Aff (net :: P.NET, fs :: FS | eff) (Either String C.ImportResult))
-  -> Aff (net :: P.NET, fs :: FS | eff) ImportResult
+withTempFile :: String -> String -> (String -> Aff (Either String C.ImportResult))
+  -> Aff ImportResult
 withTempFile fileName text action = do
   tmpFile <- makeTempFile fileName text
   res <- action tmpFile
@@ -166,8 +165,8 @@ withTempFile fileName text action = do
   _ <- attempt $ FS.unlink tmpFile
   pure answer
 
-addModuleImport :: forall eff. State -> Int -> String -> String -> String
-  -> Aff (net :: P.NET, fs :: FS | eff) (Maybe { state :: State, result :: String })
+addModuleImport :: State -> Int -> String -> String -> String
+  -> Aff (Maybe { state :: State, result :: String })
 addModuleImport state port fileName text moduleName =
   case shouldAdd of
     false -> pure Nothing
@@ -181,8 +180,8 @@ addModuleImport state port fileName text moduleName =
   shouldAdd =
     state.main /= Just moduleName && (mkImplicit moduleName `notElem` state.modules)
 
-addExplicitImport :: forall eff. State -> Int -> String -> String -> Maybe String -> Maybe String -> String
-  -> Aff (net :: P.NET, fs :: FS | eff) { state :: State, result :: ImportResult }
+addExplicitImport :: State -> Int -> String -> String -> Maybe String -> Maybe String -> String
+  -> Aff { state :: State, result :: ImportResult }
 addExplicitImport state port fileName text moduleName qualifier identifier =
   case shouldAdd of
     false -> pure { state, result: FailedImport }
@@ -211,8 +210,8 @@ addExplicitImport state port fileName text moduleName qualifier identifier =
       | moduleName' == mn = identifier `elem` idents
     shouldAddMatch _ _ = true
 
-addQualifiedImport :: forall eff. State -> Int -> String -> String -> String -> String
-  -> Aff (net :: P.NET, fs :: FS | eff) { state :: State, result :: ImportResult }
+addQualifiedImport :: State -> Int -> String -> String -> String -> String
+  -> Aff { state :: State, result :: ImportResult }
 addQualifiedImport state port fileName text moduleName qualifier =
   if not isThisModule
     then { state, result: _ } <$> withTempFile fileName text addImport

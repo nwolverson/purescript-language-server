@@ -3,9 +3,9 @@ module LanguageServer.IdePurescript.Commands where
 import Prelude
 
 import Data.Array ((:))
-import Data.Foreign (Foreign, toForeign)
 import Data.Maybe (Maybe(..))
 import Data.Nullable (toNullable)
+import Foreign (Foreign, unsafeToForeign)
 import LanguageServer.Types (Command(..), DocumentUri, Range)
 import PscIde.Command (TypeInfo)
 
@@ -28,7 +28,7 @@ addCompletionImportCmd = CommandInfo "Add completion import" "addCompletionImpor
 
 addCompletionImport :: String -> Maybe String -> Maybe String -> DocumentUri -> Command
 addCompletionImport ident mod qual uri = c addCompletionImportCmd $
-  Just [ toForeign ident, toForeign $ toNullable mod, toForeign $ toNullable qual, toForeign uri ]
+  Just [ unsafeToForeign ident, unsafeToForeign $ toNullable mod, unsafeToForeign $ toNullable qual, unsafeToForeign uri ]
 
 addModuleImportCmd :: CommandInfo
 addModuleImportCmd = CommandInfo "Add module import" "addModuleImport"
@@ -38,7 +38,7 @@ replaceSuggestionCmd = CommandInfo "Apply Suggestion" "replaceSuggestion"
 
 replaceSuggestion :: String -> DocumentUri -> String -> Range -> Command
 replaceSuggestion title uri replacement fixRange = c (CommandInfo title "replaceSuggestion") $ 
-  Just [ toForeign uri, toForeign replacement, toForeign fixRange ]
+  Just $ [ unsafeToForeign uri, unsafeToForeign replacement, unsafeToForeign fixRange ]
 
 replaceAllSuggestionsCmd :: CommandInfo
 replaceAllSuggestionsCmd = CommandInfo "Replace all suggestions" "replaceAllSuggestions"
@@ -47,7 +47,7 @@ type Replacement = { replacement:: String, range :: Range }
 
 replaceAllSuggestions :: String -> DocumentUri -> Array Replacement -> Command
 replaceAllSuggestions text uri replacements = c (CommandInfo text "replaceAllSuggestions") $ 
-  Just [ toForeign uri, toForeign replacements ]
+  Just $ [ unsafeToForeign uri, unsafeToForeign replacements ]
 
 buildCmd :: CommandInfo
 buildCmd = CommandInfo "Build" "build"
@@ -59,7 +59,7 @@ typedHoleCmd :: CommandInfo
 typedHoleCmd = CommandInfo "Insert typed hole suggestion" "typedHole"
 
 typedHole :: String -> DocumentUri -> Range -> Array TypeInfo -> Command
-typedHole name url range options = c typedHoleCmd (Just $ toForeign name : toForeign url : toForeign range : (toForeign <$> options) )
+typedHole name url range options = c typedHoleCmd (Just $ unsafeToForeign name : unsafeToForeign url : unsafeToForeign range : (unsafeToForeign <$> options) )
 
 typedHoleExplicitCmd :: CommandInfo
 typedHoleExplicitCmd = CommandInfo "Insert typed hole suggestion" "typedHole-explicit"
@@ -83,7 +83,7 @@ fixTypoCmd :: CommandInfo
 fixTypoCmd = CommandInfo "Fix typo/add import" "fixTypo"
 
 fixTypo :: DocumentUri -> Int -> Int -> Command
-fixTypo uri row char = c fixTypoCmd $ Just [ toForeign uri, toForeign row, toForeign char ] 
+fixTypo uri row char = c fixTypoCmd $ Just $ [ unsafeToForeign uri, unsafeToForeign row, unsafeToForeign char ] 
 
 commands :: Array String
 commands = cmdName <$> 

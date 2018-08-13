@@ -1,7 +1,7 @@
 {
     "name": "purescript-language-server",
-    "set": "ide-dev-20180501",
-    "source": "https://github.com/nwolverson/package-sets.git",
+    "set": "110818",
+    "source": "https://github.com/nwolverson/spacchetti.git",
     "depends": [
         "node-fs-aff",
         "node-process",

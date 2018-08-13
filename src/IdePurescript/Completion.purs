@@ -3,18 +3,18 @@ module IdePurescript.Completion where
 import Prelude
 
 import Control.Alt ((<|>))
-import Control.Monad.Aff (Aff)
 import Data.Array (filter, head, intersect, sortBy, (:))
 import Data.Either (Either)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String (Pattern(..), contains, indexOf, length)
-import Data.String.Utils (startsWith)
 import Data.String.Regex (Regex, regex)
 import Data.String.Regex.Flags (noFlags)
+import Data.String.Utils (startsWith)
+import Effect.Aff (Aff)
 import IdePurescript.PscIde (eitherToErr, getCompletion)
 import IdePurescript.Regex (match', test')
 import IdePurescript.Tokens (identPart, modulePart, moduleRegex)
-import PscIde (NET, listAvailableModules)
+import PscIde (listAvailableModules)
 import PscIde.Command (CompletionOptions(..), ModuleList(..), TypeInfo(..))
 
 type ModuleInfo =
@@ -29,7 +29,7 @@ data SuggestionType = Module | Type | Function | Value
 explicitImportRegex :: Either String Regex
 explicitImportRegex = regex ("""^import\s+""" <> modulePart <> """\s+\([^)]*?""" <> identPart <> "$") noFlags
 
-getModuleSuggestions :: forall eff. Int -> String -> Aff (net :: NET | eff) (Array String)
+getModuleSuggestions :: Int -> String -> Aff (Array String)
 getModuleSuggestions port prefix = do
   list <- eitherToErr $ listAvailableModules port
   pure $ case list of
@@ -39,13 +39,13 @@ data SuggestionResult =
   ModuleSuggestion { text :: String, suggestType :: SuggestionType, prefix :: String }
   | IdentSuggestion { origMod :: String, exportMod :: String, exportedFrom :: Array String, identifier :: String, qualifier :: Maybe String, valueType :: String, suggestType :: SuggestionType, prefix :: String, documentation :: Maybe String }
 
-getSuggestions :: forall eff. Int -> {
+getSuggestions :: Int -> {
     line :: String,
     moduleInfo :: ModuleInfo,
     groupCompletions :: Boolean,
     maxResults :: Maybe Int,
     preferredModules :: Array String
-  } -> Aff (net :: NET | eff) (Array SuggestionResult)
+  } -> Aff (Array SuggestionResult)
 getSuggestions port
     { line
     , moduleInfo: { modules, getQualifiedModule, mainModule, importedModules }

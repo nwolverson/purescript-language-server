@@ -2,9 +2,8 @@ module LanguageServer.IdePurescript.Tooltips where
 
 import Prelude
 
-import Control.Monad.Aff (Aff)
-import Control.Monad.Eff.Class (liftEff)
 import Data.Array (uncons)
+import Data.Array.NonEmpty as NEA
 import Data.Either (either)
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Newtype (un)
@@ -12,12 +11,14 @@ import Data.Nullable (Nullable, toNullable)
 import Data.String (drop, length, take)
 import Data.String.Regex (match, regex)
 import Data.String.Regex.Flags (noFlags)
+import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
 import IdePurescript.Modules (getQualModule, getUnqualActiveModules)
 import IdePurescript.PscIde (getTypeInfo)
 import IdePurescript.Tokens (WordRange, identPart, identifierAtPoint)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (TextDocumentPositionParams)
-import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
+import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.TextDocument (getTextAtRange)
 import LanguageServer.Types (DocumentStore, Hover(Hover), Position(Position), Range(Range), Settings, TextDocumentIdentifier(TextDocumentIdentifier), markupContent)
 import PscIde.Command as C
@@ -41,15 +42,15 @@ moduleAtPoint line column =
       match' r t = either (const Nothing) (\r' -> match r' t) r
       wr = wordRange 0 0
   in
-  case match' beforeRegex textBefore, match' afterRegex textAfter of
+  case NEA.toArray <$> match' beforeRegex textBefore, NEA.toArray <$> match' afterRegex textAfter of
     Just [_, Just m1], Just [_, Just m2, _] ->
       Just { word : m1 <> m2, range : wordRange (length m1) (length m2) }
     _, _ -> Nothing
 
-getTooltips :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> TextDocumentPositionParams -> Aff (MainEff eff) (Nullable Hover)
+getTooltips :: DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams -> Aff (Nullable Hover)
 getTooltips docs settings state ({ textDocument, position }) = do
-  doc <- liftEff $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
-  text <- liftEff $ getTextAtRange doc $ lineRange position
+  doc <- liftEffect $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
+  text <- liftEffect $ getTextAtRange doc $ lineRange position
   let { port, modules, conn } = un ServerState state
       char = _.character $ un Position $ position
   case port, identifierAtPoint text char, moduleAtPoint text char of

@@ -2,21 +2,21 @@ module LanguageServer.IdePurescript.References where
 
 import Prelude
 
-import Control.Monad.Aff (Aff)
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Class (liftEff)
 import Data.Either (either)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (over, un)
 import Data.String.Utils (endsWith)
 import Data.Traversable (traverse)
+import Effect (Effect)
+import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
 import IdePurescript.Modules (getQualModule, getUnqualActiveModules)
 import IdePurescript.PscIde (getTypeInfo)
 import IdePurescript.Tokens (identifierAtPoint)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (ReferenceParams)
-import LanguageServer.IdePurescript.Symbols (convPosition, convTypePosition)
-import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
+import LanguageServer.IdePurescript.Symbols (convPosition)
+import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.TextDocument (getTextAtRange)
 import LanguageServer.Types (DocumentStore, Location(..), Position(..), Range(..), Settings, TextDocumentIdentifier(..))
 import LanguageServer.Uri (filenameToUri)
@@ -25,11 +25,11 @@ import PscIde (usages)
 import PscIde.Command (Namespace(..))
 import PscIde.Command as Command
 
-getReferences :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> ReferenceParams
-  -> Aff (MainEff eff) (Array Location)
+getReferences :: DocumentStore -> Settings -> ServerState -> ReferenceParams
+  -> Aff (Array Location)
 getReferences docs settings state ({ textDocument, position }) = do
-    doc <- liftEff $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
-    text <- liftEff $ getTextAtRange doc (mkRange position)
+    doc <- liftEffect $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
+    text <- liftEffect $ getTextAtRange doc (mkRange position)
     let { port, modules, root } = un ServerState $ state
     case port, root, identifierAtPoint text (_.character $ un Position position) of
       Just port', Just root', Just { word, qualifier } -> do
@@ -44,15 +44,15 @@ getReferences docs settings state ({ textDocument, position }) = do
 
             usg <- usages port' module' ns word
             
-            liftEff $ either (pure $ pure []) (traverse $ convLocation root') usg
+            liftEffect $ either (pure $ pure []) (traverse $ convLocation root') usg
           _ -> pure $ []
       _, _, _ -> pure $ []
     where
 
 
-    convLocation :: String -> Command.TypePosition -> Eff _ Location
+    convLocation :: String -> Command.TypePosition -> Effect Location
     convLocation root (Command.TypePosition {start, end, name }) = do
-      uri <- filenameToUri $ resolve [ root ] name
+      uri <- filenameToUri =<< resolve [ root ] name
       pure $ Location
         { uri
         , range: Range { start: convPosition start, end: convPosition end }

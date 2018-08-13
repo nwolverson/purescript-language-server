@@ -2,26 +2,25 @@ module LanguageServer.IdePurescript.Symbols where
 
 import Prelude
 
-import Control.Monad.Aff (Aff, liftEff')
-import Control.Monad.Eff.Class (liftEff)
 import Data.Array (catMaybes, singleton)
-import Data.Char (toUpper)
 import Data.Maybe (Maybe(Nothing, Just), maybe)
 import Data.Newtype (over, un)
 import Data.Nullable (toNullable, Nullable)
-import Data.String (Pattern(..), charAt, contains)
+import Data.String (Pattern(..), contains)
+import Data.String as Str
 import Data.Traversable (traverse)
+import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
 import IdePurescript.Modules (getQualModule, getUnqualActiveModules)
 import IdePurescript.PscIde (getCompletion, getLoadedModules, getTypeInfo)
 import IdePurescript.Tokens (identifierAtPoint)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (TextDocumentPositionParams, WorkspaceSymbolParams, DocumentSymbolParams)
-import LanguageServer.IdePurescript.Types (ServerState(..), MainEff)
+import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.TextDocument (getTextAtRange)
 import LanguageServer.Types (DocumentStore, Location(..), Position(..), Range(..), Settings, SymbolInformation(..), SymbolKind(..), TextDocumentIdentifier(..), symbolKindToInt)
 import LanguageServer.Uri (filenameToUri)
 import Node.Path (resolve)
-import PscIde (NET)
 import PscIde.Command (CompletionOptions(..))
 import PscIde.Command as Command
 
@@ -31,18 +30,18 @@ convPosition { line, column } = Position { line: line - 1, character: column - 1
 convTypePosition :: Command.TypePosition -> Range
 convTypePosition (Command.TypePosition {start, end}) = Range { start: convPosition start, end: convPosition end }
 
-getDefinition :: forall eff. DocumentStore -> Settings -> ServerState (MainEff eff) -> TextDocumentPositionParams
-  -> Aff (MainEff eff) (Nullable Location)
+getDefinition :: DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams
+  -> Aff (Nullable Location)
 getDefinition docs settings state ({ textDocument, position }) = do
-    doc <- liftEff $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
-    text <- liftEff $ getTextAtRange doc (mkRange position)
+    doc <- liftEffect $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
+    text <- liftEffect $ getTextAtRange doc (mkRange position)
     let { port, modules, root } = un ServerState $ state
     case port, root, identifierAtPoint text (_.character $ un Position position) of
       Just port', Just root', Just { word, qualifier } -> do
         info <- getTypeInfo port' word modules.main qualifier (getUnqualActiveModules modules $ Just word) (flip getQualModule modules)
-        liftEff $ toNullable <$> case info of
+        liftEffect $ toNullable <$> case info of
           Just (Command.TypeInfo { definedAt: Just (Command.TypePosition { name, start }) }) -> do
-            uri <- filenameToUri $ resolve [ root' ] name
+            uri <- filenameToUri =<< resolve [ root' ] name
             let range = Range { start: convPosition start, end: convPosition start }
             pure $ Just $ Location { uri, range }
           _ -> pure $ Nothing
@@ -53,16 +52,16 @@ getDefinition docs settings state ({ textDocument, position }) = do
         , end: pos # over Position (\c -> c { character = c.character + 100 })
         }
 
-getDocumentSymbols :: forall eff. Settings -> ServerState (MainEff eff) -> DocumentSymbolParams
-  -> Aff (MainEff eff) (Array SymbolInformation)
+getDocumentSymbols :: Settings -> ServerState -> DocumentSymbolParams
+  -> Aff (Array SymbolInformation)
 getDocumentSymbols _ state _ = do 
   let { port, root, modules } = un ServerState state
   case port, root of
     Just port', Just root' -> getSymbols root' port' "" (maybe [] singleton modules.main)
     _, _ -> pure []
 
-getWorkspaceSymbols :: forall eff. Settings -> ServerState (MainEff eff) -> WorkspaceSymbolParams
-  -> Aff (MainEff eff) (Array SymbolInformation)
+getWorkspaceSymbols :: Settings -> ServerState -> WorkspaceSymbolParams
+  -> Aff (Array SymbolInformation)
 getWorkspaceSymbols _ state { query } = do
   let { port, root } = un ServerState state
   case port, root of
@@ -71,17 +70,17 @@ getWorkspaceSymbols _ state { query } = do
       getSymbols root' port' query allModules
     _, _ -> pure []
 
-getSymbols :: forall eff. String -> Int -> String -> Array String -> Aff (net :: NET | eff) (Array SymbolInformation)
+getSymbols :: String -> Int -> String -> Array String -> Aff (Array SymbolInformation)
 getSymbols root port prefix modules = do
   let opts = CompletionOptions { maxResults: Nothing, groupReexports: true }
   completions <- getCompletion port prefix Nothing Nothing modules (const []) opts
-  res <- liftEff' $ traverse getInfo completions
+  res <- liftEffect $ traverse getInfo completions
   pure $ catMaybes res
 
   where
   getInfo (Command.TypeInfo { identifier, definedAt: Just typePos, module', type' }) = do
-    let fileName = getName typePos
-        kind = if charAt 0 identifier == (toUpper <$> charAt 0 identifier)
+    fileName <- getName typePos
+    let kind = if Str.take 1 identifier == (Str.toUpper $ Str.take 1 identifier)
                then ClassSymbolKind
                else if contains (Pattern "->") identifier then
                   FunctionSymbolKind

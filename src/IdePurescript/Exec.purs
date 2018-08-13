@@ -1,30 +1,28 @@
 module IdePurescript.Exec where
 
 import Prelude
-import Node.Path as Path
-import Control.Monad.Aff (Aff)
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Class (liftEff)
+
 import Data.Either (either, Either(..))
 import Data.Maybe (fromMaybe, maybe, Maybe(..))
-import Data.StrMap (insert)
-import Node.Buffer (BUFFER)
-import Node.ChildProcess (CHILD_PROCESS)
-import Node.FS (FS)
-import Node.Process (getEnv, PROCESS, lookupEnv)
+import Effect (Effect)
+import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
+import Foreign.Object as Object
+import Node.Path as Path
+import Node.Process (getEnv, lookupEnv)
 import PscIde.Server (findBins', Executable)
 
-findBins :: forall a eff. Either a String -> String -> Aff (fs :: FS, buffer :: BUFFER, cp :: CHILD_PROCESS, process :: PROCESS | eff) (Array Executable)
+findBins :: forall a. Either a String -> String -> Aff (Array Executable)
 findBins pathVar server = do
-  env <- liftEff getEnv
+  env <- liftEffect getEnv
   findBins'
     { pathExt: Nothing
     , path: either (const Nothing) Just pathVar
-    , env: either (const Nothing) (Just <<< flip (insert "PATH") env) pathVar
+    , env: either (const Nothing) (Just <<< flip (Object.insert "PATH") env) pathVar
     }
     server
 
-getPathVar :: forall eff. Boolean -> String -> Eff (process :: PROCESS | eff) (Either String String)
+getPathVar :: Boolean -> String -> Effect (Either String String)
 getPathVar addNpmBin rootDir = do
   processPath <- lookupEnv "PATH"
   pure $ if addNpmBin
