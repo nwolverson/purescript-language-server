@@ -29,20 +29,20 @@ import LanguageServer.Types (Command, DocumentStore, DocumentUri(DocumentUri), P
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array Command)
-getActions documents settings (ServerState { diagnostics, conn }) { textDocument, range } =  
+getActions documents settings (ServerState { diagnostics, conn: Just conn }) { textDocument, range } =  
   case Object.lookup (un DocumentUri $ docUri) diagnostics of
     Just errs -> pure $
-      (catMaybes $ map asCommand errs)
-      <> fixAllCommand "Apply all suggestions" errs
-      <> fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode }) -> isImport errorCode) errs)
-      <> mapMaybe commandForCode errs
+        (catMaybes $ map asCommand errs)
+        <> fixAllCommand "Apply all suggestions" errs
+        <> fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode }) -> isImport errorCode) errs)
+        <> mapMaybe commandForCode errs
     _ -> pure []
   where
     docUri = _.uri $ un TextDocumentIdentifier textDocument
 
     asCommand error@(RebuildError { position: Just position, errorCode })
       | Just { replacement, range: replaceRange } <- getReplacementRange error
-      , contains range (positionToRange position) = do
+      , contains (positionToRange position) range = do
       Just $ replaceSuggestion (getTitle errorCode) docUri replacement replaceRange
     asCommand _ = Nothing
 
@@ -69,6 +69,7 @@ getActions documents settings (ServerState { diagnostics, conn }) { textDocument
     commandForCode _ = Nothing
 
     contains (Range { start, end }) (Range { start: start', end: end' }) = start <= start' && end >= end'
+getActions _ _ _ _ = pure []
 
 readRange :: Foreign -> F Range
 readRange r = do
