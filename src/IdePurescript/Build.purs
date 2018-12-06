@@ -26,7 +26,7 @@ import Node.ChildProcess as CP
 import Node.Encoding as Encoding
 import Node.Stream as S
 import PscIde as P
-import PscIde.Command (RebuildResult(..))
+import PscIde.Command (RebuildResult(..), CodegenTarget(..))
 import PscIde.Server (Executable(Executable))
 
 type BuildOptions =
@@ -81,9 +81,9 @@ build logCb buildOptions@{ command: Command cmd args, directory, useNpmDir } = d
           _ -> cb $ Left $ error "Process exited abnormally")
     pure mempty
 
-rebuild :: Int -> String -> Aff BuildResult
-rebuild port file = do
-  res <- P.rebuild port file (Just file)
+rebuild :: Int -> String -> Maybe (Array CodegenTarget) -> Aff BuildResult
+rebuild port file targets = do
+  res <- P.rebuild port file (Just file) targets
   either
     (throwError <<< error)
     (pure <<< onResult)

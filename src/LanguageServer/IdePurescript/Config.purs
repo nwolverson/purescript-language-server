@@ -9,6 +9,7 @@ import Foreign.Index ((!))
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Traversable (traverse)
 import PscIde.Server (LogLevel(..))
+import PscIde.Command (CodegenTarget(..))
 
 getConfigMaybe :: forall a. (Foreign -> F a) -> String -> Foreign -> Maybe a
 getConfigMaybe readValue key settings = do
@@ -112,3 +113,7 @@ logLevel = getString "pscIdelogLevel" "" >>> case _ of
     "debug" -> Just Debug
     "perf" -> Just Perf
     _ -> Nothing
+
+codegenTargets :: ConfigFn (Maybe (Array CodegenTarget))
+codegenTargets =  getConfigMaybe (readArray >=> traverse readString) "codegenTargets" >>>
+    map (map Other)

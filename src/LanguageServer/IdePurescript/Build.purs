@@ -20,7 +20,7 @@ import Foreign.Object as Object
 import IdePurescript.Build (Command(Command), build, rebuild)
 import IdePurescript.PscErrors (PscResult(..))
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
-import LanguageServer.IdePurescript.Config (addNpmPath, buildCommand, censorCodes)
+import LanguageServer.IdePurescript.Config (addNpmPath, buildCommand, censorCodes, codegenTargets)
 import LanguageServer.IdePurescript.Server (loadAll)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Types (Diagnostic(Diagnostic), DocumentStore, DocumentUri, Position(Position), Range(Range), Settings)
@@ -82,9 +82,10 @@ convertDiagnostics projectRoot settings (PscResult { warnings, errors }) =
 getDiagnostics :: DocumentUri -> Settings -> ServerState -> Aff DiagnosticResult
 getDiagnostics uri settings state = do 
   filename <- liftEffect $ uriToFilename uri
+  let targets = codegenTargets settings
   case state of
     ServerState { port: Just port, root: Just root } -> do
-      { errors, success } <- rebuild port filename
+      { errors, success } <- rebuild port filename targets
       liftEffect $ convertDiagnostics root settings errors
     _ -> pure emptyDiagnostics
 
