@@ -3,7 +3,7 @@ module LanguageServer.IdePurescript.Build where
 import Prelude
 
 import Data.Array (filter, mapMaybe, notElem, uncons)
-import Data.Either (either)
+import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Nullable (toNullable)
 import Data.String (trim)
@@ -95,20 +95,19 @@ censorWarnings settings = filter (flip notElem codes <<< getCode)
     getCode (RebuildError { errorCode }) = errorCode
     codes = censorCodes settings
       
-fullBuild :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff DiagnosticResult
+fullBuild :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff (Either String DiagnosticResult)
 fullBuild logCb _ settings state _ = do
   let command = buildCommand settings
   let buildCommand = either (const []) (\reg -> (split reg <<< trim) command) (regex "\\s+" noFlags)
   case state, uncons buildCommand of
     ServerState { port: Just port, conn: Just conn, root: Just directory }, Just { head: cmd, tail: args } -> do
-      res <- build logCb { command: Command cmd args, directory, useNpmDir: addNpmPath settings }
-      liftEffect $ logCb Info "Build complete"
-      loadAll port
-      liftEffect do logCb Info "Reloaded modules"
-                    convertDiagnostics directory settings res.errors
-    _, Nothing -> do
-      liftEffect $ logCb Error "Error parsing build command"
-      pure emptyDiagnostics
+      build logCb { command: Command cmd args, directory, useNpmDir: addNpmPath settings }
+        >>= either (pure <<< Left) \{errors} -> do
+          liftEffect $ logCb Info "Build complete"
+          loadAll port
+          liftEffect do logCb Info "Reloaded modules"
+                        Right <$> convertDiagnostics directory settings errors
+    _, Nothing ->
+      pure $ Left "Error parsing build command"
     ServerState { port, conn, root }, _ -> do
-      liftEffect $ logCb Error $ "Error running build: " <> show port <> " : " <> show root
-      pure emptyDiagnostics
+      pure $ Left $ "Error running build: " <> show port <> " : " <> show root

@@ -43,7 +43,7 @@ import LanguageServer.Setup (InitParams(..), initConnection, initDocumentStore)
 import LanguageServer.TextDocument (getText, getUri)
 import LanguageServer.Types (Diagnostic, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
 import LanguageServer.Uri (filenameToUri, uriToFilename)
-import LanguageServer.Window (showWarningWithActions)
+import LanguageServer.Window (showError, showWarningWithActions)
 import Node.FS.Aff as FS
 import Node.Process (argv, cwd)
 import PscIde.Command (RebuildError(..))
@@ -180,22 +180,26 @@ main = do
 
   let onBuild docs c s arguments = do
         liftEffect $ sendDiagnosticsBegin conn
-        { pscErrors, diagnostics } <- fullBuild logError docs c s arguments
-        liftEffect do
-          log conn $ "Built with " <> (show $ length pscErrors) <> " issues"
-          pscErrorsMap <- collectByFirst <$> traverse (\(e@RebuildError { filename }) -> do
-            uri <- maybe (pure Nothing) (\f -> Just <$> un DocumentUri <$> filenameToUri f) filename
-            pure $ Tuple uri e)
-              pscErrors
-          prevErrors <- _.diagnostics <$> un ServerState <$> Ref.read state
-          let nonErrorFiles :: Array String
-              nonErrorFiles = Object.keys prevErrors \\ Object.keys pscErrorsMap
-          Ref.write (over ServerState (_ { diagnostics = pscErrorsMap }) s) state
-          for_ (Object.toUnfoldable diagnostics :: Array (Tuple String (Array Diagnostic))) \(Tuple filename fileDiagnostics) -> do
-            uri <- filenameToUri filename
-            publishDiagnostics conn { uri, diagnostics: fileDiagnostics }
-          for_ (map DocumentUri nonErrorFiles) \uri -> publishDiagnostics conn { uri, diagnostics: [] }
-          sendDiagnosticsEnd conn
+        fullBuild logError docs c s arguments >>= case _ of
+          Right { pscErrors, diagnostics } ->
+            liftEffect do
+              log conn $ "Built with " <> (show $ length pscErrors) <> " issues"
+              pscErrorsMap <- collectByFirst <$> traverse (\(e@RebuildError { filename }) -> do
+                uri <- maybe (pure Nothing) (\f -> Just <$> un DocumentUri <$> filenameToUri f) filename
+                pure $ Tuple uri e)
+                  pscErrors
+              prevErrors <- _.diagnostics <$> un ServerState <$> Ref.read state
+              let nonErrorFiles :: Array String
+                  nonErrorFiles = Object.keys prevErrors \\ Object.keys pscErrorsMap
+              Ref.write (over ServerState (_ { diagnostics = pscErrorsMap }) s) state
+              for_ (Object.toUnfoldable diagnostics :: Array (Tuple String (Array Diagnostic))) \(Tuple filename fileDiagnostics) -> do
+                uri <- filenameToUri filename
+                publishDiagnostics conn { uri, diagnostics: fileDiagnostics }
+              for_ (map DocumentUri nonErrorFiles) \uri -> publishDiagnostics conn { uri, diagnostics: [] }
+              sendDiagnosticsEnd conn
+          Left err ->
+            liftEffect do error conn err
+                          showError conn err
 
   let noResult = unsafeToForeign $ toNullable Nothing
   let voidHandler :: forall a. CommandHandler a -> CommandHandler Foreign
