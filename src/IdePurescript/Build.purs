@@ -3,7 +3,7 @@ module IdePurescript.Build where
 import Prelude
 
 import Control.Monad.Error.Class (throwError)
-import Data.Array (uncons)
+import Data.Array (intercalate, uncons, (:))
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Either (either, Either(..))
@@ -64,6 +64,7 @@ build logCb buildOptions@{ command: Command cmd args, directory, useNpmDir } = d
     case cp' of
       Nothing -> succ $ Left $ "Didn't find command in PATH: " <> cmd
       Just cp -> do
+        logCb Info $ "Running build command: " <> intercalate " " (cmd : args)
         CP.onError cp (cb <<< Left <<< CP.toStandardError)
         result <- Ref.new ""
         let res :: String -> Effect Unit
