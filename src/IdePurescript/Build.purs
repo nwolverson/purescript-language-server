@@ -4,12 +4,13 @@ import Prelude
 
 import Control.Monad.Error.Class (throwError)
 import Data.Array (uncons)
+import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Either (either, Either(..))
 import Data.Foldable (find)
 import Data.List as List
 import Data.Maybe (maybe, Maybe(..))
-import Data.String (Pattern(Pattern), split, indexOf)
+import Data.String (Pattern(Pattern), indexOf, joinWith, split)
 import Data.Traversable (traverse_)
 import Data.Tuple (Tuple(Tuple))
 import Effect (Effect)
@@ -63,21 +64,24 @@ build logCb buildOptions@{ command: Command cmd args, directory, useNpmDir } = d
       Nothing -> cb $ Left $ error $ "Didn't find command in PATH: " <> cmd
       Just cp -> do
         CP.onError cp (cb <<< Left <<< CP.toStandardError)
-        let stderr = CP.stderr cp
         result <- Ref.new ""
         let res :: String -> Effect Unit
-            res s = Ref.modify_ (\acc -> acc<>s) result
+            res s = Ref.modify_ (_ <> s) result
 
-        catchException (cb <<< Left) $ S.onDataString stderr Encoding.UTF8 res
+        catchException (cb <<< Left) $ S.onDataString (CP.stderr cp) Encoding.UTF8 res
+        catchException (cb <<< Left) $ S.onDataString (CP.stdout cp) Encoding.UTF8 $ logCb Success
+
         CP.onClose cp (\exit -> case exit of
           CP.Normally n | n == 0 || n == 1 -> do
-            pscOutput <- Ref.read result
-            let lines = split (Pattern "\n") pscOutput
-                json = find (\s -> indexOf (Pattern "{\"") s == Just 0) lines
+            pursOutput <- Ref.read result
+            let lines = split (Pattern "\n") pursOutput
+                { yes: json, no: toLog } = Array.partition (\s -> indexOf (Pattern "{\"") s == Just 0) lines
+            logCb Info $ joinWith "\n" toLog
             case parsePscOutput <$> json of
-              Just (Left e) -> cb $ Left $ error e
-              Just (Right r) -> cb $ Right $ { errors: r, success: n == 0 }
-              Nothing -> cb $ Left $ error "Didn't find JSON output"
+              [ Left e ] -> cb $ Left $ error e
+              [ Right r ] -> cb $ Right $ { errors: r, success: n == 0 }
+              [] -> cb $ Left $ error "Didn't find JSON output"
+              _ -> cb $ Left $ error "Found multiple lines of JSON output, don't know what to do"
           _ -> cb $ Left $ error "Process exited abnormally")
     pure mempty
 

@@ -5,7 +5,7 @@ import Prelude
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise, fromAff)
 import Data.Array ((\\), length)
-import Data.Either (either)
+import Data.Either (Either(..), either)
 import Data.Foldable (for_)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (over, un, unwrap)
@@ -14,7 +14,7 @@ import Data.Profunctor.Strong (first)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Aff (Aff, apathize, forkAff, runAff_)
+import Effect.Aff (Aff, apathize, runAff_, try)
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
 import Foreign (Foreign, unsafeToForeign)
@@ -199,7 +199,12 @@ main = do
 
   let noResult = unsafeToForeign $ toNullable Nothing
   let voidHandler :: forall a. CommandHandler a -> CommandHandler Foreign
-      voidHandler h d c s a = h d c s a $> noResult
+      voidHandler h d c s a =
+        try (h d c s a) >>= case _ of
+          Left err -> do
+            liftEffect $ logError Error $ show err
+            pure noResult
+          Right _ -> pure noResult
       simpleHandler h d c s a = h $> noResult
   let handlers :: Object (CommandHandler Foreign)
       handlers = Object.fromFoldable $ first cmdName <$>
@@ -236,7 +241,7 @@ main = do
           let outputDir = Config.effectiveOutputDirectory c
           exists <- FS.exists outputDir
           liftEffect $ log conn $ "Onconfig: " <> show exists
-          when (not exists) $ void $ forkAff do
+          when (not exists) $ liftEffect $ launchAffLog do
             let message = "Output directory does not exist at '" <> outputDir <> "'"
             liftEffect $ info conn message
             let buildOption = "Build project"
