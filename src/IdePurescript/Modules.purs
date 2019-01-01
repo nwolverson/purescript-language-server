@@ -20,9 +20,9 @@ module IdePurescript.Modules (
 import Prelude
 
 import Control.Alt ((<|>))
-import Data.Array (findLastIndex, filter, singleton, concatMap, (:))
+import Data.Array (concatMap, filter, findLastIndex, singleton, (:))
 import Data.Either (either, Either(..))
-import Data.Foldable (all, notElem, elem)
+import Data.Foldable (all, any, notElem, elem)
 import Data.Maybe (Maybe(..), maybe, fromMaybe)
 import Data.Newtype (class Newtype)
 import Data.String (Pattern(Pattern), split)
@@ -200,7 +200,14 @@ addExplicitImport state port fileName text moduleName qualifier identifier =
       Just _ -> moduleName == state.main
       _ -> false
 
+    isOpenPrim = moduleName == Just "Prim" && not (any isExplicitPrim state.modules)
+    isExplicitPrim (Module { moduleName: "Prim", importType }) = case importType of
+      Implicit -> false
+      _ -> true
+    isExplicitPrim _ = false
+
     shouldAdd = not isThisModule
+      && not isOpenPrim
       && not (identifier `elem` state.identifiers)
       && maybe true (\mn -> all (shouldAddMatch mn) state.modules) moduleName
 
