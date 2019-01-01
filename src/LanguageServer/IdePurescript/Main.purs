@@ -196,10 +196,11 @@ main = do
                 uri <- filenameToUri filename
                 publishDiagnostics conn { uri, diagnostics: fileDiagnostics }
               for_ (map DocumentUri nonErrorFiles) \uri -> publishDiagnostics conn { uri, diagnostics: [] }
-              sendDiagnosticsEnd conn
           Left err ->
             liftEffect do error conn err
                           showError conn err
+        liftEffect $ sendDiagnosticsEnd conn
+
 
   let noResult = unsafeToForeign $ toNullable Nothing
   let voidHandler :: forall a. CommandHandler a -> CommandHandler Foreign
