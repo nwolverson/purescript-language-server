@@ -4,7 +4,8 @@ import Prelude
 
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise, fromAff)
-import Data.Array ((\\), length)
+import Data.Array (length, (!!), (\\))
+import Data.Array as Array
 import Data.Either (Either(..), either)
 import Data.Foldable (for_)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
@@ -16,6 +17,7 @@ import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Aff (Aff, apathize, runAff_, try)
 import Effect.Class (liftEffect)
+import Effect.Console as Console
 import Effect.Ref as Ref
 import Foreign (Foreign, unsafeToForeign)
 import Foreign.JSON (parseJSON)
@@ -44,8 +46,10 @@ import LanguageServer.TextDocument (getText, getUri)
 import LanguageServer.Types (Diagnostic, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
 import LanguageServer.Uri (filenameToUri, uriToFilename)
 import LanguageServer.Window (showError, showWarningWithActions)
+import Node.Encoding as Encoding
 import Node.FS.Aff as FS
-import Node.Process (argv, cwd)
+import Node.FS.Sync as FSSync
+import Node.Process (argv, cwd, exit)
 import PscIde.Command (RebuildError(..))
 
 defaultServerState :: ServerState
@@ -59,27 +63,61 @@ defaultServerState = ServerState
   , diagnostics: Object.empty
   }
 
+parseArgs :: Array String -> _
+parseArgs allArgs = go 0 defaultArgs
+  where
+  args = Array.drop 2 allArgs
+
+  defaultArgs = { config: Nothing, filename: Nothing }
+
+  go i c =
+    case args !! i of
+      Just "--config" -> case args !! (i+1) of
+        Just conf -> go (i+2) (c { config = Just conf })
+        Nothing -> Nothing
+      Just "--log" -> case args !! (i+1) of
+        Just filename -> go (i+2) (c { filename = Just filename })
+        Nothing -> Nothing
+      -- stdio etc
+      Just _ -> go (i+1) c
+      Nothing -> Just c
+
+
 main :: Effect Unit
 main = do
   state <- Ref.new defaultServerState
   config <- Ref.new (unsafeToForeign {})
+  logFile <- Ref.new (Nothing :: Maybe String)
   gotConfig <- Ref.new false
 
-  argv >>= case _ of 
-    [ _, _, "--stdio", "--config", c ] -> either (const $ pure unit) (\cc -> do
-        Ref.write cc config
-        Ref.write true gotConfig
-    ) $ runExcept $ parseJSON c
-    _ -> pure unit
+  maybeArgs <- parseArgs <$> argv
+  case maybeArgs of
+    Nothing -> do
+      Console.error "Error parsing args"
+      exit 1
+    Just args -> do
+      Ref.write args.filename logFile
+      maybe (pure unit) (flip (FSSync.writeTextFile Encoding.UTF8) "Starting logging...\n") args.filename
+      case args.config of
+        Just c -> either (const $ pure unit) (\cc -> do
+            Ref.write cc config
+            Ref.write true gotConfig
+        ) $ runExcept $ parseJSON c
+        Nothing -> pure unit
 
   let logError :: Notify
       logError l s = do
         (_.conn <$> unwrap <$> Ref.read state) >>=
-          maybe (pure unit) (\conn -> case l of 
-            Success -> log conn s
-            Info -> info conn s
-            Warning -> warn conn s
-            Error -> error conn s)
+          maybe (pure unit) (\conn -> do
+            case l of 
+              Success -> log conn s
+              Info -> info conn s
+              Warning -> warn conn s
+              Error -> error conn s
+            liftEffect (Ref.read logFile) >>= case _ of
+              Just filename -> FSSync.appendTextFile Encoding.UTF8 filename ("[" <> show l <> "] " <> s <> "\n")
+              Nothing -> pure unit
+          )
   let launchAffLog = runAff_ (either (logError Error <<< show) (const $ pure unit))
 
   let stopPscIdeServer :: Aff Unit

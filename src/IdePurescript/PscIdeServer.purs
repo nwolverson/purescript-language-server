@@ -41,6 +41,12 @@ data ServerStartResult =
   | StartError String
 
 data ErrorLevel = Success | Info | Warning | Error
+instance showErrorLevel :: Show ErrorLevel where
+  show Success = "Success"
+  show Info = "Info"
+  show Warning = "Warning"
+  show Error = "Error"
+
 type Notify = ErrorLevel -> String -> Effect Unit
 
 data Version = Version Int Int Int
