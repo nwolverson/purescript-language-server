@@ -95,10 +95,18 @@ Arguments: hole name, document URI, hole range, `PscIde.Command.TypeInfo` of cho
 
 ## Usage
 
-Use as a node module (as in vscode plugin) or via command line `purescript-language-server`. Protocol via command line option:
-- `--stdio`
-- `--node-ipc`
-- `--socket={number}`
+This LSP implmementation is consumed by vscode and Atom plugins as a node module, and bundled along with those plugins.
+
+To use with another LSP client, you will want to install this either globally or locally for `npm`, e.g.
+
+```
+npm i -g purescript-language-server
+```
+And then use the resulting executable, e.g. `purescript-language-server --stdio`.
+
+This language server is based on vscode-languageserver-node which means it should support `--stdio`, `--socket=[number]`, `--node-ipc` or `--pipe` methods of communication, see [vscode-languageserver-node](https://github.com/Microsoft/vscode-languageserver-node) for details.
+
+Currently you should pass a `--config` flag followed by a JSON object, or immediately send config on starting the server in the same way VS Code does - this should improve in future.
 
 ## Config
 
