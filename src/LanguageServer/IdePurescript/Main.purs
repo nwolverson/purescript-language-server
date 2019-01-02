@@ -49,6 +49,7 @@ import LanguageServer.Window (showError, showWarningWithActions)
 import Node.Encoding as Encoding
 import Node.FS.Aff as FS
 import Node.FS.Sync as FSSync
+import Node.Path (resolve)
 import Node.Process (argv, cwd, exit)
 import PscIde.Command (RebuildError(..))
 
@@ -119,6 +120,11 @@ main = do
               Nothing -> pure unit
           )
   let launchAffLog = runAff_ (either (logError Error <<< show) (const $ pure unit))
+      workspaceRoot = do 
+        root <- (_.root <<< unwrap) <$> Ref.read state
+        maybe cwd pure root
+      resolvePath p = workspaceRoot >>= \root -> resolve [ root ] p
+
 
   let stopPscIdeServer :: Aff Unit
       stopPscIdeServer = do
@@ -143,10 +149,14 @@ main = do
         apathize stopPscIdeServer
         startPscIdeServer
 
-  conn <- initConnection commands $ \({ params: InitParams { rootPath }, conn }) ->  do
-    cwd >>= \dir -> log conn ("Starting with cwd: " <> dir)
+  conn <- initConnection commands $ \({ params: InitParams { rootPath, rootUri }, conn }) ->  do
     argv >>= \args -> log conn $ "Starting with args: " <> show args
-    Ref.modify_ (over ServerState $ _ { root = toMaybe rootPath }) state
+    root <- case toMaybe rootUri, toMaybe rootPath of
+      Just uri, _ -> Just <$> uriToFilename uri
+      _, Just path -> pure $ Just path
+      Nothing, Nothing -> pure Nothing 
+    (\(Tuple dir root) -> log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root)) =<< Tuple <$> cwd <*> workspaceRoot
+    Ref.modify_ (over ServerState $ _ { root = root }) state
   Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
   
   documents <- initDocumentStore conn
