@@ -234,17 +234,22 @@ main = do
             liftEffect do
               log conn $ "Built with " <> (show $ length pscErrors) <> " issues"
               pscErrorsMap <- collectByFirst <$> traverse (\(e@RebuildError { filename }) -> do
-                uri <- maybe (pure Nothing) (\f -> Just <$> un DocumentUri <$> filenameToUri f) filename
+                projectRoot <- workspaceRoot
+                filename' <- traverse (resolve [ projectRoot ]) filename
+                uri <- maybe (pure Nothing) (\f -> Just <$> un DocumentUri <$> filenameToUri f) filename'
                 pure $ Tuple uri e)
                   pscErrors
               prevErrors <- _.diagnostics <$> un ServerState <$> Ref.read state
               let nonErrorFiles :: Array String
                   nonErrorFiles = Object.keys prevErrors \\ Object.keys pscErrorsMap
+              log conn $ "Removing old diagnostics for: " <> show nonErrorFiles
+              for_ (map DocumentUri nonErrorFiles) \uri -> publishDiagnostics conn { uri, diagnostics: [] }
+
               Ref.write (over ServerState (_ { diagnostics = pscErrorsMap }) s) state
               for_ (Object.toUnfoldable diagnostics :: Array (Tuple String (Array Diagnostic))) \(Tuple filename fileDiagnostics) -> do
                 uri <- filenameToUri filename
+                log conn $ "Publishing diagnostics for: " <> show uri <> " (" <> show filename <> ")"
                 publishDiagnostics conn { uri, diagnostics: fileDiagnostics }
-              for_ (map DocumentUri nonErrorFiles) \uri -> publishDiagnostics conn { uri, diagnostics: [] }
           Left err ->
             liftEffect do error conn err
                           showError conn err
