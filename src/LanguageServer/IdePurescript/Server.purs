@@ -3,12 +3,12 @@ module LanguageServer.IdePurescript.Server where
 import Prelude
 
 import Data.Array (filter, head)
-import Data.Either (Either(..))
+import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String (null)
 import Data.String.Utils (lines)
 import Data.Time.Duration (Milliseconds(..))
-import Effect.Aff (Aff, apathize, attempt, delay, makeAff)
+import Effect.Aff (Aff, apathize, attempt, delay, error, makeAff, throwError)
 import Effect.Class (liftEffect)
 import Foreign (Foreign)
 import IdePurescript.Exec (findBins, getPathVar)
@@ -23,7 +23,7 @@ import PscIde (load)
 import PscIde.Server (Executable(..))
 
 loadAll :: Int -> Aff Unit
-loadAll port = apathize $ load port [] []
+loadAll port = load port [] [] >>= either (throwError <<< error) (const $ pure unit)
 
 retry :: Notify-> Int -> Aff Unit -> Aff Unit
 retry logError n a | n > 0 = do

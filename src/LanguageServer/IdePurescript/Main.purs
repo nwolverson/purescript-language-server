@@ -15,7 +15,7 @@ import Data.Profunctor.Strong (first)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Aff (Aff, apathize, runAff_, try)
+import Effect.Aff (Aff, Milliseconds(..), apathize, delay, runAff_, try)
 import Effect.Class (liftEffect)
 import Effect.Console as Console
 import Effect.Ref as Ref
@@ -64,7 +64,10 @@ defaultServerState = ServerState
   , diagnostics: Object.empty
   }
 
-parseArgs :: Array String -> _
+parseArgs :: Array String -> Maybe
+  { config :: Maybe String
+  , filename :: Maybe String
+  }
 parseArgs allArgs = go 0 defaultArgs
   where
   args = Array.drop 2 allArgs
@@ -109,22 +112,20 @@ main = do
   let logError :: Notify
       logError l s = do
         (_.conn <$> unwrap <$> Ref.read state) >>=
-          maybe (pure unit) (\conn -> do
-            case l of 
-              Success -> log conn s
-              Info -> info conn s
-              Warning -> warn conn s
-              Error -> error conn s
-            liftEffect (Ref.read logFile) >>= case _ of
-              Just filename -> FSSync.appendTextFile Encoding.UTF8 filename ("[" <> show l <> "] " <> s <> "\n")
-              Nothing -> pure unit
-          )
+          maybe (pure unit) (flip case l of 
+              Success -> log
+              Info -> info
+              Warning -> warn
+              Error -> error
+            s)
+        liftEffect (Ref.read logFile) >>= case _ of
+          Just filename -> FSSync.appendTextFile Encoding.UTF8 filename ("[" <> show l <> "] " <> s <> "\n")
+          Nothing -> pure unit
   let launchAffLog = runAff_ (either (logError Error <<< show) (const $ pure unit))
       workspaceRoot = do 
         root <- (_.root <<< unwrap) <$> Ref.read state
         maybe cwd pure root
       resolvePath p = workspaceRoot >>= \root -> resolve [ root ] p
-
 
   let stopPscIdeServer :: Aff Unit
       stopPscIdeServer = do
@@ -311,5 +312,11 @@ main = do
     log conn "Got updated settings"
     Ref.write settings config 
     Ref.read gotConfig >>= \c -> when (not c) onConfig
+
+  launchAffLog $ do delay (Milliseconds 250.0)
+                    got <- liftEffect $ Ref.read gotConfig
+                    liftEffect $ when (not got) $ do
+                      logError Warning "Proceeding with no config receieved"
+                      onConfig
 
   log conn "PureScript Language Server started"
