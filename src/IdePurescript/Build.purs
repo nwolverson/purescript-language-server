@@ -7,11 +7,9 @@ import Data.Array (intercalate, uncons, (:))
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Either (either, Either(..))
-import Data.List as List
 import Data.Maybe (maybe, Maybe(..))
 import Data.String (Pattern(Pattern), indexOf, joinWith, split)
 import Data.Traversable (traverse_)
-import Data.Tuple (Tuple(Tuple))
 import Effect (Effect)
 import Effect.Aff (Aff, error, makeAff)
 import Effect.Class (liftEffect)
@@ -24,6 +22,7 @@ import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import Node.ChildProcess (ChildProcess)
 import Node.ChildProcess as CP
 import Node.Encoding as Encoding
+import Node.Process (getEnv)
 import Node.Stream as S
 import PscIde as P
 import PscIde.Command (CodegenTarget, RebuildResult(..))
@@ -47,8 +46,10 @@ spawn { command: Command cmd args, directory, useNpmDir } = do
   pathVar <- liftEffect $ getPathVar useNpmDir directory
   cmdBins <- findBins pathVar cmd
   cp <- liftEffect $ case uncons cmdBins of
-    Just { head: Executable cmdBin _ } -> Just <$>
-      CP.spawn cmdBin args (CP.defaultSpawnOptions { cwd = Just directory, env = Just (Object.fromFoldable $ List.singleton $ Tuple "PATH" $ either identity identity pathVar) })
+    Just { head: Executable cmdBin _ } -> do
+      env <- liftEffect getEnv
+      let childEnv = Object.insert "PATH" (either identity identity pathVar) env
+      Just <$> CP.spawn cmdBin args (CP.defaultSpawnOptions { cwd = Just directory, env = Just childEnv })
     _ -> pure Nothing
   pure { cmdBins, cp }
 

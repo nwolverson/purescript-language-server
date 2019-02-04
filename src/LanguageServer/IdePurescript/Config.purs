@@ -106,6 +106,9 @@ polling = getBoolean "polling" false
 addPscPackageSources :: ConfigFn Boolean
 addPscPackageSources = getBoolean "addPscPackageSources" false
 
+addSpagoSources :: ConfigFn Boolean
+addSpagoSources = getBoolean "addSpagoSources" false
+
 logLevel :: ConfigFn (Maybe LogLevel)
 logLevel = getString "pscIdelogLevel" "" >>> case _ of
     "all" -> Just All
