@@ -52,7 +52,7 @@ startServer' settings root cb logCb = do
     , port: Config.pscIdePort settings
     } (fromMaybe "" root) (Config.addNpmPath settings) cb logCb
   where
-    globs = getGlob Config.srcPath <> getGlob Config.packagePath
+    globs = getGlob Config.srcPath <> getGlob Config.packagePath <> Config.sourceGlobs settings
     getGlob fn = fn settings # case _ of
       glob | not (null glob) -> [ glob <> "/**/*.purs" ]
       _ -> []
