@@ -2,5 +2,6 @@ language: node_js
 dist: trusty
 sudo: required
 node_js: 8
-script:
-  - npm install
+install:
+  - npm install -g purescript@0.12.1
+  - npm ci

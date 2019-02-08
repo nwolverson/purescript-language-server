@@ -29,6 +29,8 @@ markupContent s = {kind: "markdown", value: s}
 derive instance newtypeDocumentUri :: Newtype DocumentUri _
 
 newtype DocumentUri = DocumentUri String
+instance showDocumentUri :: Show DocumentUri where
+  show (DocumentUri uri) = "DocumentUri " <> show uri
 
 derive newtype instance eqDocumentUri :: Eq DocumentUri
 
