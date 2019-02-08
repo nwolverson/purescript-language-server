@@ -7,7 +7,7 @@ import Control.Promise (Promise, fromAff)
 import Data.Array (length, (!!), (\\))
 import Data.Array as Array
 import Data.Either (Either(..), either)
-import Data.Foldable (for_)
+import Data.Foldable (for_, or)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toMaybe, toNullable)
@@ -298,9 +298,9 @@ main = do
         when (Config.autoStartPscIde c) $ do
           startPscIdeServer
           let outputDir = Config.effectiveOutputDirectory c
-          hasPackageFile <- (||) <$> (FS.exists "bower.json") <*> (FS.exists "psc-package.json")
+          hasPackageFile <- or <$> traverse FS.exists ["bower.json", "psc-package.json", "spago.dhall"]
           when (not hasPackageFile) do
-            liftEffect $ showError conn "It doesn't look like the workspace root is a PureScript project (has bower.json/psc-package.json). The PureScript project should be opened as a root workspace folder."
+            liftEffect $ showError conn "It doesn't look like the workspace root is a PureScript project (has bower.json/psc-package.json/spago.dhall). The PureScript project should be opened as a root workspace folder."
           exists <- FS.exists outputDir
           when (not exists) $ liftEffect $ launchAffLog do
             let message = "Output directory does not exist at '" <> outputDir <> "'"
