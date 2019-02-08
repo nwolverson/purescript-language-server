@@ -19,7 +19,7 @@
   "bin": "./cli.js",
   "scripts": {
     "prepare": "run-s install:* build",
-    "install:psc": "psc-package update",
+    "install:psc": "psc-package install",
     "build": "run-s build:*",
     "build:tsc": "tsc -p src/LanguageServer/",
     "build:server": "pulp --psc-package build --to server.js -m LanguageServer.IdePurescript.Main"
@@ -32,7 +32,8 @@
   "devDependencies": {
     "@types/node": "7.0.32",
     "npm-run-all": "^4.1.1",
-    "psc-package": "^0.2.5",
+    "psc-package": "^3.0.1",
+    "pulp": "^12.3.1",
     "typescript": "~2.4.1"
   }
 }

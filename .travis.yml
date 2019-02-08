@@ -3,4 +3,5 @@ dist: trusty
 sudo: required
 node_js: 8
 script:
+  - npm install -g purescript@0.12.1
   - npm install
