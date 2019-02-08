@@ -8,7 +8,7 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String (null)
 import Data.String.Utils (lines)
 import Data.Time.Duration (Milliseconds(..))
-import Effect.Aff (Aff, apathize, attempt, delay, error, makeAff, throwError)
+import Effect.Aff (Aff, attempt, delay, makeAff)
 import Effect.Class (liftEffect)
 import Foreign (Foreign)
 import IdePurescript.Exec (findBins, getPathVar)
@@ -23,8 +23,8 @@ import Node.Encoding (Encoding(..))
 import PscIde (load)
 import PscIde.Server (Executable(..))
 
-loadAll :: Int -> Aff Unit
-loadAll port = load port [] [] >>= either (throwError <<< error) (const $ pure unit)
+loadAll :: Int -> Aff (Either String Unit)
+loadAll port = (either Left (const $ Right unit)) <$> load port [] []
 
 retry :: Notify-> Int -> Aff Unit -> Aff Unit
 retry logError n a | n > 0 = do

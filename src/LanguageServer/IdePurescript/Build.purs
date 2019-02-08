@@ -12,7 +12,7 @@ import Data.String.Regex.Flags (noFlags)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Aff (Aff, catchError)
+import Effect.Aff (Aff, attempt)
 import Effect.Class (liftEffect)
 import Foreign (Foreign)
 import Foreign.Object (Object)
@@ -104,7 +104,10 @@ fullBuild logCb _ settings state _ = do
       build logCb { command: Command cmd args, directory, useNpmDir: addNpmPath settings }
         >>= either (pure <<< Left) \{errors} -> do
           liftEffect $ logCb Info "Build complete"
-          loadAll port `catchError` \e -> liftEffect $ logCb Error $ "Error reloading modules: " <> show e
+          attempt (loadAll port) >>= case _ of
+            Left e -> liftEffect $ logCb Error $ "Error reloading modules: " <> show e
+            Right (Left msg) -> liftEffect $ logCb Error $ "Error message from IDE server reloading modules: " <> msg
+            _ -> pure unit
           liftEffect do logCb Info "Reloaded modules"
                         Right <$> convertDiagnostics directory settings errors
     _, Nothing ->

@@ -142,7 +142,9 @@ main = do
         startRes <- startServer' settings rootPath logError logError
         retry logError 6 case startRes of
           { port: Just port, quit } -> do
-            loadAll port
+            loadAll port >>= case _ of
+              Left msg -> liftEffect $ logError Info $ "Non-fatal error loading modules: " <> msg
+              _ -> pure unit
             liftEffect $ Ref.modify_ (over ServerState $ _ { port = Just port, deactivate = quit }) state
           _ -> pure unit
 
