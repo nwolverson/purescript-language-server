@@ -113,4 +113,9 @@ fullBuild logCb _ settings state _ = do
     _, Nothing ->
       pure $ Left "Error parsing build command"
     ServerState { port, conn, root }, _ -> do
-      pure $ Left $ "Error running build: " <> show port <> " : " <> show root
+      let port_ = case port of
+        Just p ->
+          "port " <> show p
+        Nothing ->
+          "no port"
+      pure $ Left $ "Error running build: " <> port_ <> " : " <> show root
