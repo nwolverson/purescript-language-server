@@ -55,7 +55,7 @@ getCompletions docs settings state ({ textDocument, position }) = do
         { items: arr
         , isIncomplete: Config.autocompleteLimit settings == Just (Arr.length arr)
         }
-    mkRange (pos@ Position { line, character }) = Range
+    mkRange pos@(Position { line, character }) = Range
         { start: pos # over Position (_ { character = 0 })
         , end: pos
         }

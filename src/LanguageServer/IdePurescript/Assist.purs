@@ -32,7 +32,7 @@ lineRange' :: Int -> Int -> Range
 lineRange' line character = lineRange $ Position { line, character }
 
 lineRange :: Position -> Range
-lineRange (pos@ Position { line, character }) = Range 
+lineRange pos@(Position { line, character }) = Range 
     { start: pos # over Position (_ { character = 0 })
     , end: pos # over Position (_ { character = (top :: Int) })
     }

@@ -158,7 +158,7 @@ main = do
       Just uri, _ -> Just <$> uriToFilename uri
       _, Just path -> pure $ Just path
       Nothing, Nothing -> pure Nothing 
-    (\(Tuple dir root) -> log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root)) =<< Tuple <$> cwd <*> workspaceRoot
+    (\(Tuple dir root') -> log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root')) =<< Tuple <$> cwd <*> workspaceRoot
     Ref.modify_ (over ServerState $ _ { root = root }) state
   Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
   
@@ -235,7 +235,7 @@ main = do
           Right { pscErrors, diagnostics } ->
             liftEffect do
               log conn $ "Built with " <> (show $ length pscErrors) <> " issues"
-              pscErrorsMap <- collectByFirst <$> traverse (\(e@RebuildError { filename }) -> do
+              pscErrorsMap <- collectByFirst <$> traverse (\e@(RebuildError { filename }) -> do
                 projectRoot <- workspaceRoot
                 filename' <- traverse (resolve [ projectRoot ]) filename
                 uri <- maybe (pure Nothing) (\f -> Just <$> un DocumentUri <$> filenameToUri f) filename'
@@ -269,21 +269,21 @@ main = do
       simpleHandler h d c s a = h $> noResult
   let handlers :: Object (CommandHandler Foreign)
       handlers = Object.fromFoldable $ first cmdName <$>
-      [ Tuple caseSplitCmd $ voidHandler caseSplit
-      , Tuple addClauseCmd $ voidHandler addClause
-      , Tuple replaceSuggestionCmd $ voidHandler onReplaceSuggestion
-      , Tuple replaceAllSuggestionsCmd $ voidHandler onReplaceAllSuggestions
-      , Tuple buildCmd $ voidHandler onBuild
-      , Tuple addCompletionImportCmd $ addCompletionImport logError
-      , Tuple addModuleImportCmd $ voidHandler $ addModuleImport' logError
-      , Tuple startPscIdeCmd $ simpleHandler startPscIdeServer
-      , Tuple stopPscIdeCmd $ simpleHandler stopPscIdeServer
-      , Tuple restartPscIdeCmd $ simpleHandler restartPscIdeServer
-      , Tuple getAvailableModulesCmd $ getAllModules logError
-      , Tuple searchCmd $ search
-      , Tuple fixTypoCmd $ fixTypo logError
-      , Tuple typedHoleExplicitCmd $ voidHandler $ fillTypedHole logError
-      ]
+        [ Tuple caseSplitCmd $ voidHandler caseSplit
+        , Tuple addClauseCmd $ voidHandler addClause
+        , Tuple replaceSuggestionCmd $ voidHandler onReplaceSuggestion
+        , Tuple replaceAllSuggestionsCmd $ voidHandler onReplaceAllSuggestions
+        , Tuple buildCmd $ voidHandler onBuild
+        , Tuple addCompletionImportCmd $ addCompletionImport logError
+        , Tuple addModuleImportCmd $ voidHandler $ addModuleImport' logError
+        , Tuple startPscIdeCmd $ simpleHandler startPscIdeServer
+        , Tuple stopPscIdeCmd $ simpleHandler stopPscIdeServer
+        , Tuple restartPscIdeCmd $ simpleHandler restartPscIdeServer
+        , Tuple getAvailableModulesCmd $ getAllModules logError
+        , Tuple searchCmd $ search
+        , Tuple fixTypoCmd $ fixTypo logError
+        , Tuple typedHoleExplicitCmd $ voidHandler $ fillTypedHole logError
+        ]
 
   onExecuteCommand conn $ \{ command, arguments } -> fromAff do
     c <- liftEffect $ Ref.read config

@@ -47,7 +47,7 @@ getDefinition docs settings state ({ textDocument, position }) = do
           _ -> pure $ Nothing
       _, _, _ -> pure $ toNullable Nothing
     where
-    mkRange (pos@ Position { line, character }) = Range
+    mkRange pos@(Position { line, character }) = Range
         { start: pos # over Position (_ { character = 0 })
         , end: pos # over Position (\c -> c { character = c.character + 100 })
         }

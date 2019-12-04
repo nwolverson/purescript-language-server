@@ -90,24 +90,24 @@ newtype CompletionItem = CompletionItem
 derive instance newtypeCompletionItem :: Newtype CompletionItem _
 
 data CompletionItemKind
-	= Text
-	| Method
-	| Function
-	| Constructor
-	| Field
-	| Variable
-	| Class
-	| Interface
-	| Module
-	| Property
-	| Unit
-	| Value
-	| Enum
-	| Keyword
-	| Snippet
-	| Color
-	| File
-	| Reference
+  = Text
+  | Method
+  | Function
+  | Constructor
+  | Field
+  | Variable
+  | Class
+  | Interface
+  | Module
+  | Property
+  | Unit
+  | Value
+  | Enum
+  | Keyword
+  | Snippet
+  | Color
+  | File
+  | Reference
 
 
 defaultCompletionItem :: String -> CompletionItem

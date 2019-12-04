@@ -58,7 +58,7 @@ getReferences docs settings state ({ textDocument, position }) = do
         , range: Range { start: convPosition start, end: convPosition end }
         }
 
-    mkRange (pos@ Position { line, character }) = Range
+    mkRange pos@(Position { line, character }) = Range
         { start: pos # over Position (_ { character = 0 })
         , end: pos # over Position (\c -> c { character = c.character + 100 })
         }

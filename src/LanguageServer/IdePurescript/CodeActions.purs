@@ -47,16 +47,16 @@ getActions documents settings (ServerState { diagnostics, conn: Just conn }) { t
     asCommand _ = Nothing
 
     getReplacementRange (RebuildError { position: Just position, suggestion: Just (PscSuggestion { replacement, replaceRange }) }) =
-      Just $ { replacement, range }
+      Just $ { replacement, range: range' }
       where
-      range = positionToRange $ fromMaybe position replaceRange
+      range' = positionToRange $ fromMaybe position replaceRange
     getReplacementRange _ = Nothing
 
     fixAllCommand text rebuildErrors = if length replacements > 0 then [ replaceAllSuggestions text docUri replacements ] else [ ]
       where
       replacements = mapMaybe getReplacementRange rebuildErrors
 
-    commandForCode (err@RebuildError { position: Just position, errorCode }) | contains range (positionToRange position) =
+    commandForCode err@(RebuildError { position: Just position, errorCode }) | contains range (positionToRange position) =
       case errorCode of
         "ModuleNotFound" -> Just build
         "HoleInferredType" -> case err of
@@ -106,8 +106,8 @@ onReplaceSuggestion docs config (ServerState { conn }) args =
       -> do
         doc <- liftEffect $ getDocument docs (DocumentUri uri)
         version <- liftEffect $ getVersion doc
-        TextEdit { range: range', newText } <- getReplacementEdit doc { replacement, range }
-        let edit = makeWorkspaceEdit (DocumentUri uri) version range' newText
+        TextEdit { range: range'', newText } <- getReplacementEdit doc { replacement, range }
+        let edit = makeWorkspaceEdit (DocumentUri uri) version range'' newText
 
         -- TODO: Check original & expected text ?
         void $ applyEdit conn' edit
@@ -129,11 +129,11 @@ getReplacementEdit doc { replacement, range } = do
   where
     -- | Modify suggestion replacement text, removing extraneous newlines
     getReplacement :: String -> String -> String
-    getReplacement replacement extraText =
-      (trim $ replace' (regex "\\s+\n" global) "\n" replacement)
+    getReplacement replacement' extraText =
+      (trim $ replace' (regex "\\s+\n" global) "\n" replacement')
       <> if addNewline then "\n" else ""
       where
-      trailingNewline = test' (regex "\n\\s+$" noFlags) replacement
+      trailingNewline = test' (regex "\n\\s+$" noFlags) replacement'
       addNewline = trailingNewline && (not $ null extraText)
 
 onReplaceAllSuggestions :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
