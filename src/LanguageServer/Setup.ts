@@ -29,7 +29,8 @@ exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeP
                     ? undefined : {
                         commands
                     },
-                referencesProvider: true
+                referencesProvider: true,
+                foldingRangeProvider: true
             }
         };
     });

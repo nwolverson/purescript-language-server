@@ -27,6 +27,8 @@ export const onReferences = (conn: IConnection) => registerHandler(conn.onRefere
 
 export const onCodeAction = (conn: IConnection) => registerHandler(conn.onCodeAction);
 
+export const onFoldingRanges = (conn: IConnection) => registerHandler(conn.onFoldingRanges);
+
 export const onDidChangeConfiguration = (conn: IConnection) => registerNotificationHandler(conn.onDidChangeConfiguration);
 
 export const publishDiagnostics = (conn: IConnection) => (params: PublishDiagnosticsParams) => () => conn.sendDiagnostics(params);

@@ -20,6 +20,7 @@ exports.onDocumentSymbol = function (conn) { return registerHandler(conn.onDocum
 exports.onWorkspaceSymbol = function (conn) { return registerHandler(conn.onWorkspaceSymbol); };
 exports.onReferences = function (conn) { return registerHandler(conn.onReferences); };
 exports.onCodeAction = function (conn) { return registerHandler(conn.onCodeAction); };
+exports.onFoldingRanges = function (conn) { return registerHandler(conn.onFoldingRanges); };
 exports.onDidChangeConfiguration = function (conn) { return registerNotificationHandler(conn.onDidChangeConfiguration); };
 exports.publishDiagnostics = function (conn) { return function (params) { return function () { return conn.sendDiagnostics(params); }; }; };
 exports.applyEditImpl = function (conn) { return function (edit) { return function () { return conn.workspace.applyEdit(edit).then(function (x) { return x.applied; }); }; }; };
