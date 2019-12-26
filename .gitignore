@@ -4,3 +4,4 @@ output/
 server.js
 .psc*
 yarn.lock
+.spago/

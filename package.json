@@ -19,7 +19,7 @@
   "bin": "./cli.js",
   "scripts": {
     "prepare": "run-s install:* build",
-    "install:psc": "psc-package install",
+    "install:spago": "spago install",
     "build": "run-s build:*",
     "build:tsc": "tsc -p src/LanguageServer/",
     "build:server": "spago bundle-app  -t server.js -m LanguageServer.IdePurescript.Main"
@@ -32,6 +32,8 @@
   "devDependencies": {
     "@types/node": "7.0.32",
     "npm-run-all": "^4.1.5",
+    "purescript": "^0.13.5",
+    "spago": "^0.13.0",
     "typescript": "~2.4.1"
   }
 }
