@@ -100,17 +100,19 @@ fullBuild logCb _ settings state _ = do
   let command = buildCommand settings
   let buildCommand = either (const []) (\reg -> (split reg <<< trim) command) (regex "\\s+" noFlags)
   case state, uncons buildCommand of
-    ServerState { port: Just port, conn: Just conn, root: Just directory }, Just { head: cmd, tail: args } -> do
+    ServerState { port: maybePort, root: Just directory }, Just { head: cmd, tail: args } -> do
       build logCb { command: Command cmd args, directory, useNpmDir: addNpmPath settings }
         >>= either (pure <<< Left) \{errors} -> do
           liftEffect $ logCb Info "Build complete"
-          attempt (loadAll port) >>= case _ of
-            Left e -> liftEffect $ logCb Error $ "Error reloading modules: " <> show e
-            Right (Left msg) -> liftEffect $ logCb Error $ "Error message from IDE server reloading modules: " <> msg
-            _ -> pure unit
-          liftEffect do logCb Info "Reloaded modules"
-                        Right <$> convertDiagnostics directory settings errors
+          case maybePort of 
+            Nothing -> liftEffect $ logCb Error $ "Couldn't reload modules, no ide server port"
+            Just port -> do
+              attempt (loadAll port) >>= case _ of
+                Left e -> liftEffect $ logCb Error $ "Error reloading modules: " <> show e
+                Right (Left msg) -> liftEffect $ logCb Error $ "Error message from IDE server reloading modules: " <> msg
+                _ -> liftEffect $ logCb Info "Reloaded modules"
+          liftEffect $ Right <$> convertDiagnostics directory settings errors
     _, Nothing ->
       pure $ Left "Error parsing build command"
     ServerState { port, conn, root }, _ -> do
-      pure $ Left $ "Error running build: " <> show port <> " : " <> show root
+      pure $ Left $ "Error running build: port=" <> show port <> ", root=" <> show root
