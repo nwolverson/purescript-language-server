@@ -28,7 +28,8 @@ exports.initConnection = function (commands) { return function (cb) { return fun
                     ? undefined : {
                     commands: commands
                 },
-                referencesProvider: true
+                referencesProvider: true,
+                foldingRangeProvider: true
             }
         };
     });

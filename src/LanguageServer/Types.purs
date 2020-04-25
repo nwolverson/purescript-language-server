@@ -206,6 +206,14 @@ newtype Hover = Hover { contents :: MarkupContent, range :: Nullable Range }
 
 newtype Command = Command { title :: String, command :: String, arguments :: Nullable (Array Foreign) }
 
+newtype FoldingRange = FoldingRange 
+  { startLine :: Int
+  , startCharacter :: Nullable Int
+  , endLine :: Int
+  , endCharacter :: Nullable Int
+  , kind :: Nullable String -- | comment, imports, region
+  }
+
 derive instance newtypeCommand :: Newtype Command _
 
 newtype TextEdit = TextEdit { range :: Range, newText :: String }
