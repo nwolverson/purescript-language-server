@@ -11,11 +11,10 @@ import Data.String.Regex (Regex, regex)
 import Data.String.Regex.Flags (noFlags)
 import Data.String.Utils (startsWith)
 import Effect.Aff (Aff)
-import IdePurescript.PscIde (eitherToErr, getCompletion)
+import IdePurescript.PscIde (getAvailableModules, getCompletion)
 import IdePurescript.Regex (match', test')
 import IdePurescript.Tokens (identPart, modulePart, moduleRegex)
-import PscIde (listAvailableModules)
-import PscIde.Command (CompletionOptions(..), ModuleList(..), TypeInfo(..))
+import PscIde.Command (CompletionOptions(..), TypeInfo(..))
 
 type ModuleInfo =
   { modules :: Array String
@@ -31,9 +30,8 @@ explicitImportRegex = regex ("""^import\s+""" <> modulePart <> """\s+\([^)]*?"""
 
 getModuleSuggestions :: Int -> String -> Aff (Array String)
 getModuleSuggestions port prefix = do
-  list <- eitherToErr $ listAvailableModules port
-  pure $ case list of
-    (ModuleList lst) -> filter (\m -> indexOf (Pattern prefix) m == Just 0) lst
+  list <- getAvailableModules port
+  pure $ filter (\m -> indexOf (Pattern prefix) m == Just 0) list
 
 data SuggestionResult =
   ModuleSuggestion { text :: String, suggestType :: SuggestionType, prefix :: String }

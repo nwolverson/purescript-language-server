@@ -12,6 +12,7 @@ import Node.Path as Path
 import Node.Process (getEnv, lookupEnv)
 import PscIde.Server (findBins', Executable)
 
+
 findBins :: forall a. Either a String -> String -> Aff (Array Executable)
 findBins pathVar server = do
   env <- liftEffect getEnv

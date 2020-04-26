@@ -47,12 +47,23 @@ getImports' port s = result conv $ P.listImports port s
 getAvailableModules :: Int -> Aff (Array String)
 getAvailableModules = result conv <<< P.listAvailableModules
   where
-  conv (C.ModuleList modules) = modules
+  conv (C.ModuleList modules) = primModules <> modules
+
 
 getLoadedModules :: Int -> Aff (Array String)
 getLoadedModules = result conv <<< P.listLoadedModules
   where
-  conv (C.ModuleList modules) = modules
+  conv (C.ModuleList modules) = primModules <> modules
+
+primModules :: Array String
+primModules = ["Prim"
+              ,"Prim.Boolean"
+              ,"Prim.Ordering"
+              ,"Prim.Row"
+              ,"Prim.RowList"
+              ,"Prim.Symbol"
+              ,"Prim.TypeError"
+              ]
 
 abbrevType :: String -> String
 abbrevType = replace' r "$1"
