@@ -35,7 +35,7 @@ type Port = Int
 
 data ServerStartResult =
     CorrectPath Port
-  | WrongPath Port String
+  | WrongPath Port String String
   | Started Port ChildProcess
   | Closed
   | StartError String
@@ -103,9 +103,9 @@ startServer' settings@({ exe: server, glob }) path addNpmBin cb logCb = do
       let noRes = { quit: pure unit, port: Nothing }
       liftEffect $ case res of
         CorrectPath usedPort -> { quit: pure unit, port: Just usedPort } <$ cb Info ("Found existing IDE server with correct path on port " <> show usedPort)
-        WrongPath usedPort wrongPath -> do
+        WrongPath usedPort wrongPath expectedPath -> do
           cb Error $ "Found existing IDE server on port '" <> show usedPort <> "' with wrong path: '" <> wrongPath
-            <> "'. Correct, kill or configure a different port, and restart."
+            <> "' instead of '" <> expectedPath <> "'. Correct, kill or configure a different port, and restart."
           pure noRes
         Started usedPort cp -> do
           cb Success $ "Started IDE server (port " <> show usedPort <> ")"
@@ -172,7 +172,7 @@ startServer logCb { exe, combinedExe, glob, logLevel, editorMode, polling, outpu
       else
         do
           logCb Info $ "Found IDE server on port " <> show port <> " with wrong path: " <> normalizePath workingDir <> " instead of " <> normalizePath rootPath
-          pure $ WrongPath port workingDir
+          pure $ WrongPath port workingDir rootPath
 
   normalizePath = (if platform == Just Win32 then toLower else identity) <<< normalize
 
