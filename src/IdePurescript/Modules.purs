@@ -1,5 +1,5 @@
 module IdePurescript.Modules (
-    Module
+    Module(..)
   , initialModulesState
   , State
   , getMainModule

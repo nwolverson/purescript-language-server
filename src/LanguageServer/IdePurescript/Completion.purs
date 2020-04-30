@@ -2,7 +2,7 @@ module LanguageServer.IdePurescript.Completion where
 
 import Prelude
 
-import Data.Array (filter)
+import Data.Array (filter, mapMaybe)
 import Data.Array (length, null) as Arr
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Maybe (Maybe(..), fromMaybe)
@@ -14,6 +14,7 @@ import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import IdePurescript.Completion (SuggestionResult(..), SuggestionType(..), getSuggestions)
 import IdePurescript.Modules (State, getAllActiveModules, getModuleFromUnknownQualifier, getModuleName, getQualModule, getUnqualActiveModules)
+import IdePurescript.Modules as Modules
 import IdePurescript.PscIde (getLoadedModules)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (TextDocumentPositionParams)
@@ -40,9 +41,11 @@ getCompletions docs settings state ({ textDocument, position }) = do
             usedModules <- if autoCompleteAllModules
                 then getLoadedModules port'
                 else pure $ getUnqualActiveModules modules Nothing
+            let qualifiers = mapMaybe (\(Modules.Module { qualifier }) -> qualifier) modules.modules
             suggestions <- getSuggestions port'
                 { line
                 , moduleInfo: { modules: usedModules, getQualifiedModule, mainModule: modules.main, importedModules: getAllActiveModules modules }
+                , qualifiers
                 , maxResults: Config.autocompleteLimit settings
                 , groupCompletions: Config.autocompleteGrouped settings
                 , preferredModules: Config.importsPreferredModules settings
@@ -74,6 +77,8 @@ getCompletions docs settings state ({ textDocument, position }) = do
         , newText
         }
 
+    convert _ (QualifierSuggestion { text }) =
+        completionItem text LS.Module
     convert _ (ModuleSuggestion { text, suggestType, prefix }) =
         completionItem text (convertSuggest suggestType)
         # over CompletionItem (_

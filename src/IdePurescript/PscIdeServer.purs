@@ -31,6 +31,8 @@ import Node.Stream (onDataString)
 import PscIde.Server (Executable(Executable), LogLevel, defaultServerArgs, getSavedPort, pickFreshPort, savePort)
 import PscIde.Server as S
 
+import IdePurescript.Completion as IdeCompletion
+
 type Port = Int
 
 data ServerStartResult =
@@ -39,6 +41,7 @@ data ServerStartResult =
   | Started Port ChildProcess
   | Closed
   | StartError String
+
 
 data ErrorLevel = Success | Info | Warning | Error
 instance showErrorLevel :: Show ErrorLevel where
@@ -50,6 +53,8 @@ instance showErrorLevel :: Show ErrorLevel where
 type Notify = ErrorLevel -> String -> Effect Unit
 
 data Version = Version Int Int Int
+
+
 
 parseVersion :: String -> Maybe Version
 parseVersion s =

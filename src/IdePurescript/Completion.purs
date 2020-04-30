@@ -4,6 +4,7 @@ import Prelude
 
 import Control.Alt ((<|>))
 import Data.Array (filter, head, intersect, sortBy, (:))
+import Data.Array as Array
 import Data.Either (Either)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String (Pattern(..), contains, indexOf, length)
@@ -36,10 +37,13 @@ getModuleSuggestions port prefix = do
 data SuggestionResult =
   ModuleSuggestion { text :: String, suggestType :: SuggestionType, prefix :: String }
   | IdentSuggestion { origMod :: String, exportMod :: String, exportedFrom :: Array String, identifier :: String, qualifier :: Maybe String, valueType :: String, suggestType :: SuggestionType, prefix :: String, documentation :: Maybe String }
+  | QualifierSuggestion { text :: String }
+
 
 getSuggestions :: Int -> {
     line :: String,
     moduleInfo :: ModuleInfo,
+    qualifiers :: Array String,
     groupCompletions :: Boolean,
     maxResults :: Maybe Int,
     preferredModules :: Array String
@@ -47,6 +51,7 @@ getSuggestions :: Int -> {
 getSuggestions port
     { line
     , moduleInfo: { modules, getQualifiedModule, mainModule, importedModules }
+    , qualifiers
     , maxResults
     , groupCompletions
     , preferredModules
@@ -66,10 +71,16 @@ getSuggestions port
           pure $ map (modResult prefix) completions
         else do
           completions <- getCompletion port token mainModule mod ("Prim":modules) getQualifiedModule opts
-          pure $ map (result mod token) completions
+          pure $ 
+            matchingQualifiers token <> 
+            map (result mod token) completions
       Nothing -> pure []
     where
     opts = CompletionOptions { maxResults, groupReexports: groupCompletions }
+
+    matchingQualifiers token = convQ <$> Array.filter (\q -> indexOf (Pattern token) q == Just 0) qualifiers
+      where
+      convQ text = QualifierSuggestion { text }
 
     getModuleName "" token  = token
     getModuleName mod token = mod <> "." <> token
