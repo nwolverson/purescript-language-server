@@ -37,7 +37,7 @@ retry logError n a | n > 0 = do
             retry logError (n - 1) a
 retry _ _ a = a
 
-startServer' :: Settings -> Maybe String -> Notify -> Notify -> Aff { port :: Maybe Int, quit :: Aff Unit }
+startServer' :: Settings -> String -> Notify -> Notify -> Aff { port :: Maybe Int, quit :: Aff Unit }
 startServer' settings root cb logCb = do
   pscpGlob <- getPackagerPaths Config.addPscPackageSources "psc-package" settings root
   spagoGlob <- getPackagerPaths Config.addSpagoSources "spago" settings root
@@ -50,7 +50,7 @@ startServer' settings root cb logCb = do
     , polling: Config.polling settings
     , outputDirectory: Config.outputDirectory settings
     , port: Config.pscIdePort settings
-    } (fromMaybe "" root) (Config.addNpmPath settings) cb logCb
+    } root (Config.addNpmPath settings) cb logCb
   where
     globs = getGlob Config.srcPath <> getGlob Config.packagePath <> Config.sourceGlobs settings
     getGlob fn = fn settings # case _ of
@@ -58,9 +58,9 @@ startServer' settings root cb logCb = do
       _ -> []
     exe = if Config.usePurs settings then Config.pursExe settings else Config.serverExe settings
 
-getPackagerPaths :: ConfigFn Boolean -> String -> Foreign -> Maybe String -> Aff (Array String)
+getPackagerPaths :: ConfigFn Boolean -> String -> Foreign -> String -> Aff (Array String)
 getPackagerPaths enabled binName settings root = if not $ enabled settings then pure [] else do
-  pathVar <- liftEffect $ getPathVar (Config.addNpmPath settings) (fromMaybe "" root)
+  pathVar <- liftEffect $ getPathVar (Config.addNpmPath settings) root
   serverBins <- findBins pathVar binName
   case head serverBins of
     Just (Executable bin _) -> makeAff \cb -> do

@@ -138,7 +138,7 @@ main = do
 
       startPscIdeServer = do
         liftEffect $ logError Info "Starting IDE server"
-        rootPath <- liftEffect $ (_.root <<< unwrap) <$> Ref.read state
+        rootPath <- liftEffect workspaceRoot
         settings <- liftEffect $ Ref.read config
         startRes <- startServer' settings rootPath logError logError
         retry logError 6 case startRes of
@@ -158,9 +158,9 @@ main = do
     root <- case toMaybe rootUri, toMaybe rootPath of
       Just uri, _ -> Just <$> uriToFilename uri
       _, Just path -> pure $ Just path
-      Nothing, Nothing -> pure Nothing 
-    (\(Tuple dir root') -> log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root')) =<< Tuple <$> cwd <*> workspaceRoot
+      Nothing, Nothing -> pure Nothing
     Ref.modify_ (over ServerState $ _ { root = root }) state
+    (\(Tuple dir root') -> log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root')) =<< Tuple <$> cwd <*> workspaceRoot
   Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
   
   documents <- initDocumentStore conn
