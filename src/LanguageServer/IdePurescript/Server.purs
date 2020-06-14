@@ -6,6 +6,9 @@ import Data.Array (filter, head)
 import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String (null)
+import Data.String.Regex as Regex
+import Data.String.Regex.Flags (noFlags)
+import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.String.Utils (lines)
 import Data.Time.Duration (Milliseconds(..))
 import Effect.Aff (Aff, attempt, delay, makeAff)
@@ -20,6 +23,7 @@ import LanguageServer.Types (Settings)
 import Node.Buffer (toString)
 import Node.ChildProcess (defaultExecOptions, execFile)
 import Node.Encoding (Encoding(..))
+import Node.Process (lookupEnv)
 import PscIde (load)
 import PscIde.Server (Executable(..))
 
@@ -39,12 +43,20 @@ retry _ _ a = a
 
 startServer' :: Settings -> Maybe String -> Notify -> Notify -> Aff { port :: Maybe Int, quit :: Aff Unit }
 startServer' settings root cb logCb = do
-  pscpGlob <- getPackagerPaths Config.addPscPackageSources "psc-package" settings root
-  spagoGlob <- getPackagerPaths Config.addSpagoSources "spago" settings root
+  envIdeSources :: Maybe String <- liftEffect $ lookupEnv "PURS_IDE_SOURCES"
+  packageGlobs <- case envIdeSources of
+    Just sourcesString -> do
+      liftEffect $ logCb Info "Using sources from PURS_IDE_SOURCES"
+      pure (Regex.split (unsafeRegex """[\r\n\s]+""" noFlags) sourcesString)
+    Nothing -> do
+      liftEffect $ logCb Info "Using sources from PURS_IDE_SOURCES"
+      pscpGlob <- getPackagerPaths Config.addPscPackageSources "psc-package" settings root
+      spagoGlob <- getPackagerPaths Config.addSpagoSources "spago" settings root
+      pure (pscpGlob <> spagoGlob)
   P.startServer'
     { exe
     , combinedExe: Config.usePurs settings
-    , glob: filter (not <<< null) $ globs <> pscpGlob <> spagoGlob
+    , glob: filter (not <<< null) $ globs <> packageGlobs
     , logLevel: Config.logLevel settings
     , editorMode: Config.editorMode settings
     , polling: Config.polling settings
