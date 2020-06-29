@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var vscode_languageserver_1 = require("vscode-languageserver");
+var vscode_languageserver_textdocument_1 = require("vscode-languageserver-textdocument");
 exports.initConnection = function (commands) { return function (cb) { return function () {
     var conn = vscode_languageserver_1.createConnection();
     conn.listen();
@@ -36,7 +37,10 @@ exports.initConnection = function (commands) { return function (cb) { return fun
     return conn;
 }; }; };
 exports.initDocumentStore = function (conn) { return function () {
-    var documents = new vscode_languageserver_1.TextDocuments();
+    var documents = new vscode_languageserver_1.TextDocuments(vscode_languageserver_textdocument_1.TextDocument);
     documents.listen(conn);
     return documents;
+}; };
+exports.getConfigurationImpl = function (conn) { return function () {
+    return conn.workspace.getConfiguration("purescript");
 }; };

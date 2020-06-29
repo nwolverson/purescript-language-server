@@ -1,5 +1,5 @@
 import { IConnection, createConnection,InitializeParams, IPCMessageReader, IPCMessageWriter, TextDocuments, Location, Hover, TextDocumentSyncKind } from 'vscode-languageserver';
-
+import { TextDocument } from 'vscode-languageserver-textdocument';
 exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeParams, conn: IConnection}) => () => void) => (): IConnection => {
     const conn = createConnection();
     conn.listen();
@@ -38,7 +38,10 @@ exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeP
 }
 
 exports.initDocumentStore = (conn : IConnection) => () => {
-    const documents: TextDocuments = new TextDocuments();
+    const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
     documents.listen(conn);
     return documents;
 }
+
+exports.getConfigurationImpl = (conn : IConnection) => () =>
+    conn.workspace.getConfiguration("purescript");

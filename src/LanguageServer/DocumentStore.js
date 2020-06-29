@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.onDidChangeContent = exports.onDidCloseDocument = exports.onDidOpenDocument = exports.onDidSaveDocument = exports.getDocument = exports.getDocuments = void 0;
 exports.getDocuments = function (documents) { return function () { return documents.all(); }; };
 exports.getDocument = function (documents) { return function (uri) { return function () { return documents.get(uri); }; }; };
 exports.onDidSaveDocument = function (documents) { return function (f) { return function () { return documents.onDidSave(function (p) { return f(p)(); }); }; }; };

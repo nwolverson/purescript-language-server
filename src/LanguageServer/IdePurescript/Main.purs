@@ -15,7 +15,7 @@ import Data.Profunctor.Strong (first)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds(..), apathize, delay, runAff_, try)
+import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, runAff_, try)
 import Effect.Class (liftEffect)
 import Effect.Console as Console
 import Effect.Ref as Ref
@@ -42,7 +42,7 @@ import LanguageServer.IdePurescript.Server (loadAll, retry, startServer')
 import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, getWorkspaceSymbols)
 import LanguageServer.IdePurescript.Tooltips (getTooltips)
 import LanguageServer.IdePurescript.Types (ServerState(..), CommandHandler)
-import LanguageServer.Setup (InitParams(..), initConnection, initDocumentStore)
+import LanguageServer.Setup (InitParams(..), getConfiguration, initConnection, initDocumentStore)
 import LanguageServer.TextDocument (getText, getUri)
 import LanguageServer.Types (Diagnostic, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
 import LanguageServer.Uri (filenameToUri, uriToFilename)
@@ -315,17 +315,35 @@ main = do
               s <- liftEffect $ Ref.read state
               onBuild documents c s []
 
-  Ref.read gotConfig >>= (_ `when` onConfig)
-
   onDidChangeConfiguration conn $ \{settings} -> do 
-    log conn "Got updated settings"
+    log conn "Got updated settings (client push)"
     Ref.write settings config 
     Ref.read gotConfig >>= \c -> when (not c) onConfig
 
-  launchAffLog $ do delay (Milliseconds 250.0)
-                    got <- liftEffect $ Ref.read gotConfig
-                    liftEffect $ when (not got) $ do
-                      logError Warning "Proceeding with no config receieved"
-                      onConfig
+  -- 1. Config on command line - go immediately
+  Ref.read gotConfig >>= case _ of
+    true -> onConfig
+    false -> pure unit
+
+  launchAffLog $ do 
+    delay (Milliseconds 50.0)
+    -- 2. Config may be pushed immediately
+    got1 <- liftEffect $ Ref.read gotConfig
+    when (not got1) $ do
+      -- 3. Fetch config via pull (waited 50ms as at least in vscode, not ready immediately)
+      initialConfig <- attempt $ getConfiguration conn
+      case initialConfig of
+        Right ic -> liftEffect do
+            log conn "Got updated settings (by request)"
+            Ref.write ic config 
+            onConfig
+        Left error -> do
+          liftEffect $ log conn $ "Failed to request settings: " <> show error
+          -- 4. Wait some time longer for possible config push, then proceed with no config
+          delay (Milliseconds 200.0)
+          got2 <- liftEffect $ Ref.read gotConfig
+          liftEffect $ when (not got2) $ do
+            logError Warning "Proceeding with no config receieved"
+            onConfig
 
   log conn "PureScript Language Server started"

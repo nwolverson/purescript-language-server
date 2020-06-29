@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.onShutdown = exports.onExit = exports.onDidChangeWatchedFiles = exports.onExecuteCommand = exports.sendDiagnosticsEnd = exports.sendDiagnosticsBegin = exports.applyEditImpl = exports.publishDiagnostics = exports.onDidChangeConfiguration = exports.onFoldingRanges = exports.onCodeAction = exports.onReferences = exports.onWorkspaceSymbol = exports.onDocumentSymbol = exports.onHover = exports.onCompletion = exports.onDefinition = void 0;
 var vscode_jsonrpc_1 = require("vscode-jsonrpc");
 var registerHandler = function (registerF) {
     return function (f) { return function () { return registerF(function (x) { return f(x)(); }); }; };
