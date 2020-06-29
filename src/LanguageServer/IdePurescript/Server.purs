@@ -49,7 +49,7 @@ startServer' settings root cb logCb = do
       liftEffect $ logCb Info "Using sources from PURS_IDE_SOURCES"
       pure (Regex.split (unsafeRegex """[\r\n\s]+""" noFlags) sourcesString)
     Nothing -> do
-      liftEffect $ logCb Info "Using sources from PURS_IDE_SOURCES"
+      liftEffect $ logCb Info "Using sources from psc-package/spago packages (PURS_IDE_SOURCES not set)"
       pscpGlob <- getPackagerPaths Config.addPscPackageSources "psc-package" settings root
       spagoGlob <- getPackagerPaths Config.addSpagoSources "spago" settings root
       pure (pscpGlob <> spagoGlob)
