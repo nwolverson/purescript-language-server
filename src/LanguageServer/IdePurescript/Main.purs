@@ -8,7 +8,7 @@ import Data.Array (length, (!!), (\\))
 import Data.Array as Array
 import Data.Either (Either(..), either)
 import Data.Foldable (for_, or)
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toMaybe, toNullable)
 import Data.Profunctor.Strong (first)
@@ -38,7 +38,7 @@ import LanguageServer.IdePurescript.FoldingRanges (getFoldingRanges)
 import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules)
 import LanguageServer.IdePurescript.References (getReferences)
 import LanguageServer.IdePurescript.Search (search)
-import LanguageServer.IdePurescript.Server (loadAll, retry, startServer')
+import LanguageServer.IdePurescript.Server (getEnvPursIdeSources, loadAll, retry, startServer')
 import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, getWorkspaceSymbols)
 import LanguageServer.IdePurescript.Tooltips (getTooltips)
 import LanguageServer.IdePurescript.Types (ServerState(..), CommandHandler)
@@ -303,7 +303,8 @@ main = do
           startPscIdeServer
           let outputDir = Config.effectiveOutputDirectory c
           hasPackageFile <- or <$> traverse FS.exists ["bower.json", "psc-package.json", "spago.dhall"]
-          when (not hasPackageFile) do
+          envIdeSources <- getEnvPursIdeSources
+          when (not hasPackageFile && isNothing envIdeSources) do
             liftEffect $ showError conn "It doesn't look like the workspace root is a PureScript project (has bower.json/psc-package.json/spago.dhall). The PureScript project should be opened as a root workspace folder."
           exists <- FS.exists outputDir
           when (not exists) $ liftEffect $ launchAffLog do
