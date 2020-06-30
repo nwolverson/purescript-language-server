@@ -4,7 +4,7 @@ import Prelude
 
 import Data.Array (filter, head)
 import Data.Either (Either(..), either)
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..))
 import Data.String (null)
 import Data.String.Regex as Regex
 import Data.String.Regex.Flags (noFlags)
@@ -12,7 +12,7 @@ import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.String.Utils (lines)
 import Data.Time.Duration (Milliseconds(..))
 import Effect.Aff (Aff, attempt, delay, makeAff)
-import Effect.Class (liftEffect)
+import Effect.Class (class MonadEffect, liftEffect)
 import Foreign (Foreign)
 import IdePurescript.Exec (findBins, getPathVar)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
@@ -41,9 +41,12 @@ retry logError n a | n > 0 = do
             retry logError (n - 1) a
 retry _ _ a = a
 
+getEnvPursIdeSources :: forall m. MonadEffect m => m (Maybe String)
+getEnvPursIdeSources = liftEffect $ lookupEnv "PURS_IDE_SOURCES"
+
 startServer' :: Settings -> String -> Notify -> Notify -> Aff { port :: Maybe Int, quit :: Aff Unit }
 startServer' settings root cb logCb = do
-  envIdeSources :: Maybe String <- liftEffect $ lookupEnv "PURS_IDE_SOURCES"
+  envIdeSources <- getEnvPursIdeSources
   packageGlobs <- case envIdeSources of
     Just sourcesString -> do
       liftEffect $ logCb Info "Using sources from PURS_IDE_SOURCES"
