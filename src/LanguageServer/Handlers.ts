@@ -4,7 +4,8 @@ import { NotificationType0 } from 'vscode-jsonrpc';
 let registerHandler = <T1,T2>(registerF: (handler: RequestHandler<T1, T2, void>) => void) =>
     (f: (args: T1) => () => T2) => () => registerF(x => f(x)());
 
-let registerHandler0 = <T>(registerF: (handler: RequestHandler0<T, void>) => void) =>
+// For some reason this is getting deleted by DCE even though it is used and the same form as the others...
+export let registerHandler0 = <T>(registerF: (handler: RequestHandler0<T, void>) => void) =>
     (f: () => T) => () => registerF(f);
 
 let registerNotificationHandler = <T>(registerF: (handler: NotificationHandler<T>) => void) =>

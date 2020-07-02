@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onShutdown = exports.onExit = exports.onDidChangeWatchedFiles = exports.onExecuteCommand = exports.sendDiagnosticsEnd = exports.sendDiagnosticsBegin = exports.applyEditImpl = exports.publishDiagnostics = exports.onDidChangeConfiguration = exports.onFoldingRanges = exports.onCodeAction = exports.onReferences = exports.onWorkspaceSymbol = exports.onDocumentSymbol = exports.onHover = exports.onCompletion = exports.onDefinition = void 0;
+exports.onShutdown = exports.onExit = exports.onDidChangeWatchedFiles = exports.onExecuteCommand = exports.sendDiagnosticsEnd = exports.sendDiagnosticsBegin = exports.applyEditImpl = exports.publishDiagnostics = exports.onDidChangeConfiguration = exports.onFoldingRanges = exports.onCodeAction = exports.onReferences = exports.onWorkspaceSymbol = exports.onDocumentSymbol = exports.onHover = exports.onCompletion = exports.onDefinition = exports.registerHandler0 = void 0;
 var vscode_jsonrpc_1 = require("vscode-jsonrpc");
 var registerHandler = function (registerF) {
     return function (f) { return function () { return registerF(function (x) { return f(x)(); }); }; };
 };
-var registerHandler0 = function (registerF) {
+// For some reason this is getting deleted by DCE even though it is used and the same form as the others...
+exports.registerHandler0 = function (registerF) {
     return function (f) { return function () { return registerF(f); }; };
 };
 var registerNotificationHandler = function (registerF) {
@@ -30,4 +31,4 @@ exports.sendDiagnosticsEnd = function (conn) { return function () { return conn.
 exports.onExecuteCommand = function (conn) { return registerHandler(conn.onExecuteCommand); };
 exports.onDidChangeWatchedFiles = function (conn) { return registerNotificationHandler(conn.onDidChangeWatchedFiles); };
 exports.onExit = function (conn) { return registerNotificationHandler0(conn.onExit); };
-exports.onShutdown = function (conn) { return registerHandler0(conn.onShutdown); };
+exports.onShutdown = function (conn) { return exports.registerHandler0(conn.onShutdown); };
