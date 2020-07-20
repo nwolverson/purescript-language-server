@@ -159,8 +159,9 @@ main = do
       Just uri, _ -> Just <$> uriToFilename uri
       _, Just path -> pure $ Just path
       Nothing, Nothing -> pure Nothing
-    Ref.modify_ (over ServerState $ _ { root = root }) state
-    (\(Tuple dir root') -> log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root')) =<< Tuple <$> cwd <*> workspaceRoot
+    workingRoot <- maybe cwd pure root
+    Ref.modify_ (over ServerState $ _ { root = Just workingRoot }) state
+    (\(Tuple dir root') -> log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root')) =<< Tuple <$> cwd <*> pure workingRoot
   Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
   
   documents <- initDocumentStore conn
@@ -301,8 +302,8 @@ main = do
         c <- liftEffect $ Ref.read config
         when (Config.autoStartPscIde c) $ do
           startPscIdeServer
-          let outputDir = Config.effectiveOutputDirectory c
-          hasPackageFile <- or <$> traverse FS.exists ["bower.json", "psc-package.json", "spago.dhall"]
+          outputDir <- liftEffect $ resolvePath $ Config.effectiveOutputDirectory c
+          hasPackageFile <- or <$> traverse (FS.exists <=< liftEffect  <<< resolvePath) ["bower.json", "psc-package.json", "spago.dhall"]
           envIdeSources <- getEnvPursIdeSources
           when (not hasPackageFile && isNothing envIdeSources) do
             liftEffect $ showError conn "It doesn't look like the workspace root is a PureScript project (has bower.json/psc-package.json/spago.dhall). The PureScript project should be opened as a root workspace folder."
