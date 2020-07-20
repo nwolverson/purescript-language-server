@@ -3,7 +3,7 @@ module LanguageServer.IdePurescript.CodeActions where
 import Prelude
 
 import Control.Monad.Except (runExcept)
-import Data.Array (catMaybes, filter, length, mapMaybe)
+import Data.Array (catMaybes, filter, length, mapMaybe, nubByEq)
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (un)
@@ -29,7 +29,7 @@ import LanguageServer.Types (Command, DocumentStore, DocumentUri(DocumentUri), P
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array Command)
-getActions documents settings (ServerState { diagnostics, conn: Just conn }) { textDocument, range } =  
+getActions documents settings (ServerState { diagnostics, conn: Just conn }) { textDocument, range } =
   case Object.lookup (un DocumentUri $ docUri) diagnostics of
     Just errs -> pure $
         (catMaybes $ map asCommand errs)
@@ -54,7 +54,7 @@ getActions documents settings (ServerState { diagnostics, conn: Just conn }) { t
 
     fixAllCommand text rebuildErrors = if length replacements > 0 then [ replaceAllSuggestions text docUri replacements ] else [ ]
       where
-      replacements = mapMaybe getReplacementRange rebuildErrors
+      replacements = nubByEq eq $ mapMaybe getReplacementRange rebuildErrors
 
     commandForCode err@(RebuildError { position: Just position, errorCode }) | contains range (positionToRange position) =
       case errorCode of
@@ -83,14 +83,14 @@ readRange r = do
     pure $ Position { line, character }
 
 afterEnd :: Range -> Range
-afterEnd (Range { end: end@(Position { line, character }) }) = 
+afterEnd (Range { end: end@(Position { line, character }) }) =
   Range
     { start: end
     , end: Position { line, character: character + 10 }
     }
 
 toNextLine :: Range -> Range
-toNextLine (Range { start, end: end@(Position { line, character }) }) = 
+toNextLine (Range { start, end: end@(Position { line, character }) }) =
   Range
     { start
     , end: Position { line: line+1, character: 0 }
@@ -98,7 +98,7 @@ toNextLine (Range { start, end: end@(Position { line, character }) }) =
 
 onReplaceSuggestion :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 onReplaceSuggestion docs config (ServerState { conn }) args =
-  case conn, args of 
+  case conn, args of
     Just conn', [ uri', replacement', range' ]
       | Right uri <- runExcept $ readString uri'
       , Right replacement <- runExcept $ readString replacement'
@@ -120,7 +120,7 @@ getReplacementEdit doc { replacement, range } = do
   afterText <- liftEffect $ replace' (regex "\n$" noFlags) "" <$> getTextAtRange doc (afterEnd range)
 
   let newText = getReplacement replacement afterText
-  
+
   let range' = if newText == "" && afterText == "" then
                 toNextLine range
                 else
@@ -138,7 +138,7 @@ getReplacementEdit doc { replacement, range } = do
 
 onReplaceAllSuggestions :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 onReplaceAllSuggestions docs config (ServerState { conn }) args =
-  case conn, args of 
+  case conn, args of
     Just conn', [ uri', suggestions' ]
       | Right uri <- runExcept $ readString uri'
       , Right suggestions <- runExcept $ readArray suggestions' >>= traverse readSuggestion
@@ -148,7 +148,7 @@ onReplaceAllSuggestions docs config (ServerState { conn }) args =
           edits <- traverse (getReplacementEdit doc) suggestions
           void $ applyEdit conn' $ workspaceEdit
             [ TextDocumentEdit
-              { textDocument: TextDocumentIdentifier { uri: DocumentUri uri, version } 
+              { textDocument: TextDocumentIdentifier { uri: DocumentUri uri, version }
               , edits
               }
             ]
