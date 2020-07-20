@@ -56,6 +56,9 @@ newtype Range = Range { start :: Position, end :: Position }
 instance eqRange :: Eq Range where
   eq (Range {start, end}) (Range {start: start', end: end'}) = start == start' && end == end'
 
+instance ordRange :: Ord Range where
+  compare (Range {start, end}) (Range {start: start', end: end'}) = compare start start' <> compare end end'
+
 instance showRange :: Show Range where
   show (Range { start, end }) = "Range(" <> show start <> "," <> show end <> ")"
 

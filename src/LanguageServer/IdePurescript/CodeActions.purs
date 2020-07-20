@@ -3,7 +3,7 @@ module LanguageServer.IdePurescript.CodeActions where
 import Prelude
 
 import Control.Monad.Except (runExcept)
-import Data.Array (catMaybes, filter, length, mapMaybe, nubByEq)
+import Data.Array (catMaybes, filter, foldl, head, length, mapMaybe, nubByEq, sort, sortWith, uncons, (:))
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (un)
@@ -54,7 +54,18 @@ getActions documents settings (ServerState { diagnostics, conn: Just conn }) { t
 
     fixAllCommand text rebuildErrors = if length replacements > 0 then [ replaceAllSuggestions text docUri replacements ] else [ ]
       where
-      replacements = nubByEq eq $ mapMaybe getReplacementRange rebuildErrors
+      replacements :: Array { range :: Range, replacement :: String }
+      replacements = removeOverlaps $ sortWith _.range $ nubByEq eq $ mapMaybe getReplacementRange rebuildErrors
+
+    removeOverlaps :: Array { range :: Range, replacement :: String } -> Array { range :: Range, replacement :: String }
+    removeOverlaps = foldl go []
+      where
+      go [] x = [x] 
+      go acc x@{range: Range { start }} 
+        | Just ({range: Range { end: lastEnd }}) <- head acc
+        , lastEnd < start
+        = x:acc
+      go acc _ = acc
 
     commandForCode err@(RebuildError { position: Just position, errorCode }) | contains range (positionToRange position) =
       case errorCode of
