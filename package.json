@@ -24,6 +24,10 @@
     "build:tsc": "tsc -p src/LanguageServer/",
     "build:server": "spago bundle-app  -t server.js -m LanguageServer.IdePurescript.Main"
   },
+  "files": [
+    "cli.js",
+    "server.js"
+  ],
   "dependencies": {
     "vscode-languageserver": "^6.1.1",
     "vscode-languageserver-textdocument": "^1.0.1",
