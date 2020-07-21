@@ -79,7 +79,7 @@ getPackagerPaths enabled binName settings root = if not $ enabled settings then 
   serverBins <- findBins pathVar binName
   case head serverBins of
     Just (Executable bin _) -> makeAff \cb -> do
-      void $ execFile bin [ "sources" ] defaultExecOptions (\{stdout} -> do
+      void $ execFile bin [ "sources" ] (defaultExecOptions { cwd = Just root }) (\{stdout} -> do
         text <- toString UTF8 stdout
         cb $ pure $ lines text)
       pure mempty
