@@ -6,6 +6,7 @@ import Control.Monad.Except (runExcept)
 import Data.Array (catMaybes, filter, foldl, head, length, mapMaybe, nubByEq, sort, sortWith, uncons, (:))
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe)
+
 import Data.Newtype (un)
 import Data.String (null, trim)
 import Data.String.Regex (regex)
@@ -67,7 +68,7 @@ getActions documents settings (ServerState { diagnostics, conn: Just conn }) { t
         = x:acc
       go acc _ = acc
 
-    commandForCode err@(RebuildError { position: Just position, errorCode }) | contains range (positionToRange position) =
+    commandForCode err@(RebuildError { position: Just position, errorCode }) | contains (positionToRange position) range =
       case errorCode of
         "ModuleNotFound" -> Just build
         "HoleInferredType" -> case err of
@@ -75,7 +76,8 @@ getActions documents settings (ServerState { diagnostics, conn: Just conn }) { t
             Just $ typedHole name docUri (positionToRange position) completions
           _ -> Nothing
         x | isUnknownToken x
-          , { startLine, startColumn } <- position -> Just $ fixTypo docUri (startLine-1) (startColumn-1)
+          , { startLine, startColumn } <- position ->
+            Just $ fixTypo docUri (startLine-1) (startColumn-1)
         _ -> Nothing
     commandForCode _ = Nothing
 
