@@ -98,7 +98,7 @@ outputDirectory = getConfigMaybe readString "outputDirectory"
 
 -- | Effective output directory (taking account of purs default)
 effectiveOutputDirectory :: ConfigFn String
-effectiveOutputDirectory = fromMaybe "output" <<< outputDirectory
+effectiveOutputDirectory = fromMaybe "output" <<< ignoreEmpty <<< outputDirectory
 
 polling :: ConfigFn Boolean
 polling = getBoolean "polling" false
@@ -120,3 +120,7 @@ logLevel = getString "pscIdelogLevel" "" >>> case _ of
 codegenTargets :: ConfigFn (Maybe (Array CodegenTarget))
 codegenTargets =  getConfigMaybe (readArray >=> traverse readString) "codegenTargets" >>>
     map (map Other)
+
+ignoreEmpty :: Maybe String -> Maybe String
+ignoreEmpty (Just "") = Nothing
+ignoreEmpty x = x
