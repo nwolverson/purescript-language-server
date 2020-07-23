@@ -35,9 +35,6 @@ getInt = getConfig readInt
 
 type ConfigFn a = Foreign -> a
 
-serverExe :: ConfigFn String
-serverExe = getString "pscIdeServerExe" "psc-ide-server"
-
 pursExe :: ConfigFn String
 pursExe = getString "pursExe" "purs"
 
@@ -48,16 +45,13 @@ autoCompleteAllModules :: ConfigFn Boolean
 autoCompleteAllModules = getBoolean "autocompleteAllModules" true
 
 buildCommand :: ConfigFn String
-buildCommand = getString "buildCommand" "pulp build -- --json-errors"
+buildCommand = getString "buildCommand" "spago build --purs-args --json-errors"
 
 addNpmPath :: ConfigFn Boolean
 addNpmPath = getBoolean "addNpmPath" false
 
-usePurs :: ConfigFn Boolean
-usePurs = getBoolean "useCombinedExe" true
-
 packagePath :: ConfigFn String
-packagePath = getString "packagePath" "bower_components"
+packagePath = getString "packagePath" ""
 
 srcPath :: ConfigFn String
 srcPath = getString "sourcePath" "src"

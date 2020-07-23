@@ -58,7 +58,7 @@ startServer' settings root cb logCb = do
       pure (pscpGlob <> spagoGlob)
   P.startServer'
     { exe
-    , combinedExe: Config.usePurs settings
+    , combinedExe: true
     , glob: filter (not <<< null) $ globs <> packageGlobs
     , logLevel: Config.logLevel settings
     , editorMode: Config.editorMode settings
@@ -71,7 +71,7 @@ startServer' settings root cb logCb = do
     getGlob fn = fn settings # case _ of
       glob | not (null glob) -> [ glob <> "/**/*.purs" ]
       _ -> []
-    exe = if Config.usePurs settings then Config.pursExe settings else Config.serverExe settings
+    exe = Config.pursExe settings
 
 getPackagerPaths :: ConfigFn Boolean -> String -> Foreign -> String -> Aff (Array String)
 getPackagerPaths enabled binName settings root = if not $ enabled settings then pure [] else do
