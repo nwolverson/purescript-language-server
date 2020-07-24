@@ -39,7 +39,7 @@ lineRange pos@(Position { line, character }) = Range
 
 caseSplit :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 caseSplit docs settings state args = do
-  let ServerState { port, conn } = state
+  let ServerState { port, conn, clientCapabilities } = state
   case port, conn, args of
     Just port', Just conn', [ argUri, argLine, argChar, argType ]
         | Right uri <- runExcept $ readString argUri
@@ -53,7 +53,7 @@ caseSplit docs settings state args = do
             case identifierAtPoint lineText char of
                 Just { range: { left, right } } -> do
                     lines <- eitherToErr $ P.caseSplit port' lineText left right false tyStr
-                    let edit = makeWorkspaceEdit (DocumentUri uri) version (lineRange' line char) $ intercalate "\n" $ map trim lines
+                    let edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version (lineRange' line char) $ intercalate "\n" $ map trim lines
                     void $ applyEdit conn' edit
                 _ -> do liftEffect $ log conn' "fail identifier"
                         pure unit
@@ -66,7 +66,7 @@ caseSplit docs settings state args = do
 
 addClause :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 addClause docs settings state args = do
-  let ServerState { port, conn } = state
+  let ServerState { port, conn, clientCapabilities } = state
   case port, conn, args of
     Just port', Just conn', [ argUri, argLine, argChar ]
         | Right uri <- runExcept $ readString argUri
@@ -79,7 +79,7 @@ addClause docs settings state args = do
             case identifierAtPoint lineText char of
                 Just { range: { left, right } } -> do
                     lines <- eitherToErr $ P.addClause port' lineText false
-                    let edit = makeWorkspaceEdit (DocumentUri uri) version (lineRange' line char) $ intercalate "\n" $ map trim lines
+                    let edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version (lineRange' line char) $ intercalate "\n" $ map trim lines
                     void $ applyEdit conn' edit
                 _ -> pure unit
             pure unit
@@ -97,8 +97,7 @@ decodeTypoResult obj = do
   pure $ TypoResult { identifier, mod }
 
 fixTypo :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
-fixTypo log docs settings state args = do
-  let ServerState { port, conn, modules } = state
+fixTypo log docs settings state@(ServerState { port, conn, modules, clientCapabilities }) args = do
   (unsafeToForeign <<< map encodeTypoResult) <$> case port, conn, args !! 0, args !! 1, args !! 2 of
     Just port', Just conn', Just argUri, Just argLine, Just argChar
       | Right uri <- runExcept $ readString argUri
@@ -122,16 +121,16 @@ fixTypo log docs settings state args = do
     emptyRes = unsafeToForeign []
     convertRes (TypeInfo { identifier, module' }) = TypoResult { identifier, mod: module' }
     replace conn uri version line {left, right} word mod = do 
-      let range = Range { start: Position { line, character: right }
-                        , end: Position { line, character: left }
+      let range = Range { start: Position { line, character: left }
+                        , end: Position { line, character: right }
                         }
-          edit = makeWorkspaceEdit (DocumentUri uri) version range word
+          edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range word
       void $ applyEdit conn edit
       addCompletionImport log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign Nothing, unsafeToForeign uri ]
 
 fillTypedHole :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 fillTypedHole logFn docs settings state args = do
-  let ServerState { port, conn } = state
+  let ServerState { port, conn, clientCapabilities } = state
   case port, conn, args of
     Just port', Just conn', [ _, argUri, range', argChoice ]
       | Right range <- runExcept $ readRange range'
@@ -141,7 +140,7 @@ fillTypedHole logFn docs settings state args = do
       doc <- liftEffect $ getDocument docs (DocumentUri uri)
       version <- liftEffect $ getVersion doc
       text <- liftEffect $ getText doc
-      let edit = makeWorkspaceEdit (DocumentUri uri) version range identifier
+      let edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range identifier
       edit' <- either (const []) identity <$> addCompletionImportEdit logFn docs settings state 
          { identifier, mod: Just mod , qual: Nothing, uri: DocumentUri uri }
         doc version text

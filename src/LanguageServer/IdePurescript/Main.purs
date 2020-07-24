@@ -63,6 +63,7 @@ defaultServerState = ServerState
   , modules: initialModulesState
   , modulesFile: Nothing
   , diagnostics: Object.empty
+  , clientCapabilities: Nothing
   }
 
 parseArgs :: Array String -> Maybe
@@ -153,14 +154,14 @@ main = do
         apathize stopPscIdeServer
         startPscIdeServer
 
-  conn <- initConnection commands $ \({ params: InitParams { rootPath, rootUri }, conn }) ->  do
+  conn <- initConnection commands $ \({ params: InitParams { rootPath, rootUri, capabilities }, conn }) ->  do
     argv >>= \args -> log conn $ "Starting with args: " <> show args
     root <- case toMaybe rootUri, toMaybe rootPath of
       Just uri, _ -> Just <$> uriToFilename uri
       _, Just path -> pure $ Just path
       Nothing, Nothing -> pure Nothing
     workingRoot <- maybe cwd pure root
-    Ref.modify_ (over ServerState $ _ { root = Just workingRoot }) state
+    Ref.modify_ (over ServerState $ _ { root = Just workingRoot, clientCapabilities = Just capabilities }) state
     (\(Tuple dir root') -> log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root')) =<< Tuple <$> cwd <*> pure workingRoot
   Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
   

@@ -4,7 +4,7 @@ import Prelude
 
 import Data.Array (concat, groupBy, sortWith, (:))
 import Data.Array.NonEmpty (toNonEmpty)
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, isNothing)
 import Data.Newtype (class Newtype, over)
 import Data.NonEmpty (foldl1, (:|))
 import Data.Nullable (Nullable, toMaybe, toNullable)
@@ -237,12 +237,18 @@ newtype WorkspaceEdit = WorkspaceEdit
 instance semigroupWorkspaceEdit :: Semigroup WorkspaceEdit where
   append (WorkspaceEdit { documentChanges, changes }) (WorkspaceEdit { documentChanges: documentChanges', changes: changes' }) =
     WorkspaceEdit
-      { documentChanges: toNullable $ Just $ 
-          map (foldl1 combine) $
-          map toNonEmpty $
-          groupBy (\d1 d2 -> docId d1 == docId d2)
-            (fromNullableArray documentChanges <> fromNullableArray documentChanges')
-      , changes: toNullable $ Just $ Object.fromFoldableWith (<>) (goStrMap changes <> goStrMap changes')
+      { documentChanges: toNullable $ case isNothing (toMaybe documentChanges), isNothing (toMaybe documentChanges') of
+                                        true, true -> Nothing
+                                        _, _ -> 
+                                          Just $ 
+                                              map (foldl1 combine) $
+                                              map toNonEmpty $
+                                              groupBy (\d1 d2 -> docId d1 == docId d2)
+                                                (fromNullableArray documentChanges <> fromNullableArray documentChanges')
+      , changes: toNullable $ case isNothing (toMaybe changes), isNothing (toMaybe changes') of
+                                true, true -> Nothing
+                                _, _ ->
+                                  Just $ Object.fromFoldableWith (<>) (goStrMap changes <> goStrMap changes')
       }
     where
       combine (TextDocumentEdit { textDocument, edits }) (TextDocumentEdit { edits: edits' }) =
@@ -254,21 +260,30 @@ instance semigroupWorkspaceEdit :: Semigroup WorkspaceEdit where
       goStrMap a = Object.toUnfoldable $ fromMaybe Object.empty $ toMaybe a
   
 instance monoidWorkspaceEdit :: Monoid WorkspaceEdit where
-  mempty = WorkspaceEdit { documentChanges: toNullable $ Just [], changes: toNullable $ Just $ Object.empty }
+  mempty = WorkspaceEdit { documentChanges: toNullable Nothing, changes: toNullable Nothing }
 
 -- | Create workspace edit, supporting both documentChanges and older changes property for v2 clients
-workspaceEdit :: Array TextDocumentEdit -> WorkspaceEdit
-workspaceEdit edits = WorkspaceEdit
-  { documentChanges: toNullable $ Just edits
-  , changes: toNullable $ Just $ 
-      Object.fromFoldable $
-      map (\(h :| t) -> Tuple (uri h) (concat $ edit h : map edit t) ) $
-        map toNonEmpty $
-        groupBy (\a b -> uri a == uri b) $ sortWith uri edits
+workspaceEdit :: Maybe ClientCapabilities -> Array TextDocumentEdit -> WorkspaceEdit
+workspaceEdit capabilities edits = WorkspaceEdit
+  { documentChanges: toNullable $
+      if useDocumentChanges then Just edits else Nothing
+  , changes: toNullable $ 
+      if useDocumentChanges then Nothing
+      else
+        Just $
+          Object.fromFoldable $
+          map (\(h :| t) -> Tuple (uri h) (concat $ edit h : map edit t) ) $
+            map toNonEmpty $
+            groupBy (\a b -> uri a == uri b) $ sortWith uri edits
   }
   where
+  useDocumentChanges = supportsDocumentChanges capabilities
   uri (TextDocumentEdit { textDocument: TextDocumentIdentifier { uri: DocumentUri uri' } }) = uri'
   edit (TextDocumentEdit { edits: edits' }) = edits'
+
+supportsDocumentChanges ::  Maybe ClientCapabilities -> Boolean
+supportsDocumentChanges Nothing = false
+supportsDocumentChanges (Just {workspace}) = fromMaybe false $ toMaybe workspace >>= (_.workspaceEdit >>> toMaybe) >>= (_.documentChanges >>> toMaybe) 
 
 newtype TextDocumentEdit = TextDocumentEdit { textDocument :: TextDocumentIdentifier, edits :: Array TextEdit }
 
@@ -297,3 +312,10 @@ intToFileChangeType = case _ of
   _ -> Nothing
   
 newtype FileEvent = FileEvent { uri :: DocumentUri, type :: FileChangeTypeCode }
+
+
+type ClientCapabilities = { workspace :: Nullable WorkspaceClientCapabilities }
+type WorkspaceClientCapabilities = { applyEdit :: Nullable Boolean, workspaceEdit :: Nullable WorkspaceEditClientCapabilities }
+
+-- https://microsoft.github.io/language-server-protocol/specifications/specification-current/#workspaceEditClientCapabilities
+type WorkspaceEditClientCapabilities = { documentChanges :: Nullable Boolean }

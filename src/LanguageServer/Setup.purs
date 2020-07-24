@@ -8,10 +8,11 @@ import Data.Nullable (Nullable)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Foreign (Foreign)
-import LanguageServer.Types (Connection, DocumentStore, DocumentUri)
+import LanguageServer.Types (ClientCapabilities, Connection, DocumentStore, DocumentUri)
 
-newtype InitParams = InitParams { rootUri :: Nullable DocumentUri, rootPath :: Nullable String, trace :: Nullable String }
+newtype InitParams = InitParams { rootUri :: Nullable DocumentUri, rootPath :: Nullable String, trace :: Nullable String, capabilities :: ClientCapabilities }
 type InitResult = { conn :: Connection, params :: InitParams }
+
 
 type Res a = Effect (Promise a)
 

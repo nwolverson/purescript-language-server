@@ -3,7 +3,7 @@ module LanguageServer.IdePurescript.CodeActions where
 import Prelude
 
 import Control.Monad.Except (runExcept)
-import Data.Array (catMaybes, filter, foldl, head, length, mapMaybe, nubByEq, sort, sortWith, uncons, (:))
+import Data.Array (catMaybes, filter, foldl, head, length, mapMaybe, nubByEq, sortWith, (:))
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe)
 
@@ -110,7 +110,7 @@ toNextLine (Range { start, end: end@(Position { line, character }) }) =
     }
 
 onReplaceSuggestion :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
-onReplaceSuggestion docs config (ServerState { conn }) args =
+onReplaceSuggestion docs config (ServerState { conn, clientCapabilities }) args =
   case conn, args of
     Just conn', [ uri', replacement', range' ]
       | Right uri <- runExcept $ readString uri'
@@ -120,7 +120,7 @@ onReplaceSuggestion docs config (ServerState { conn }) args =
         doc <- liftEffect $ getDocument docs (DocumentUri uri)
         version <- liftEffect $ getVersion doc
         TextEdit { range: range'', newText } <- getReplacementEdit doc { replacement, range }
-        let edit = makeWorkspaceEdit (DocumentUri uri) version range'' newText
+        let edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range'' newText
 
         -- TODO: Check original & expected text ?
         void $ applyEdit conn' edit
@@ -150,7 +150,7 @@ getReplacementEdit doc { replacement, range } = do
       addNewline = trailingNewline && (not $ null extraText)
 
 onReplaceAllSuggestions :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
-onReplaceAllSuggestions docs config (ServerState { conn }) args =
+onReplaceAllSuggestions docs config (ServerState { conn, clientCapabilities }) args =
   case conn, args of
     Just conn', [ uri', suggestions' ]
       | Right uri <- runExcept $ readString uri'
@@ -159,7 +159,7 @@ onReplaceAllSuggestions docs config (ServerState { conn }) args =
           doc <- liftEffect $ getDocument docs (DocumentUri uri)
           version <- liftEffect $ getVersion doc
           edits <- traverse (getReplacementEdit doc) suggestions
-          void $ applyEdit conn' $ workspaceEdit
+          void $ applyEdit conn' $ workspaceEdit clientCapabilities
             [ TextDocumentEdit
               { textDocument: TextDocumentIdentifier { uri: DocumentUri uri, version }
               , edits

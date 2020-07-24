@@ -54,7 +54,7 @@ type CompletionImportArgs =
 addCompletionImportEdit :: Notify -> DocumentStore -> Settings -> ServerState
  -> CompletionImportArgs -> TextDocument -> Number -> String
  -> Aff (Either Foreign (Array WorkspaceEdit))
-addCompletionImportEdit log docs config state@(ServerState { port, modules, conn }) { identifier, mod, qual, uri } doc version text = do
+addCompletionImportEdit log docs config state@(ServerState { port, modules, conn, clientCapabilities }) { identifier, mod, qual, uri } doc version text = do
   let prelude = preludeModule config
   case port of
     Just port -> do
@@ -68,7 +68,7 @@ addCompletionImportEdit log docs config state@(ServerState { port, modules, conn
             addExplicitImport modules port (un DocumentUri uri) text mod' qual' identifier
       case result of
         UpdatedImports newText -> do
-          let edit = makeMinimalWorkspaceEdit uri version text newText
+          let edit = makeMinimalWorkspaceEdit clientCapabilities uri version text newText
           pure $ Right $ maybe [] singleton edit
         AmbiguousImport imps -> liftEffect do
           log Warning "Found ambiguous imports"
@@ -98,7 +98,7 @@ addCompletionImportEdit log docs config state@(ServerState { port, modules, conn
 
 addModuleImport' :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 addModuleImport' log docs config state args = do
-  let ServerState { port, modules, conn } = state
+  let ServerState { port, modules, conn, clientCapabilities } = state
   case port, (runExcept <<< readString) <$> args of
     Just port', [ Right mod', qual', Right uri ] -> do
       doc <- liftEffect $ getDocument docs (DocumentUri uri)
@@ -108,7 +108,7 @@ addModuleImport' log docs config state args = do
       res <- addModuleImport modules port' fileName text mod'
       case res of
         Just { result } -> do
-          let edit = makeMinimalWorkspaceEdit (DocumentUri uri) version text result
+          let edit = makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
           case conn, edit of
             Just conn', Just edit' -> void $ applyEdit conn' edit'
             _, _ -> pure unit

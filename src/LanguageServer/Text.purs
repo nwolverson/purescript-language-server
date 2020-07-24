@@ -10,10 +10,10 @@ import Data.String.Regex (regex)
 import Data.String.Regex as Regex
 import Data.String.Regex.Flags (noFlags)
 import Data.Tuple (uncurry)
-import LanguageServer.Types (DocumentUri, Position(..), Range(..), TextDocumentEdit(..), TextDocumentIdentifier(..), TextEdit(..), WorkspaceEdit, workspaceEdit)
+import LanguageServer.Types (DocumentUri, Position(..), Range(..), TextDocumentEdit(..), TextDocumentIdentifier(..), TextEdit(..), WorkspaceEdit, ClientCapabilities, workspaceEdit)
 
-makeWorkspaceEdit :: DocumentUri -> Number -> Range -> String -> WorkspaceEdit
-makeWorkspaceEdit uri version range newText = workspaceEdit [ edit ]
+makeWorkspaceEdit :: Maybe ClientCapabilities -> DocumentUri -> Number -> Range -> String -> WorkspaceEdit
+makeWorkspaceEdit capabilities uri version range newText = workspaceEdit capabilities [ edit ]
   where 
       textEdit = TextEdit { range, newText }
       docid = TextDocumentIdentifier { uri, version }
@@ -21,8 +21,8 @@ makeWorkspaceEdit uri version range newText = workspaceEdit [ edit ]
 
 -- | Make a full-text workspace edit via a minimal diff under the assumption that at most one change is required
 -- | In particular the scenario of inserting text in the middle AC -> ABC becomes an edit of B only.
-makeMinimalWorkspaceEdit :: DocumentUri -> Number -> String -> String -> Maybe WorkspaceEdit
-makeMinimalWorkspaceEdit uri version oldText newText =
+makeMinimalWorkspaceEdit :: Maybe ClientCapabilities -> DocumentUri -> Number -> String -> String -> Maybe WorkspaceEdit
+makeMinimalWorkspaceEdit clientCapabilities uri version oldText newText =
   let splitLines t = either (const [t]) (\r -> Regex.split r t) $ regex "\r?\n" noFlags
       newLines = splitLines newText
       oldLines = case splitLines oldText of
@@ -39,7 +39,7 @@ makeMinimalWorkspaceEdit uri version oldText newText =
       firstDiff = findIndex (uncurry (/=)) (zip oldLines newLines)
       lastDiff = findIndex (uncurry (/=)) (zip (reverse oldLines) (reverse newLines))
 
-      e a b = Just $ makeWorkspaceEdit uri version a b
+      e a b = Just $ makeWorkspaceEdit clientCapabilities uri version a b
       oldLen = length oldLines
       newLen = length newLines
 

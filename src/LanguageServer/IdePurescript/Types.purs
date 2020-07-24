@@ -8,7 +8,7 @@ import Effect.Aff (Aff)
 import Foreign (Foreign)
 import Foreign.Object (Object)
 import IdePurescript.Modules (State)
-import LanguageServer.Types (Connection, DocumentStore, DocumentUri, Settings)
+import LanguageServer.Types (Connection, DocumentStore, DocumentUri, Settings, ClientCapabilities)
 import PscIde.Command (RebuildError)
 
 newtype ServerState = ServerState
@@ -19,6 +19,7 @@ newtype ServerState = ServerState
   , modules :: State
   , modulesFile :: Maybe DocumentUri
   , diagnostics :: Object (Array RebuildError)
+  , clientCapabilities :: Maybe ClientCapabilities
   }
 
 derive instance newtypeServerState :: Newtype ServerState _
