@@ -132,8 +132,9 @@ For atom, clone `atom-ide-purescript` and:
 For vscode, clone `vscode-ide-purescript` and:
 
 1. In `purescript-language-server` run `npm link`, in `vscode-ide-purescript` run `npm link purescript-language-server`
-2. Open `vscode-ide-purescript` in vscode and hit F5 to "launch extension"
-3. Use the newly launched Extension Development Host to test language server changes
+1. Run `npm install`
+1. Open `vscode-ide-purescript` in vscode (`code .`) and hit F5 to "launch extension"
+1. Use the newly launched Extension Development Host to test language server changes
 
 See [vscode plugin](https://github.com/nwolverson/vscode-ide-purescript) repo, [atom plugin](https://github.com/nwolverson/atom-ide-purescript). Common code via
 [purescript-ide-purescript-core](https://github.com/nwolverson/purescript-ide-purescript-core).
