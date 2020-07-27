@@ -44,4 +44,6 @@ exports.initDocumentStore = (conn : IConnection) => () => {
 }
 
 exports.getConfigurationImpl = (conn : IConnection) => () =>
-    conn.workspace.getConfiguration("purescript");
+    conn.workspace.getConfiguration("purescript").then(config => {
+        return { purescript: config };
+    });

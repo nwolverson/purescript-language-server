@@ -42,5 +42,7 @@ exports.initDocumentStore = function (conn) { return function () {
     return documents;
 }; };
 exports.getConfigurationImpl = function (conn) { return function () {
-    return conn.workspace.getConfiguration("purescript");
+    return conn.workspace.getConfiguration("purescript").then(function (config) {
+        return { purescript: config };
+    });
 }; };
