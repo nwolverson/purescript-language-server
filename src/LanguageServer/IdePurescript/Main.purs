@@ -15,7 +15,9 @@ import Data.Profunctor.Strong (first)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, runAff_, try)
+import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, launchAff_, runAff_, try)
+import Effect.Aff.AVar (AVar)
+import Effect.Aff.AVar as AVar
 import Effect.Class (liftEffect)
 import Effect.Console as Console
 import Effect.Ref as Ref
@@ -66,10 +68,12 @@ defaultServerState = ServerState
   , clientCapabilities: Nothing
   }
 
-parseArgs :: Array String -> Maybe
+type CmdLineArguments =
   { config :: Maybe String
   , filename :: Maybe String
   }
+
+parseArgs :: Array String -> Maybe CmdLineArguments
 parseArgs allArgs = go 0 defaultArgs
   where
   args = Array.drop 2 allArgs
@@ -88,28 +92,29 @@ parseArgs allArgs = go 0 defaultArgs
       Just _ -> go (i+1) c
       Nothing -> Just c
 
-
 main :: Effect Unit
 main = do
-  state <- Ref.new defaultServerState
-  config <- Ref.new (unsafeToForeign {})
-  logFile <- Ref.new (Nothing :: Maybe String)
-  gotConfig <- Ref.new false
-
   maybeArgs <- parseArgs <$> argv
-  case maybeArgs of
+  args' <- case maybeArgs of
     Nothing -> do
       Console.error "Error parsing args"
       exit 1
     Just args -> do
-      Ref.write args.filename logFile
       maybe (pure unit) (flip (FSSync.writeTextFile Encoding.UTF8) "Starting logging...\n") args.filename
-      case args.config of
-        Just c -> either (const $ pure unit) (\cc -> do
-            Ref.write cc config
-            Ref.write true gotConfig
-        ) $ runExcept $ parseJSON c
-        Nothing -> pure unit
+      let config' = case args.config of
+                      Just c -> either (const Nothing) Just $ runExcept $ parseJSON c
+                      Nothing -> Nothing
+      pure (args { config = config' } )
+  launchAff_ $ main' args'
+
+main' ::
+  { config :: Maybe Foreign
+  , filename :: Maybe String
+  } -> Aff Unit
+main' { filename: logFile, config: cmdLineConfig } = do
+  gotConfig :: AVar Unit <- AVar.empty
+  state <- liftEffect $ Ref.new defaultServerState
+  config <- liftEffect $ Ref.new (unsafeToForeign {})
 
   let logError :: Notify
       logError l s = do
@@ -120,7 +125,7 @@ main = do
               Warning -> warn
               Error -> error
             s)
-        liftEffect (Ref.read logFile) >>= case _ of
+        case logFile of
           Just filename -> FSSync.appendTextFile Encoding.UTF8 filename ("[" <> show l <> "] " <> s <> "\n")
           Nothing -> pure unit
   let launchAffLog = runAff_ (either (logError Error <<< show) (const $ pure unit))
@@ -154,7 +159,7 @@ main = do
         apathize stopPscIdeServer
         startPscIdeServer
 
-  conn <- initConnection commands $ \({ params: InitParams { rootPath, rootUri, capabilities }, conn }) ->  do
+  conn <- liftEffect $ initConnection commands $ \({ params: InitParams { rootPath, rootUri, capabilities }, conn }) ->  do
     argv >>= \args -> log conn $ "Starting with args: " <> show args
     root <- case toMaybe rootUri, toMaybe rootPath of
       Just uri, _ -> Just <$> uriToFilename uri
@@ -163,9 +168,9 @@ main = do
     workingRoot <- maybe cwd pure root
     Ref.modify_ (over ServerState $ _ { root = Just workingRoot, clientCapabilities = Just capabilities }) state
     (\(Tuple dir root') -> log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root')) =<< Tuple <$> cwd <*> pure workingRoot
-  Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
+  liftEffect $ Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
   
-  documents <- initDocumentStore conn
+  documents <- liftEffect $ initDocumentStore conn
 
   let showModule :: Module -> String
       showModule = unwrap >>> case _ of
@@ -193,28 +198,29 @@ main = do
   let getTextDocUri :: forall r. { textDocument :: TextDocumentIdentifier | r } -> Maybe DocumentUri
       getTextDocUri = (Just <<< _.uri <<< un TextDocumentIdentifier <<< _.textDocument)
 
-  onCompletion conn $ runHandler "onCompletion" getTextDocUri (getCompletions documents)
-  onDefinition conn $ runHandler "onDefinition" getTextDocUri (getDefinition documents)
-  onDocumentSymbol conn $ runHandler "onDocumentSymbol" getTextDocUri getDocumentSymbols
-  onWorkspaceSymbol conn $ runHandler "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
+  liftEffect do
+    onCompletion conn $ runHandler "onCompletion" getTextDocUri (getCompletions documents)
+    onDefinition conn $ runHandler "onDefinition" getTextDocUri (getDefinition documents)
+    onDocumentSymbol conn $ runHandler "onDocumentSymbol" getTextDocUri getDocumentSymbols
+    onWorkspaceSymbol conn $ runHandler "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
 
-  onFoldingRanges conn $ runHandler "onFoldingRanges" getTextDocUri (getFoldingRanges documents)
-  onReferences conn $ runHandler "onReferences" (const Nothing) (getReferences documents)
-  onHover conn $ runHandler "onHover" getTextDocUri (getTooltips documents)
-  onCodeAction conn $ runHandler "onCodeAction" getTextDocUri (getActions documents)
-  onShutdown conn $ fromAff stopPscIdeServer
+    onFoldingRanges conn $ runHandler "onFoldingRanges" getTextDocUri (getFoldingRanges documents)
+    onReferences conn $ runHandler "onReferences" (const Nothing) (getReferences documents)
+    onHover conn $ runHandler "onHover" getTextDocUri (getTooltips documents)
+    onCodeAction conn $ runHandler "onCodeAction" getTextDocUri (getActions documents)
+    onShutdown conn $ fromAff stopPscIdeServer
 
-  onDidChangeWatchedFiles conn $ \{ changes } -> do
+  liftEffect $ onDidChangeWatchedFiles conn $ \{ changes } -> do
     for_ changes \(FileEvent { uri, "type": FileChangeTypeCode n }) -> do
       case intToFileChangeType n of
         Just CreatedChangeType -> log conn $ "Created " <> un DocumentUri uri <> " - full build may be required"
         Just DeletedChangeType -> log conn $ "Deleted " <> un DocumentUri uri <> " - full build may be required"
         _ -> pure unit
 
-  onDidChangeContent documents $ \_ ->
-    liftEffect $ Ref.modify_ (over ServerState (_ { modulesFile = Nothing })) state
+  liftEffect $ onDidChangeContent documents $ \_ ->
+    Ref.modify_ (over ServerState (_ { modulesFile = Nothing })) state
 
-  onDidSaveDocument documents \{ document } -> launchAffLog do
+  liftEffect $ onDidSaveDocument documents \{ document } -> launchAffLog do
     let uri = getUri document
     c <- liftEffect $ Ref.read config
     s <- liftEffect $ Ref.read state
@@ -289,7 +295,7 @@ main = do
         , Tuple typedHoleExplicitCmd $ voidHandler $ fillTypedHole logError
         ]
 
-  onExecuteCommand conn $ \{ command, arguments } -> fromAff do
+  liftEffect $ onExecuteCommand conn $ \{ command, arguments } -> fromAff do
     c <- liftEffect $ Ref.read config
     s <- liftEffect $ Ref.read state
     case Object.lookup command handlers of 
@@ -298,55 +304,60 @@ main = do
         liftEffect $ error conn $ "Unknown command: " <> command
         pure noResult
 
-  let onConfig = launchAffLog do
-        liftEffect $ Ref.write true gotConfig
-        c <- liftEffect $ Ref.read config
-        when (Config.autoStartPscIde c) $ do
-          startPscIdeServer
-          outputDir <- liftEffect $ resolvePath $ Config.effectiveOutputDirectory c
-          hasPackageFile <- or <$> traverse (FS.exists <=< liftEffect  <<< resolvePath) ["bower.json", "psc-package.json", "spago.dhall"]
-          envIdeSources <- getEnvPursIdeSources
-          when (not hasPackageFile && isNothing envIdeSources) do
-            liftEffect $ showError conn "It doesn't look like the workspace root is a PureScript project (has bower.json/psc-package.json/spago.dhall). The PureScript project should be opened as a root workspace folder."
-          exists <- FS.exists outputDir
-          when (not exists) $ liftEffect $ launchAffLog do
-            let message = "Output directory does not exist at '" <> outputDir <> "'"
-            liftEffect $ info conn message
-            let buildOption = "Build project"
-            action <- showWarningWithActions conn (message <> ". Ensure project is built, or check configuration of output directory and build command.") [ buildOption ]
-            when (action == Just buildOption) do
-              s <- liftEffect $ Ref.read state
-              onBuild documents c s []
+  let setConfig :: String -> Foreign -> Aff Unit
+      setConfig source newConfig = do
+        liftEffect do
+          log conn $ "Got new config (" <> source <> ")"
+          Ref.write newConfig config
+        AVar.tryPut unit gotConfig >>= case _ of
+          true -> pure unit
+          false -> liftEffect $ log conn "Not starting server, already started"
 
-  onDidChangeConfiguration conn $ \{settings} -> do 
-    log conn "Got updated settings (client push)"
-    Ref.write settings config 
-    Ref.read gotConfig >>= \c -> when (not c) onConfig
+  liftEffect $ onDidChangeConfiguration conn $ \{settings} ->
+    launchAffLog $ setConfig "client push" settings
+
+  -- When config is received, start the server
+  _ <- forkAff do
+    -- Ensure we only run once
+    AVar.read gotConfig
+    c <- liftEffect $ Ref.read config
+    when (Config.autoStartPscIde c) $ do
+      startPscIdeServer
+      outputDir <- liftEffect $ resolvePath $ Config.effectiveOutputDirectory c
+      hasPackageFile <- or <$> traverse (FS.exists <=< liftEffect  <<< resolvePath) ["bower.json", "psc-package.json", "spago.dhall"]
+      envIdeSources <- getEnvPursIdeSources
+      when (not hasPackageFile && isNothing envIdeSources) do
+        liftEffect $ showError conn "It doesn't look like the workspace root is a PureScript project (has bower.json/psc-package.json/spago.dhall). The PureScript project should be opened as a root workspace folder."
+      exists <- FS.exists outputDir
+      unless exists $ liftEffect $ launchAffLog do
+        let message = "Output directory does not exist at '" <> outputDir <> "'"
+        liftEffect $ info conn message
+        let buildOption = "Build project"
+        action <- showWarningWithActions conn (message <> ". Ensure project is built, or check configuration of output directory and build command.") [ buildOption ]
+        when (action == Just buildOption) do
+          s <- liftEffect $ Ref.read state
+          onBuild documents c s []
+
 
   -- 1. Config on command line - go immediately
-  Ref.read gotConfig >>= case _ of
-    true -> onConfig
-    false -> pure unit
+  maybe (pure unit) (setConfig "command line") cmdLineConfig
 
-  launchAffLog $ do 
-    delay (Milliseconds 50.0)
-    -- 2. Config may be pushed immediately
-    got1 <- liftEffect $ Ref.read gotConfig
-    when (not got1) $ do
-      -- 3. Fetch config via pull (waited 50ms as at least in vscode, not ready immediately)
-      initialConfig <- attempt $ getConfiguration conn
-      case initialConfig of
-        Right ic -> liftEffect do
-            log conn "Got updated settings (by request)"
-            Ref.write ic config 
-            onConfig
-        Left error -> do
-          liftEffect $ log conn $ "Failed to request settings: " <> show error
-          -- 4. Wait some time longer for possible config push, then proceed with no config
-          delay (Milliseconds 200.0)
-          got2 <- liftEffect $ Ref.read gotConfig
-          liftEffect $ when (not got2) $ do
-            logError Warning "Proceeding with no config receieved"
-            onConfig
+  delay (Milliseconds 50.0)
+  -- 2. Config may be pushed immediately
+  got1 <- AVar.isFilled <$> AVar.status gotConfig
+  unless got1 do
+    -- 3. Fetch config via pull (waited 50ms as at least in vscode, not ready immediately)
+    initialConfig <- attempt $ getConfiguration conn
+    case initialConfig of
+      Right ic -> 
+        setConfig "by request" ic
+      Left error -> do
+        liftEffect $ log conn $ "Failed to request settings: " <> show error
+        -- 4. Wait some time longer for possible config push, then proceed with no config
+        delay (Milliseconds 200.0)
+        got2 <- AVar.isFilled <$> AVar.status gotConfig
+        unless got2 do
+          liftEffect $ logError Warning "Proceeding with no config receieved"
+          void $ AVar.tryPut unit gotConfig
 
-  log conn "PureScript Language Server started"
+  liftEffect $ log conn "PureScript Language Server started"
