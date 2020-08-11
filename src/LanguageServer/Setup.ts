@@ -30,7 +30,8 @@ exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeP
                         commands
                     },
                 referencesProvider: true,
-                foldingRangeProvider: true
+                foldingRangeProvider: true,
+                documentFormattingProvider: true
             }
         };
     });

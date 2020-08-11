@@ -13,9 +13,10 @@ in.
 
 - Completion provider
 - Definition provider
+- Formatting provider
 - Document & workspace symbol providers
 - Hover provider
-- Code action provider 
+- Code action provider
   - Compiler fix suggestions for imports/missing types
 - Build on save (via IDE server "fast rebuild" facility, certain limitations apply)
   - Provides diagnostics

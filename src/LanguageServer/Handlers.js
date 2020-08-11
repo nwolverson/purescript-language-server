@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onShutdown = exports.onExit = exports.onDidChangeWatchedFiles = exports.onExecuteCommand = exports.sendDiagnosticsEnd = exports.sendDiagnosticsBegin = exports.applyEditImpl = exports.publishDiagnostics = exports.onDidChangeConfiguration = exports.onFoldingRanges = exports.onCodeAction = exports.onReferences = exports.onWorkspaceSymbol = exports.onDocumentSymbol = exports.onHover = exports.onCompletion = exports.onDefinition = exports.registerHandler0 = void 0;
+exports.onShutdown = exports.onExit = exports.onDidChangeWatchedFiles = exports.onExecuteCommand = exports.sendDiagnosticsEnd = exports.sendDiagnosticsBegin = exports.applyEditImpl = exports.publishDiagnostics = exports.onDidChangeConfiguration = exports.onDocumentFormatting = exports.onFoldingRanges = exports.onCodeAction = exports.onReferences = exports.onWorkspaceSymbol = exports.onDocumentSymbol = exports.onHover = exports.onCompletion = exports.onDefinition = exports.registerHandler0 = void 0;
 var vscode_jsonrpc_1 = require("vscode-jsonrpc");
 var registerHandler = function (registerF) {
     return function (f) { return function () { return registerF(function (x) { return f(x)(); }); }; };
@@ -23,6 +23,7 @@ exports.onWorkspaceSymbol = function (conn) { return registerHandler(conn.onWork
 exports.onReferences = function (conn) { return registerHandler(conn.onReferences); };
 exports.onCodeAction = function (conn) { return registerHandler(conn.onCodeAction); };
 exports.onFoldingRanges = function (conn) { return registerHandler(conn.onFoldingRanges); };
+exports.onDocumentFormatting = function (conn) { return registerHandler(conn.onDocumentFormatting); };
 exports.onDidChangeConfiguration = function (conn) { return registerNotificationHandler(conn.onDidChangeConfiguration); };
 exports.publishDiagnostics = function (conn) { return function (params) { return function () { return conn.sendDiagnostics(params); }; }; };
 exports.applyEditImpl = function (conn) { return function (edit) { return function () { return conn.workspace.applyEdit(edit).then(function (x) { return x.applied; }); }; }; };
