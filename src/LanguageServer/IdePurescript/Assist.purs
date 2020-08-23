@@ -75,6 +75,7 @@ addClause docs settings state args = do
         -> do
             doc <- liftEffect $ getDocument docs (DocumentUri uri)
             lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
+
             version <- liftEffect $ getVersion doc
             case identifierAtPoint lineText char of
                 Just { range: { left, right } } -> do
@@ -120,12 +121,12 @@ fixTypo log docs settings state@(ServerState { port, conn, modules, clientCapabi
   where
     emptyRes = unsafeToForeign []
     convertRes (TypeInfo { identifier, module' }) = TypoResult { identifier, mod: module' }
-    replace conn uri version line {left, right} word mod = do 
+    replace conn' uri version line {left, right} word mod = do 
       let range = Range { start: Position { line, character: left }
                         , end: Position { line, character: right }
                         }
           edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range word
-      void $ applyEdit conn edit
+      void $ applyEdit conn' edit
       addCompletionImport log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign Nothing, unsafeToForeign uri ]
 
 fillTypedHole :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit

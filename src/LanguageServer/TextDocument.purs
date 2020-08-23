@@ -25,9 +25,4 @@ foreign import getLanguageId :: TextDocument -> String
 foreign import getVersion :: TextDocument -> Effect Number
 foreign import getLineCount :: TextDocument -> Effect Int
 
-getTextAtRange :: TextDocument -> Range -> Effect String
-getTextAtRange doc (Range { start, end }) = do
-    i <- offsetAtPosition doc start
-    j <- offsetAtPosition doc end
-    text <- getText doc
-    pure $ take (j-i) $ drop i text
+foreign import getTextAtRange :: TextDocument -> Range -> Effect String

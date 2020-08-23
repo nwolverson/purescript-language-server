@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.positionAtOffset = exports.offsetAtPosition = exports.getLineCount = exports.getVersion = exports.getLanguageId = exports.getUri = exports.getText = void 0;
+exports.positionAtOffset = exports.offsetAtPosition = exports.getLineCount = exports.getVersion = exports.getLanguageId = exports.getUri = exports.getTextAtRange = exports.getText = void 0;
 exports.getText = function (document) { return function () { return document.getText(); }; };
+exports.getTextAtRange = function (document) { return function (range) { return function () { return document.getText(range); }; }; };
 exports.getUri = function (document) { return document.uri; };
 exports.getLanguageId = function (document) { return document.languageId; };
 exports.getVersion = function (document) { return function () { return document.version; }; };

@@ -63,7 +63,7 @@ startServer' settings root cb logCb = do
     , logLevel: Config.logLevel settings
     , editorMode: Config.editorMode settings
     , polling: Config.polling settings
-    , outputDirectory: Config.effectiveOutputDirectory settings
+    , outputDirectory: Just $ Config.effectiveOutputDirectory settings
     , port: Config.pscIdePort settings
     } root (Config.addNpmPath settings) cb logCb
   where

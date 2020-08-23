@@ -1,6 +1,8 @@
-import { TextDocument, Position } from 'vscode-languageserver';
+import { TextDocument, Position, Range } from 'vscode-languageserver';
 
 export const getText = (document: TextDocument) => () => document.getText();
+
+export const getTextAtRange = (document: TextDocument) => (range: Range) => () => document.getText(range);
 
 export const getUri = (document: TextDocument) => document.uri;
 
