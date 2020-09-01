@@ -17,6 +17,7 @@ You can edit this file as you like.
     , "psci-support"
     , "stringutils"
     , "test-unit"
+    , "uuid"
     ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

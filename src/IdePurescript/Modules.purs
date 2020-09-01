@@ -29,6 +29,7 @@ import Data.String (Pattern(Pattern), split)
 import Data.String.Regex (regex) as R
 import Data.String.Regex.Flags (global, noFlags, multiline) as R
 import Data.Tuple (Tuple(..))
+import Data.UUID (genUUID)
 import Effect (Effect)
 import Effect.Aff (Aff, attempt)
 import Effect.Class (liftEffect)
@@ -148,8 +149,9 @@ data ImportResult = UpdatedImports String | AmbiguousImport (Array C.TypeInfo) |
 makeTempFile :: Path -> String -> Aff Path
 makeTempFile fileName text = do
   dir <- liftEffect tmpDir
+  uuid <- liftEffect genUUID
   let name = replace' (R.regex "[\\/\\\\:]" R.global) "-" fileName
-      tmpFile = dir <> sep <> "ide-purescript-" <> name
+      tmpFile = dir <> sep <> "ide-purescript-" <> show uuid <> "-" <> name
   FS.writeTextFile UTF8 tmpFile text
   pure tmpFile
 
