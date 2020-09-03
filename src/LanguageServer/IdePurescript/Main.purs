@@ -29,7 +29,7 @@ import IdePurescript.Modules (Module, getModulesForFileTemp, initialModulesState
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.Console (error, info, log, warn)
 import LanguageServer.DocumentStore (getDocument, onDidChangeContent, onDidSaveDocument)
-import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendDiagnosticsBegin, sendDiagnosticsEnd)
+import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onDocumentFormatting, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fillTypedHole, fixTypo)
 import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnostics)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
@@ -37,6 +37,7 @@ import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportC
 import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.IdePurescript.FoldingRanges (getFoldingRanges)
+import LanguageServer.IdePurescript.Formatting (getFormattedDocument)
 import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules)
 import LanguageServer.IdePurescript.References (getReferences)
 import LanguageServer.IdePurescript.Search (search)
@@ -205,6 +206,7 @@ main' { filename: logFile, config: cmdLineConfig } = do
     onWorkspaceSymbol conn $ runHandler "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
 
     onFoldingRanges conn $ runHandler "onFoldingRanges" getTextDocUri (getFoldingRanges documents)
+    onDocumentFormatting conn $ runHandler "onDocumentFormatting" getTextDocUri (getFormattedDocument documents)
     onReferences conn $ runHandler "onReferences" (const Nothing) (getReferences documents)
     onHover conn $ runHandler "onHover" getTextDocUri (getTooltips documents)
     onCodeAction conn $ runHandler "onCodeAction" getTextDocUri (getActions documents)

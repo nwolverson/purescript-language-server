@@ -30,7 +30,8 @@ exports.initConnection = function (commands) { return function (cb) { return fun
                     commands: commands
                 },
                 referencesProvider: true,
-                foldingRangeProvider: true
+                foldingRangeProvider: true,
+                documentFormattingProvider: true
             }
         };
     });

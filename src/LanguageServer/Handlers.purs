@@ -8,7 +8,7 @@ import Data.Nullable (Nullable)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Foreign (Foreign)
-import LanguageServer.Types (Command, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, FoldingRange, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, WorkspaceEdit)
+import LanguageServer.Types (Command, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, FoldingRange, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, WorkspaceEdit, TextEdit)
 
 type TextDocumentPositionParams = { textDocument :: TextDocumentIdentifier, position :: Position }
 
@@ -20,6 +20,8 @@ type CodeActionParams = { textDocument :: TextDocumentIdentifier, range :: Range
 type CodeActionContext = { diagnostics :: Array Diagnostic }
 
 type FoldingRangesParams = { textDocument :: TextDocumentIdentifier }
+
+type DocumentFormattingParams = { textDocument :: TextDocumentIdentifier }
 
 type DidChangeConfigurationParams = { settings :: Foreign }
 
@@ -45,6 +47,8 @@ foreign import onReferences :: Connection -> (ReferenceParams -> Res (Array Loca
 foreign import onCodeAction :: Connection -> (CodeActionParams -> Res (Array Command)) -> Effect Unit
 
 foreign import onFoldingRanges :: Connection -> (FoldingRangesParams -> Res (Array FoldingRange)) -> Effect Unit
+
+foreign import onDocumentFormatting :: Connection -> (DocumentFormattingParams -> Res (Array TextEdit)) -> Effect Unit
 
 foreign import onDidChangeConfiguration :: Connection -> (DidChangeConfigurationParams -> Effect Unit) -> Effect Unit
 

@@ -30,6 +30,8 @@ export const onCodeAction = (conn: IConnection) => registerHandler(conn.onCodeAc
 
 export const onFoldingRanges = (conn: IConnection) => registerHandler(conn.onFoldingRanges);
 
+export const onDocumentFormatting = (conn: IConnection) => registerHandler(conn.onDocumentFormatting);
+
 export const onDidChangeConfiguration = (conn: IConnection) => registerNotificationHandler(conn.onDidChangeConfiguration);
 
 export const publishDiagnostics = (conn: IConnection) => (params: PublishDiagnosticsParams) => () => conn.sendDiagnostics(params);
