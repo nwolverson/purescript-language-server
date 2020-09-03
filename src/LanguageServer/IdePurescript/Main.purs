@@ -206,7 +206,7 @@ main' { filename: logFile, config: cmdLineConfig } = do
     onWorkspaceSymbol conn $ runHandler "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
 
     onFoldingRanges conn $ runHandler "onFoldingRanges" getTextDocUri (getFoldingRanges documents)
-    onDocumentFormatting conn $ runHandler "onDocumentFormatting" getTextDocUri (getFormattedDocument documents)
+    onDocumentFormatting conn $ runHandler "onDocumentFormatting" getTextDocUri (getFormattedDocument logError documents)
     onReferences conn $ runHandler "onReferences" (const Nothing) (getReferences documents)
     onHover conn $ runHandler "onHover" getTextDocUri (getTooltips documents)
     onCodeAction conn $ runHandler "onCodeAction" getTextDocUri (getActions documents)

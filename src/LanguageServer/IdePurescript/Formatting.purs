@@ -1,43 +1,68 @@
 module LanguageServer.IdePurescript.Formatting where
 
 import Prelude
+
 import Data.Either (Either(..))
 import Data.Foldable (length)
+import Data.Maybe (Maybe(..))
 import Data.String.Utils (lines)
+import Effect (Effect)
 import Effect.Aff (Aff, attempt, makeAff)
 import Effect.Class (liftEffect)
+import Effect.Exception (catchException, error)
+import Effect.Ref as Ref
+import IdePurescript.Build (Command(..), spawn)
+import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (DocumentFormattingParams)
-import LanguageServer.IdePurescript.Types (ServerState)
+import LanguageServer.IdePurescript.Config as Config
+import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.TextDocument (getText)
 import LanguageServer.Types (DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..))
-import Node.Buffer (toString)
-import Node.ChildProcess (defaultExecOptions, execFile, stdin)
+import Node.ChildProcess as CP
 import Node.Encoding (Encoding(..))
-import Node.Stream (writeString, end)
+import Node.Encoding as Encoding
+import Node.Stream as S
 
-getFormattedDocument :: DocumentStore -> Settings -> ServerState -> DocumentFormattingParams -> Aff (Array TextEdit)
-getFormattedDocument docs _settings _serverState { textDocument: TextDocumentIdentifier textDocId } = do
+getFormattedDocument :: Notify -> DocumentStore -> Settings -> ServerState -> DocumentFormattingParams -> Aff (Array TextEdit)
+getFormattedDocument logCb docs settings serverState { textDocument: TextDocumentIdentifier textDocId } = do
   text <- liftEffect $ getText =<< getDocument docs textDocId.uri
-  newTextEither <- attempt $ formatWithPurty text
-  pure
-    $ case newTextEither of
-        Left _ -> []
-        Right "" -> []
-        Right newText -> [ mkTextEdit newText ]
+  newTextEither <- attempt $ formatWithPurty logCb settings serverState text
 
-formatWithPurty :: String -> Aff String
-formatWithPurty text =
-  makeAff \cb -> do
-    process <-
-      execFile "purty" [ "format", "-" ] (defaultExecOptions)
-        ( \{ stdout } -> do
-            newText <- toString UTF8 stdout
-            cb $ pure newText
-        )
-    void $ writeString (stdin process) UTF8 text (pure unit)
-    end (stdin process) (pure unit)
-    pure mempty
+  case newTextEither of
+    Left err -> liftEffect (logCb Error $ show err) $> []
+    Right "" -> pure []
+    Right newText -> pure [ mkTextEdit newText ]
+
+formatWithPurty :: Notify ->Settings -> ServerState -> String -> Aff String
+formatWithPurty logCb settings state text = do
+  case state of 
+    ServerState { root: Just directory } -> do
+      { cp: cp' } <- spawn { command: Command "purty" [ "format", "-" ], directory, useNpmDir: Config.addNpmPath settings }
+      makeAff $ \cb -> do
+        let succ = cb <<< Right
+            err = cb <<< Left
+        case cp' of
+          Nothing -> err $ error "Didn't find purty in PATH" 
+          Just cp -> do
+            CP.onError cp (cb <<< Left <<< CP.toStandardError)
+            result <- Ref.new ""
+            let res :: String -> Effect Unit
+                res s = Ref.modify_ (_ <> s) result
+
+            catchException err $ S.onDataString (CP.stderr cp) Encoding.UTF8 $ err <<< error
+            catchException err $ S.onDataString (CP.stdout cp) Encoding.UTF8 res
+
+            CP.onClose cp \exit -> case exit of
+              CP.Normally n | n == 0 || n == 1 ->
+                Ref.read result >>= succ
+              _ -> err $ error "purty process exited abnormally"
+
+            void $ S.writeString (CP.stdin cp) UTF8 text (pure unit)
+            S.end (CP.stdin cp) (pure unit)
+
+        pure mempty
+    _ -> pure ""
 
 mkTextEdit :: String -> TextEdit
 mkTextEdit text = TextEdit { range, newText: text }
