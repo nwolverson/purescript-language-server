@@ -32,7 +32,7 @@ getFormattedDocument logCb docs settings serverState { textDocument: TextDocumen
   case newTextEither of
     Left err -> liftEffect (logCb Error $ show err) $> []
     Right "" -> pure []
-    Right newText -> pure [ mkTextEdit newText ]
+    Right newText -> pure [ mkTextEdit text newText ]
 
 formatWithPurty :: Notify ->Settings -> ServerState -> String -> Aff String
 formatWithPurty logCb settings state text = do
@@ -64,11 +64,11 @@ formatWithPurty logCb settings state text = do
         pure mempty
     _ -> pure ""
 
-mkTextEdit :: String -> TextEdit
-mkTextEdit text = TextEdit { range, newText: text }
+mkTextEdit :: String -> String -> TextEdit
+mkTextEdit oldText text = TextEdit { range, newText: text }
   where
   range =
     Range
       { start: Position { line: 0, character: 0 }
-      , end: Position { line: (length $ lines text) + 1, character: 0 }
+      , end: Position { line: (length $ lines oldText) + 1, character: 0 }
       }
