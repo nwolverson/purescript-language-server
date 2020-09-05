@@ -72,13 +72,17 @@ Configuration with [coc.nvim](https://github.com/neoclide/coc.nvim/wiki/Language
     }
 ```
 
-## Config
+### Other clients
 
 Config may be supplied via client-push on startup (`workspace.didChangeConfiguration`), server-request (`workspace.configuration`), or at last resort by JSON object on the command line with `--config` option.
+
+## Config
 See [config defined in vscode plugin](https://github.com/nwolverson/vscode-ide-purescript/blob/master/package.json).
 
 
 ## Commands
+
+Various commands are provided. Some are triggered via completion etc, some must be called explicitly from a LSP client.
 
 ### `purescript.build`
 
