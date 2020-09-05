@@ -32,6 +32,52 @@ in.
 - Config
   - `purescript.*`
 
+## Usage
+
+This LSP implmementation is consumed by vscode and Atom plugins as a node module, and bundled along with those plugins.
+
+To use with another LSP client, you will want to install this either globally or locally for `npm`, e.g.
+
+```
+npm i -g purescript-language-server
+```
+And then use the resulting executable, e.g. `purescript-language-server --stdio`.
+
+This language server is based on vscode-languageserver-node which means it should support `--stdio`, `--socket=[number]`, `--node-ipc` or `--pipe` methods of communication, see [vscode-languageserver-node](https://github.com/Microsoft/vscode-languageserver-node) for details.
+
+### VSCode 
+
+Use [vscode-ide-purescript](https://github.com/nwolverson/vscode-ide-purescript).
+
+### Atom
+
+Use [atom-ide-purescript](https://github.com/nwolverson/atom-ide-purescript).
+
+### Vim/CoC
+
+Configuration with [coc.nvim](https://github.com/neoclide/coc.nvim/wiki/Language-servers#purescript):
+
+```json
+    "purescript": {
+      "command": "purescript-language-server",
+      "args": ["--stdio"],
+      "filetypes": ["purescript"],
+      "trace.server": "off",
+      "rootPatterns": ["bower.json", "psc-package.json", "spago.dhall"],
+      "settings": {
+        "purescript": {
+          "addSpagoSources": true // etc
+        }
+      }
+    }
+```
+
+## Config
+
+Config may be supplied via client-push on startup (`workspace.didChangeConfiguration`), server-request (`workspace.configuration`), or at last resort by JSON object on the command line with `--config` option.
+See [config defined in vscode plugin](https://github.com/nwolverson/vscode-ide-purescript/blob/master/package.json).
+
+
 ## Commands
 
 ### `purescript.build`
@@ -94,24 +140,6 @@ Arguments: document URI, line, character.
 
 Arguments: hole name, document URI, hole range, `PscIde.Command.TypeInfo` of chosen replacement option
 
-## Usage
-
-This LSP implmementation is consumed by vscode and Atom plugins as a node module, and bundled along with those plugins.
-
-To use with another LSP client, you will want to install this either globally or locally for `npm`, e.g.
-
-```
-npm i -g purescript-language-server
-```
-And then use the resulting executable, e.g. `purescript-language-server --stdio`.
-
-This language server is based on vscode-languageserver-node which means it should support `--stdio`, `--socket=[number]`, `--node-ipc` or `--pipe` methods of communication, see [vscode-languageserver-node](https://github.com/Microsoft/vscode-languageserver-node) for details.
-
-Currently you should pass a `--config` flag followed by a JSON object, or immediately send config on starting the server in the same way VS Code does - this should improve in future.
-
-## Config
-
-See [config defined in vscode plugin](https://github.com/nwolverson/vscode-ide-purescript/blob/master/package.json).
 
 ## Development
 
