@@ -4,7 +4,7 @@ import Prelude
 
 import Control.Error.Util (hush)
 import Control.Monad.Except (runExcept)
-import Data.Array (fold, singleton)
+import Data.Array (fold, singleton, (:))
 import Data.Either (Either(..))
 import Data.Foldable (all)
 import Data.Maybe (Maybe(..), maybe)
@@ -27,7 +27,10 @@ import LanguageServer.Uri (uriToFilename)
 import PscIde.Command as C
 
 addCompletionImport :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
-addCompletionImport log docs config state@(ServerState { port, modules, conn }) args = do
+addCompletionImport = addCompletionImport' mempty
+
+addCompletionImport' :: WorkspaceEdit -> Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
+addCompletionImport' existingEdit log docs config state@(ServerState { port, modules, conn }) args = do
   let shouldAddImport = autocompleteAddImport config
   case conn, (runExcept <<< readString) <$> args, shouldAddImport of
     Just conn, [ Right identifier, mod, qual, Right uriRaw ], true -> do
@@ -38,9 +41,14 @@ addCompletionImport log docs config state@(ServerState { port, modules, conn }) 
       edit <- addCompletionImportEdit log docs config state { identifier, mod: hush mod, qual: hush qual, uri } doc version text
       case edit of
         Right edits -> do
-          void $ applyEdit conn (fold edits)
+          void $ applyEdit conn (fold $ existingEdit : edits)
           pure $ unsafeToForeign $ toNullable Nothing
-        Left res -> pure res
+        Left res -> do
+          void $ applyEdit conn existingEdit
+          pure res
+    Just conn, _, _ ->  do
+      void $ applyEdit conn existingEdit
+      pure $ unsafeToForeign $ toNullable Nothing
     _, _, _ -> pure $ unsafeToForeign $ toNullable Nothing
 
 type CompletionImportArgs =

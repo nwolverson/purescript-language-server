@@ -43,7 +43,7 @@ getActions documents settings (ServerState { diagnostics, conn: Just conn }) { t
 
     asCommand error@(RebuildError { position: Just position, errorCode })
       | Just { replacement, range: replaceRange } <- getReplacementRange error
-      , contains (positionToRange position) range = do
+      , intersects (positionToRange position) range = do
       Just $ replaceSuggestion (getTitle errorCode) docUri replacement replaceRange
     asCommand _ = Nothing
 
@@ -68,7 +68,7 @@ getActions documents settings (ServerState { diagnostics, conn: Just conn }) { t
         = x:acc
       go acc _ = acc
 
-    commandForCode err@(RebuildError { position: Just position, errorCode }) | contains (positionToRange position) range =
+    commandForCode err@(RebuildError { position: Just position, errorCode }) | intersects (positionToRange position) range =
       case errorCode of
         "ModuleNotFound" -> Just build
         "HoleInferredType" -> case err of
@@ -81,7 +81,8 @@ getActions documents settings (ServerState { diagnostics, conn: Just conn }) { t
         _ -> Nothing
     commandForCode _ = Nothing
 
-    contains (Range { start, end }) (Range { start: start', end: end' }) = start <= start' && end >= end'
+    intersects (Range { start, end }) (Range { start: start', end: end' }) = start <= end' && start' >= end
+
 getActions _ _ _ _ = pure []
 
 readRange :: Foreign -> F Range

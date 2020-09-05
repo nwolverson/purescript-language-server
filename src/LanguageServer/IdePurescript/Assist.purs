@@ -19,7 +19,7 @@ import LanguageServer.Console (log)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (applyEdit)
 import LanguageServer.IdePurescript.CodeActions (readRange)
-import LanguageServer.IdePurescript.Imports (addCompletionImport, addCompletionImportEdit)
+import LanguageServer.IdePurescript.Imports (addCompletionImport, addCompletionImport', addCompletionImportEdit)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (getText, getTextAtRange, getVersion)
@@ -126,8 +126,7 @@ fixTypo log docs settings state@(ServerState { port, conn, modules, clientCapabi
                         , end: Position { line, character: right }
                         }
           edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range word
-      void $ applyEdit conn' edit
-      addCompletionImport log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign Nothing, unsafeToForeign uri ]
+      addCompletionImport' edit log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign Nothing, unsafeToForeign uri ]
 
 fillTypedHole :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 fillTypedHole logFn docs settings state args = do
