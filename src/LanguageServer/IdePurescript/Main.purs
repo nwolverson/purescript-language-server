@@ -8,7 +8,7 @@ import Data.Array (length, (!!), (\\))
 import Data.Array as Array
 import Data.Either (Either(..), either)
 import Data.Foldable (for_, or)
-import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toMaybe, toNullable)
 import Data.Profunctor.Strong (first)
@@ -177,23 +177,24 @@ main' { filename: logFile, config: cmdLineConfig } = do
       showModule = unwrap >>> case _ of
          { moduleName, importType, qualifier } -> moduleName <> maybe "" (" as " <> _) qualifier
 
-  let updateModules :: DocumentUri -> Aff Unit
+  let updateModules :: DocumentUri -> Aff (Maybe ServerState)
       updateModules uri = 
         liftEffect (Ref.read state) >>= case _ of 
-          ServerState { port: Just port, modulesFile } 
+          ServerState { port: Just port, modulesFile }
             | modulesFile /= Just uri -> do
             text <- liftEffect $ getDocument documents uri >>= getText
             path <- liftEffect $ uriToFilename uri
             modules <- getModulesForFileTemp port path text
-            liftEffect $ Ref.modify_ (over ServerState (_ { modules = modules, modulesFile = Just uri })) state
-          _ -> pure unit
+            s <- liftEffect $ Ref.modify (over ServerState (_ { modules = modules, modulesFile = Just uri })) state
+            pure $ Just s
+          _ -> pure Nothing
 
   let runHandler :: forall a b . String -> (b -> Maybe DocumentUri) -> (Settings -> ServerState -> b -> Aff a) -> b -> Effect (Promise a)
       runHandler handlerName docUri f b =
         fromAff do
           c <- liftEffect $ Ref.read config
-          s <- liftEffect $ Ref.read state
-          maybe (pure unit) updateModules (docUri b)          
+          ms <- maybe (pure Nothing) updateModules (docUri b)
+          s <- maybe' (\_ -> liftEffect $ Ref.read state) pure ms
           f c s b
 
   let getTextDocUri :: forall r. { textDocument :: TextDocumentIdentifier | r } -> Maybe DocumentUri
