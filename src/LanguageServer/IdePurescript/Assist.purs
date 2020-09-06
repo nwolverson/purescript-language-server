@@ -3,7 +3,7 @@ module LanguageServer.IdePurescript.Assist where
 import Prelude
 
 import Control.Monad.Except (runExcept)
-import Data.Array (fold, intercalate, (!!))
+import Data.Array (fold, intercalate, take, (!!))
 import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (over)
@@ -18,12 +18,12 @@ import IdePurescript.Tokens (identifierAtPoint)
 import LanguageServer.Console (log)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (applyEdit)
-import LanguageServer.IdePurescript.CodeActions (readRange)
+import LanguageServer.IdePurescript.Commands as Commands
 import LanguageServer.IdePurescript.Imports (addCompletionImport, addCompletionImport', addCompletionImportEdit)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (getText, getTextAtRange, getVersion)
-import LanguageServer.Types (DocumentStore, DocumentUri(..), Position(..), Range(..), Settings)
+import LanguageServer.Types (Command, DocumentStore, DocumentUri(..), Position(..), Range(..), Settings, readRange)
 import PscIde (defaultCompletionOptions, suggestTypos)
 import PscIde as P
 import PscIde.Command (TypeInfo(..))
@@ -97,9 +97,36 @@ decodeTypoResult obj = do
   mod <- obj ! "mod" >>= readString
   pure $ TypoResult { identifier, mod }
 
+fixTypoActions :: DocumentStore -> Settings -> ServerState -> DocumentUri -> Int -> Int -> Aff (Array Command)
+fixTypoActions docs settings state@(ServerState { port, conn, modules, clientCapabilities }) docUri line char =
+  case port, conn of
+    Just port', Just conn' -> do
+      doc <- liftEffect $ getDocument docs docUri
+      lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
+      version <- liftEffect $ getVersion doc
+      case identifierAtPoint lineText char of
+        Just { word, range } -> do
+          res <- suggestTypos port' word 2 modules.main defaultCompletionOptions
+          pure $ case res of 
+            Left _ -> []
+            Right infos ->
+              take 10 $
+              map (\tinfo@(TypeInfo { identifier, module' }) ->
+                Commands.fixTypo' 
+                  do
+                    if identifier == word then
+                      "Import " <> identifier <> " (" <> module' <> ")"
+                    else
+                      "Replace with " <> identifier <> " (" <> module' <> ")"  
+                  docUri line char
+                  (encodeTypoResult $ TypoResult { identifier, mod: module' }))
+                infos
+        Nothing -> pure []
+    _, _ -> pure []
+
 fixTypo :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 fixTypo log docs settings state@(ServerState { port, conn, modules, clientCapabilities }) args = do
-  (unsafeToForeign <<< map encodeTypoResult) <$> case port, conn, args !! 0, args !! 1, args !! 2 of
+  unsafeToForeign <$> case port, conn, args !! 0, args !! 1, args !! 2 of
     Just port', Just conn', Just argUri, Just argLine, Just argChar
       | Right uri <- runExcept $ readString argUri
       , Right line <- runExcept $ readInt argLine -- TODO: Can this be a Position?
@@ -108,19 +135,11 @@ fixTypo log docs settings state@(ServerState { port, conn, modules, clientCapabi
         lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
         version <- liftEffect $ getVersion doc
         case identifierAtPoint lineText char, (runExcept <<< decodeTypoResult) <$> args !! 3 of
-            Just { range }, Just (Right (TypoResult { identifier, mod })) -> [] <$ replace conn' uri version line range identifier mod
-            -- TODO add import?
-            Just { word, range }, _ -> do
-                res <- suggestTypos port' word 2 modules.main defaultCompletionOptions
-                case res of
-                    Right [ TypeInfo { identifier, module' } ] -> [] <$ replace conn' uri version line range identifier module'
-                    _ -> pure $ map convertRes $ either (pure []) identity res
-            _, _ -> pure $ []
-    _, _, _, _, _ -> pure  []
+            Just { range }, Just (Right (TypoResult { identifier, mod })) -> void $ replace conn' uri version line range identifier mod
+            _, _ -> pure unit
+    _, _, _, _, _ -> pure unit
 
   where
-    emptyRes = unsafeToForeign []
-    convertRes (TypeInfo { identifier, module' }) = TypoResult { identifier, mod: module' }
     replace conn' uri version line {left, right} word mod = do 
       let range = Range { start: Position { line, character: left }
                         , end: Position { line, character: right }

@@ -3,10 +3,9 @@ module LanguageServer.IdePurescript.CodeActions where
 import Prelude
 
 import Control.Monad.Except (runExcept)
-import Data.Array (catMaybes, filter, foldl, head, length, mapMaybe, nubByEq, sortWith, (:))
+import Data.Array (catMaybes, concat, filter, foldl, head, length, mapMaybe, nubByEq, singleton, sortWith, (:))
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe)
-
 import Data.Newtype (un)
 import Data.String (null, trim)
 import Data.String.Regex (regex)
@@ -14,29 +13,32 @@ import Data.String.Regex.Flags (global, noFlags)
 import Data.Traversable (traverse)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
-import Foreign (F, Foreign, readArray, readInt, readString)
+import Foreign (F, Foreign, readArray, readString)
 import Foreign.Index ((!))
 import Foreign.Object as Object
 import IdePurescript.QuickFix (getTitle, isImport, isUnknownToken)
 import IdePurescript.Regex (replace', test')
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (CodeActionParams, applyEdit)
+import LanguageServer.IdePurescript.Assist (fixTypoActions)
 import LanguageServer.IdePurescript.Build (positionToRange)
-import LanguageServer.IdePurescript.Commands (Replacement, build, fixTypo, replaceAllSuggestions, replaceSuggestion, typedHole)
+import LanguageServer.IdePurescript.Commands (Replacement, build, replaceAllSuggestions, replaceSuggestion, typedHole)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (TextDocument, getTextAtRange, getVersion)
-import LanguageServer.Types (Command, DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), workspaceEdit)
+import LanguageServer.Types (Command, DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), readRange, workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array Command)
-getActions documents settings (ServerState { diagnostics, conn: Just conn }) { textDocument, range } =
+getActions documents settings state@(ServerState { diagnostics, conn: Just conn }) { textDocument, range } =
   case Object.lookup (un DocumentUri $ docUri) diagnostics of
-    Just errs -> pure $
+    Just errs -> do
+      codeActions <- traverse commandForCode errs
+      pure $
         (catMaybes $ map asCommand errs)
         <> fixAllCommand "Apply all suggestions" errs
         <> fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode }) -> isImport errorCode) errs)
-        <> mapMaybe commandForCode errs
+        <> concat codeActions
     _ -> pure []
   where
     docUri = _.uri $ un TextDocumentIdentifier textDocument
@@ -70,31 +72,23 @@ getActions documents settings (ServerState { diagnostics, conn: Just conn }) { t
 
     commandForCode err@(RebuildError { position: Just position, errorCode }) | intersects (positionToRange position) range =
       case errorCode of
-        "ModuleNotFound" -> Just build
+        "ModuleNotFound" -> pure [ build ]
         "HoleInferredType" -> case err of
           RebuildError { pursIde: Just (PursIdeInfo { name, completions }) } ->
-            Just $ typedHole name docUri (positionToRange position) completions
-          _ -> Nothing
+            pure $ singleton $ typedHole name docUri (positionToRange position) completions
+          _ -> pure []
         x | isUnknownToken x
           , { startLine, startColumn } <- position ->
-            Just $ fixTypo docUri (startLine-1) (startColumn-1)
-        _ -> Nothing
-    commandForCode _ = Nothing
+            fixTypoActions documents settings state docUri (startLine-1) (startColumn-1)
+            -- singleton $ fixTypo docUri (startLine-1) (startColumn-1)
+        _ -> pure []
+    commandForCode _ = pure []
 
     intersects (Range { start, end }) (Range { start: start', end: end' }) = start <= end' && start' >= end
 
 getActions _ _ _ _ = pure []
 
-readRange :: Foreign -> F Range
-readRange r = do
-  start <- r ! "start" >>= readPosition
-  end <- r ! "end" >>= readPosition
-  pure $ Range { start, end }
-  where
-  readPosition p = do
-    line <- p ! "line" >>= readInt
-    character <- p ! "character" >>= readInt
-    pure $ Position { line, character }
+
 
 afterEnd :: Range -> Range
 afterEnd (Range { end: end@(Position { line, character }) }) =

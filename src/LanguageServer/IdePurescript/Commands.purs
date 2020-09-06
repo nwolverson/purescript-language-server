@@ -85,6 +85,10 @@ fixTypoCmd = CommandInfo "Fix typo/add import" "fixTypo"
 fixTypo :: DocumentUri -> Int -> Int -> Command
 fixTypo uri row char = c fixTypoCmd $ Just $ [ unsafeToForeign uri, unsafeToForeign row, unsafeToForeign char ] 
 
+fixTypo' :: String -> DocumentUri -> Int -> Int -> Foreign -> Command
+fixTypo' x uri row char tinfo = c (CommandInfo x "fixTypo") $ Just $ [ unsafeToForeign uri, unsafeToForeign row, unsafeToForeign char, tinfo ] 
+
+
 commands :: Array String
 commands = cmdName <$> 
   [ addCompletionImportCmd 

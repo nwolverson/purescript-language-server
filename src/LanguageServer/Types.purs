@@ -9,7 +9,8 @@ import Data.Newtype (class Newtype, over)
 import Data.NonEmpty (foldl1, (:|))
 import Data.Nullable (Nullable, toMaybe, toNullable)
 import Data.Tuple (Tuple(..))
-import Foreign (Foreign)
+import Foreign (F, Foreign, readInt)
+import Foreign.Index ((!))
 import Foreign.Object (Object)
 import Foreign.Object as Object
 
@@ -63,6 +64,17 @@ instance showRange :: Show Range where
   show (Range { start, end }) = "Range(" <> show start <> "," <> show end <> ")"
 
 derive instance newtypeRange :: Newtype Range _
+
+readRange :: Foreign -> F Range
+readRange r = do
+  start <- r ! "start" >>= readPosition
+  end <- r ! "end" >>= readPosition
+  pure $ Range { start, end }
+  where
+  readPosition p = do
+    line <- p ! "line" >>= readInt
+    character <- p ! "character" >>= readInt
+    pure $ Position { line, character }
 
 newtype Location = Location { uri :: DocumentUri, range :: Range }
 
