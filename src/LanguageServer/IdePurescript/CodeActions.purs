@@ -84,7 +84,7 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn 
         _ -> pure []
     commandForCode _ = pure []
 
-    intersects (Range { start, end }) (Range { start: start', end: end' }) = start <= end' && start' >= end
+    intersects (Range { start, end }) (Range { start: start', end: end' }) = start <= end' && start' <= end
 
 getActions _ _ _ _ = pure []
 
