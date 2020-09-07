@@ -208,7 +208,7 @@ main' { filename: logFile, config: cmdLineConfig } = do
 
     onFoldingRanges conn $ runHandler "onFoldingRanges" getTextDocUri (getFoldingRanges documents)
     onDocumentFormatting conn $ runHandler "onDocumentFormatting" getTextDocUri (getFormattedDocument logError documents)
-    onReferences conn $ runHandler "onReferences" (const Nothing) (getReferences documents)
+    onReferences conn $ runHandler "onReferences" getTextDocUri (getReferences documents)
     onHover conn $ runHandler "onHover" getTextDocUri (getTooltips documents)
     onCodeAction conn $ runHandler "onCodeAction" getTextDocUri (getActions documents)
     onShutdown conn $ fromAff stopPscIdeServer
