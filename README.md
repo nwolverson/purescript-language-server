@@ -57,7 +57,7 @@ Use [atom-ide-purescript](https://github.com/nwolverson/atom-ide-purescript).
 
 Configuration with [coc.nvim](https://github.com/neoclide/coc.nvim/wiki/Language-servers#purescript):
 
-```json
+```jsonc
     "purescript": {
       "command": "purescript-language-server",
       "args": ["--stdio"],
