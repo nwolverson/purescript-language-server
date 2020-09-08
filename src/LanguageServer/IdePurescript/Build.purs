@@ -6,9 +6,6 @@ import Data.Array (filter, mapMaybe, notElem, uncons)
 import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Nullable (toNullable)
-import Data.String (trim)
-import Data.String.Regex (regex, split)
-import Data.String.Regex.Flags (noFlags)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
@@ -94,12 +91,13 @@ censorWarnings settings = filter (flip notElem codes <<< getCode)
   where
     getCode (RebuildError { errorCode }) = errorCode
     codes = censorCodes settings
-      
+
+foreign import parseShellQuote :: String -> Array String
+
 fullBuild :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff (Either String DiagnosticResult)
 fullBuild logCb _ settings state _ = do
-  let command = buildCommand settings
-  let buildCommand = either (const []) (\reg -> (split reg <<< trim) command) (regex "\\s+" noFlags)
-  case state, uncons buildCommand of
+  let command = parseShellQuote $ buildCommand settings
+  case state, uncons command of
     ServerState { port: maybePort, root: Just directory }, Just { head: cmd, tail: args } -> do
       build logCb { command: Command cmd args, directory, useNpmDir: addNpmPath settings }
         >>= either (pure <<< Left) \{errors} -> do
