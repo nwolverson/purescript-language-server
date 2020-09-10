@@ -160,9 +160,9 @@ fillTypedHole logFn docs settings state args = do
       version <- liftEffect $ getVersion doc
       text <- liftEffect $ getText doc
       let edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range identifier
-      edit' <- either (const []) identity <$> addCompletionImportEdit logFn docs settings state 
+      edit' <- either (const []) identity <$> addCompletionImportEdit logFn docs settings state
          { identifier, mod: Just mod , qual: Nothing, uri: DocumentUri uri }
-        doc version text
+        doc version text Nothing
       let edit2 = edit <> fold edit'
       applyRes <- applyEdit conn' $ edit2 -- edit <> fold edit'
       liftEffect $ log conn' $ "Applied: " <> show applyRes

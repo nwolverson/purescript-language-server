@@ -2,9 +2,9 @@ module IdePurescript.PscErrors where
 
 import Prelude
 
-import Data.Argonaut (decodeJson, class DecodeJson)
-import Data.Argonaut.Decode.Combinators ((.?))
+import Data.Argonaut (class DecodeJson, decodeJson, (.:))
 import Data.Argonaut.Parser (jsonParser)
+import Data.Bifunctor (lmap)
 import Data.Either (Either)
 import PscIde.Command (RebuildError)
 
@@ -16,9 +16,10 @@ newtype PscResult = PscResult
 instance decodePscResult :: DecodeJson PscResult where
   decodeJson json = do
     o <- decodeJson json
-    warnings <- o .? "warnings"
-    errors <- o .? "errors"
+    warnings <- o .: "warnings"
+    errors <- o .: "errors"
     pure $ PscResult { warnings, errors }
 
 parsePscOutput :: String -> Either String PscResult
-parsePscOutput = decodeJson <=< jsonParser
+parsePscOutput = 
+  (lmap show <<< decodeJson) <=< jsonParser

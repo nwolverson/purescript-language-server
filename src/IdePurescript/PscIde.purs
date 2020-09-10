@@ -5,8 +5,7 @@ module IdePurescript.PscIde (getCompletion, getCompletion', cwd, loadDeps, getTy
 import Prelude
 
 import Control.Monad.Error.Class (throwError)
-import Data.Argonaut.Decode (class DecodeJson, decodeJson)
-import Data.Argonaut.Decode.Combinators ((.?))
+import Data.Argonaut.Decode (class DecodeJson, decodeJson, (.:))
 import Data.Array (head, null)
 import Data.Either (Either(Right, Left))
 import Data.Maybe (maybe, Maybe(..))
@@ -120,8 +119,8 @@ data ModuleCompletion = ModuleCompletion {
 instance decodeModuleCompletion :: DecodeJson ModuleCompletion where
   decodeJson json = do
     o <- decodeJson json
-    module' <- o .? "module"
-    package <- o .? "package"
+    module' <- o .: "module"
+    package <- o .: "package"
     pure (ModuleCompletion {
       module': module',
       package: package

@@ -68,6 +68,8 @@ getCompletions docs settings state ({ textDocument, position }) = do
       Value -> LS.Value
       Function -> LS.Function
       Type -> LS.Class
+      DCtor ->  LS.Enum
+      Kind -> LS.Interface
 
     edit newText prefix = TextEdit
         { range: Range
@@ -89,7 +91,7 @@ getCompletions docs settings state ({ textDocument, position }) = do
         # over CompletionItem (_
           { detail = toNullable $ Just valueType
           , documentation = toNullable $ Just $ markupContent $ (fromMaybe "" documentation) <> exportText
-          , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri
+          , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri (show suggestType)
           , textEdit = toNullable $ Just $ edit identifier prefix
           , sortText = toNullable $ Just $ rankText <> "." <> identifier
           })

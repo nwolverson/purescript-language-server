@@ -24,7 +24,24 @@ type ModuleInfo =
   , importedModules :: Array String
   }
 
-data SuggestionType = Module | Type | Function | Value
+data SuggestionType = Module | Type | DCtor | Function | Value | Kind
+
+instance showSuggestionType :: Show SuggestionType where
+  show Module = "Module"
+  show Type = "Type"
+  show DCtor = "DCtor"
+  show Function = "Function"
+  show Value = "Value"
+  show Kind = "Kind"
+
+parseSuggestionType :: String -> Maybe SuggestionType
+parseSuggestionType = case _ of
+  "Module" -> Just Module
+  "Type" -> Just Type
+  "DCtor" -> Just DCtor
+  "Function" -> Just Function
+  "Value" -> Just Value
+  _ -> Nothing
 
 explicitImportRegex :: Either String Regex
 explicitImportRegex = regex ("""^import\s+""" <> modulePart <> """\s+\([^)]*?""" <> identPart <> "$") noFlags
@@ -99,9 +116,14 @@ getSuggestions port
     result qualifier prefix (TypeInfo {type', identifier, module': origMod, exportedFrom, documentation }) =
       IdentSuggestion { origMod, exportMod, identifier, qualifier, suggestType, prefix, valueType: type', exportedFrom, documentation }
       where
-        suggestType =
-          if contains (Pattern "->") type' then Function
-          else if test' (regex "^[A-Z]" noFlags) identifier then Type
+        suggestType = 
+          if type' == "Type" then Type
+          else if type' == "kind" then Kind
+          else if test' (regex "(->|→) Type$" noFlags) type' then Type -- type constructor
+          -- else if identifier == "Baz" then Module
+          else if contains (Pattern "Type") type' then Type
+          else if test' (regex "^[A-Z]" noFlags) identifier then DCtor
+          else if contains (Pattern "->") type' || contains (Pattern "→") type' then Function
           else Value
 
         -- Strategies for picking the re-export to choose

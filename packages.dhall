@@ -119,9 +119,11 @@ let additions =
 
 
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.13.5-20191127/packages.dhall sha256:654e8427ff1f9830542f491623cd5d89b1648774a765520554f98f41d3d1b3b3
+      https://github.com/purescript/package-sets/releases/download/psc-0.13.8-20200831/packages.dhall sha256:cdb3529cac2cd8dd780f07c80fd907d5faceae7decfcaa11a12037df68812c83
 
-let overrides = {=}
+let overrides =
+      { psc-ide = upstream.psc-ide // { version = "c813caa4aec6beef9677b4e68b8bc724f3b4c308" } 
+      }
 
 let additions = {=}
 

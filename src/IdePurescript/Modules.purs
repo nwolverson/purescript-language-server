@@ -34,6 +34,7 @@ import Effect (Effect)
 import Effect.Aff (Aff, attempt)
 import Effect.Class (liftEffect)
 import Foreign.Object as Object
+import IdePurescript.Completion as Completion
 import IdePurescript.Regex (replace', match', test')
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
@@ -182,9 +183,9 @@ addModuleImport state port fileName text moduleName =
   shouldAdd =
     state.main /= Just moduleName && (mkImplicit moduleName `notElem` state.modules)
 
-addExplicitImport :: State -> Int -> String -> String -> Maybe String -> Maybe String -> String
+addExplicitImport :: State -> Int -> String -> String -> Maybe String -> Maybe String -> String -> Maybe Completion.SuggestionType
   -> Aff { state :: State, result :: ImportResult }
-addExplicitImport state port fileName text moduleName qualifier identifier =
+addExplicitImport state port fileName text moduleName qualifier identifier suggestionType =
   case shouldAdd of
     false -> pure { state, result: FailedImport }
     true -> do
@@ -194,10 +195,14 @@ addExplicitImport state port fileName text moduleName qualifier identifier =
             _ -> state
       pure { result, state: state' }
   where
-    addImport tmpFile = P.explicitImport port tmpFile (Just tmpFile) filters identifier qualifier
+    addImport tmpFile = P.explicitImport port tmpFile (Just tmpFile) (filters<>namespaceFilters) identifier qualifier
     filters = case moduleName of
                 Nothing -> []
                 Just mn -> [C.ModuleFilter [mn]]
+    namespaceFilters = case suggestionType of
+                        Just Completion.Type -> [ C.NamespaceFilter [ C.NSType ] ]
+                        Just Completion.DCtor -> [ C.NamespaceFilter [ C.NSValue ] ]
+                        _ -> []
     isThisModule = case moduleName of
       Just _ -> moduleName == state.main
       _ -> false
@@ -210,7 +215,8 @@ addExplicitImport state port fileName text moduleName qualifier identifier =
 
     shouldAdd = not isThisModule
       && not isOpenPrim
-      && not (identifier `elem` state.identifiers)
+      -- This check did not validate identifier namespace - so always let purs ide decide
+      -- && not (identifier `elem` state.identifiers)
       && maybe true (\mn -> all (shouldAddMatch mn) state.modules) moduleName
 
     shouldAddMatch mn (Module { moduleName: moduleName', qualifier: Nothing, importType: Implicit })
