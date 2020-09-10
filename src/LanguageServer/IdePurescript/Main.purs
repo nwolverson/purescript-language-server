@@ -234,7 +234,7 @@ main' { filename: logFile, config: cmdLineConfig } = do
       filename <- liftEffect $ uriToFilename uri
       let fileDiagnostics = fromMaybe [] $ Object.lookup filename diagnostics
       liftEffect do
-        log conn $ "Built with " <> show (length pscErrors) <> " issues for file: " <> show filename <> ", all diagnostic files: " <> show (Object.keys diagnostics)
+        log conn $ "Built with " <> show (length fileDiagnostics) <> "/" <> show (length pscErrors) <> " issues for file: " <> show filename <> ", all diagnostic files: " <> show (Object.keys diagnostics)
         Ref.write (over ServerState (\s1 -> s1 { 
           diagnostics = Object.insert (un DocumentUri uri) pscErrors (s1.diagnostics)
         , modulesFile = Nothing -- Force reload of modules on next request
