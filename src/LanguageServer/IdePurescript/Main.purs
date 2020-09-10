@@ -235,6 +235,9 @@ main' { filename: logFile, config: cmdLineConfig } = do
       let fileDiagnostics = fromMaybe [] $ Object.lookup filename diagnostics
       liftEffect do
         log conn $ "Built with " <> show (length fileDiagnostics) <> "/" <> show (length pscErrors) <> " issues for file: " <> show filename <> ", all diagnostic files: " <> show (Object.keys diagnostics)
+        let nonFileDiagnostics = Object.delete filename diagnostics
+        when (Object.size nonFileDiagnostics > 0) do
+          log conn $ "Unmatched diagnostics: " <> show nonFileDiagnostics
         Ref.write (over ServerState (\s1 -> s1 { 
           diagnostics = Object.insert (un DocumentUri uri) pscErrors (s1.diagnostics)
         , modulesFile = Nothing -- Force reload of modules on next request

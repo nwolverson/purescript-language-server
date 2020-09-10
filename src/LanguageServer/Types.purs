@@ -88,6 +88,7 @@ newtype Diagnostic = Diagnostic
     , message :: String
     }
 derive instance newtypeDiagnostic :: Newtype Diagnostic _
+derive newtype instance showDiagnostic :: Show Diagnostic
 
 newtype CompletionItem = CompletionItem
     { label :: String
