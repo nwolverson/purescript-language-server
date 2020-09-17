@@ -74,7 +74,7 @@ addCompletionImportEdit log docs config state@(ServerState { port, modules, conn
           Just mod', Nothing | mod' == prelude && noModule (isSameUnqualified prelude) ->
             addOpenImport modules port (un DocumentUri uri) text mod'
           mod', qual' -> do
-            liftEffect $ log Info $ "Adding import of " <> text <> " from " <> show mod' <> " with type filter " <> show suggestionType
+            liftEffect $ log Info $ "Adding import of " <> identifier <> " from " <> show mod' <> " with type filter " <> show suggestionType
             addExplicitImport modules port (un DocumentUri uri) text mod' qual' identifier suggestionType
       case result of
         UpdatedImports newText -> do

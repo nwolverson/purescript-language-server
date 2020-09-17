@@ -195,7 +195,8 @@ addExplicitImport state port fileName text moduleName qualifier identifier sugge
             _ -> state
       pure { result, state: state' }
   where
-    addImport tmpFile = P.explicitImport port tmpFile (Just tmpFile) (filters<>namespaceFilters) identifier qualifier
+    -- TODO removed namespaceFilters as they are currently broken
+    addImport tmpFile = P.explicitImport port tmpFile (Just tmpFile) (filters) identifier qualifier
     filters = case moduleName of
                 Nothing -> []
                 Just mn -> [C.ModuleFilter [mn]]
