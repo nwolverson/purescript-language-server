@@ -127,12 +127,12 @@ getSuggestions port
           else Value
 
         -- Strategies for picking the re-export to choose
-        -- 1. Existing imports
-        -- 2. User configuration of preferred modules (ordered list)
+        -- 1. User configuration of preferred modules (ordered list)
+        -- 2. Existing imports
         -- 3. Re-export from a prefix named module (e.g. Foo.Bar.Baz reexported from Foo.Bar) shortest first
         -- 4. Original module (if none of the previous rules apply, there are no re-exports, or either grouping
         --    is disabled or compiler version does not support it)
-        exportMod = fromMaybe origMod (existingModule <|> preferredModule <|> prefixModule)
+        exportMod = fromMaybe origMod (preferredModule <|> existingModule <|> prefixModule)
         existingModule = head $ intersect importedModules exportedFrom
         preferredModule = head $ intersect preferredModules exportedFrom
         prefixModule = head $
