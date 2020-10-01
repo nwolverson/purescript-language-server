@@ -5,7 +5,7 @@ import Prelude
 import Control.Monad.Except (runExcept)
 import Data.Array (catMaybes, concat, filter, foldl, head, length, mapMaybe, nubByEq, singleton, sortWith, (:))
 import Data.Either (Either(..))
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (un)
 import Data.String (null, trim)
 import Data.String.Regex (regex)
@@ -37,7 +37,7 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn 
       pure $
         (catMaybes $ map asCommand errs)
         <> fixAllCommand "Apply all suggestions" errs
-        <> fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode }) -> isImport errorCode) errs)
+        <> fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode && maybe false (\pos -> intersects (positionToRange pos) range) position) errs)
         <> concat codeActions
     _ -> pure []
   where
