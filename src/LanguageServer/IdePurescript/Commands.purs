@@ -33,6 +33,9 @@ addCompletionImport ident mod qual uri suggestionType = c addCompletionImportCmd
 addModuleImportCmd :: CommandInfo
 addModuleImportCmd = CommandInfo "Add module import" "addModuleImport"
 
+organiseImportsCmd :: CommandInfo
+organiseImportsCmd = CommandInfo "Organise imports" "organiseImports"
+
 replaceSuggestionCmd :: CommandInfo
 replaceSuggestionCmd = CommandInfo "Apply Suggestion" "replaceSuggestion"
 

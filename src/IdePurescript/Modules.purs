@@ -15,19 +15,23 @@ module IdePurescript.Modules (
   , addExplicitImport
   , addQualifiedImport
   , ImportResult(..)
+  , organiseModuleImports
   ) where
 
 import Prelude
 
 import Control.Alt ((<|>))
-import Data.Array (concatMap, filter, findLastIndex, singleton, (:))
+import Data.Array (concatMap, filter, findLastIndex, intercalate, singleton, (:))
+import Data.Array as Array
 import Data.Either (either, Either(..))
 import Data.Foldable (all, any, notElem, elem)
 import Data.Maybe (Maybe(..), maybe, fromMaybe)
 import Data.Newtype (class Newtype)
 import Data.String (Pattern(Pattern), split)
+import Data.String as String
 import Data.String.Regex (regex) as R
 import Data.String.Regex.Flags (global, noFlags, multiline) as R
+import Data.String.Utils (lines)
 import Data.Tuple (Tuple(..))
 import Data.UUID (genUUID)
 import Effect (Effect)
@@ -235,3 +239,20 @@ addQualifiedImport state port fileName text moduleName qualifier =
   where
     addImport tmpFile = P.qualifiedImport port tmpFile (Just tmpFile) moduleName qualifier
     isThisModule = Just moduleName == state.main
+
+
+organiseModuleImports :: State -> Int -> String -> String
+  -> Aff (Maybe { state :: State, result :: String })
+organiseModuleImports state port fileName text = do
+  res <- withTempFile fileName text addBogusImport
+  pure $ case res of
+    UpdatedImports result -> do
+
+      let result' = intercalate "\n" $ 
+                      Array.filter (not <<<  String.contains (Pattern qualifier)) $
+                      lines result
+      Just { state, result: result' }
+    _ -> Nothing
+  where
+  qualifier = "__IDE_IMPORT_HACK"
+  addBogusImport tmpFile = P.qualifiedImport port tmpFile (Just tmpFile) "Prim" qualifier

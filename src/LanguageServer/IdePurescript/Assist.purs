@@ -145,7 +145,8 @@ fixTypo log docs settings state@(ServerState { port, conn, modules, clientCapabi
                         , end: Position { line, character: right }
                         }
           edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range word
-      addCompletionImport' edit log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign Nothing, unsafeToForeign uri ]
+      -- TODO suggestion type
+      addCompletionImport' edit log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign Nothing, unsafeToForeign uri, unsafeToForeign "" ]
 
 fillTypedHole :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 fillTypedHole logFn docs settings state args = do

@@ -33,12 +33,12 @@ import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidC
 import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fillTypedHole, fixTypo)
 import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnostics)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
-import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
+import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, organiseImportsCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
 import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.IdePurescript.FoldingRanges (getFoldingRanges)
 import LanguageServer.IdePurescript.Formatting (getFormattedDocument)
-import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules)
+import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules, organiseImports)
 import LanguageServer.IdePurescript.References (getReferences)
 import LanguageServer.IdePurescript.Search (search)
 import LanguageServer.IdePurescript.Server (getEnvPursIdeSources, loadAll, retry, startServer')
@@ -292,6 +292,7 @@ main' { filename: logFile, config: cmdLineConfig } = do
         , Tuple buildCmd $ voidHandler onBuild
         , Tuple addCompletionImportCmd $ addCompletionImport logError
         , Tuple addModuleImportCmd $ voidHandler $ addModuleImport' logError
+        , Tuple organiseImportsCmd $ organiseImports logError
         , Tuple startPscIdeCmd $ simpleHandler startPscIdeServer
         , Tuple stopPscIdeCmd $ simpleHandler stopPscIdeServer
         , Tuple restartPscIdeCmd $ simpleHandler restartPscIdeServer

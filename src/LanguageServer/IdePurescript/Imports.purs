@@ -14,7 +14,7 @@ import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign (Foreign, readString, unsafeToForeign)
 import IdePurescript.Completion (SuggestionType, parseSuggestionType)
-import IdePurescript.Modules (ImportResult(..), addExplicitImport, addModuleImport, addQualifiedImport)
+import IdePurescript.Modules (ImportResult(..), addExplicitImport, addModuleImport, addQualifiedImport, organiseModuleImports)
 import IdePurescript.PscIde (getAvailableModules)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.DocumentStore (getDocument)
@@ -141,3 +141,29 @@ getAllModules log docs config state args =
     _ -> do
       liftEffect $ log Error "Fail case"
       pure $ unsafeToForeign []
+
+organiseImports :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
+organiseImports log docs config state args = do
+  let ServerState { port, modules, conn, clientCapabilities } = state
+  case port, (runExcept <<< readString) <$> args of
+    Just port', [ Right uri ] -> do
+      doc <- liftEffect $ getDocument docs (DocumentUri uri)
+      version <- liftEffect $ getVersion doc
+      text <- liftEffect $ getText doc
+      fileName <- liftEffect $ uriToFilename $ DocumentUri uri
+      res <- organiseModuleImports modules port' fileName text
+      case res of
+        Just { result } -> do
+          let edit = makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
+          case conn, edit of
+            Just conn', Just edit' -> void $ applyEdit conn' edit'
+            _, _ -> pure unit
+        _ -> pure unit
+      pure successResult
+
+    _, args'-> do
+      liftEffect $ log Info $ show args'
+      pure successResult
+
+    where
+    successResult = unsafeToForeign $ toNullable Nothing
