@@ -187,9 +187,9 @@ addModuleImport state port fileName text moduleName =
   shouldAdd =
     state.main /= Just moduleName && (mkImplicit moduleName `notElem` state.modules)
 
-addExplicitImport :: State -> Int -> String -> String -> Maybe String -> Maybe String -> String -> Maybe Completion.SuggestionType
+addExplicitImport :: State -> Int -> String -> String -> Maybe String -> Maybe String -> String -> Maybe C.Namespace
   -> Aff { state :: State, result :: ImportResult }
-addExplicitImport state port fileName text moduleName qualifier identifier suggestionType =
+addExplicitImport state port fileName text moduleName qualifier identifier ns =
   case shouldAdd of
     false -> pure { state, result: FailedImport }
     true -> do
@@ -199,15 +199,9 @@ addExplicitImport state port fileName text moduleName qualifier identifier sugge
             _ -> state
       pure { result, state: state' }
   where
-    -- TODO removed namespaceFilters as they are currently broken
-    addImport tmpFile = P.explicitImport port tmpFile (Just tmpFile) (filters) identifier qualifier
-    filters = case moduleName of
-                Nothing -> []
-                Just mn -> [C.ModuleFilter [mn]]
-    namespaceFilters = case suggestionType of
-                        Just Completion.Type -> [ C.NamespaceFilter [ C.NSType ] ]
-                        Just Completion.DCtor -> [ C.NamespaceFilter [ C.NSValue ] ]
-                        _ -> []
+    addImport tmpFile = P.explicitImport port tmpFile (Just tmpFile) (filters <> namespaceFilters) identifier qualifier
+    filters = maybe [] (\m -> [C.ModuleFilter [m]]) moduleName
+    namespaceFilters = maybe [] (\n -> [C.NamespaceFilter [ n ]]) ns
     isThisModule = case moduleName of
       Just _ -> moduleName == state.main
       _ -> false

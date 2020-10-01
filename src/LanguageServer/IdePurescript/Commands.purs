@@ -27,8 +27,8 @@ addCompletionImportCmd :: CommandInfo
 addCompletionImportCmd = CommandInfo "Add completion import" "addCompletionImport"
 
 addCompletionImport :: String -> Maybe String -> Maybe String -> DocumentUri -> String -> Command
-addCompletionImport ident mod qual uri suggestionType = c addCompletionImportCmd $
-  Just [ unsafeToForeign ident, unsafeToForeign $ toNullable mod, unsafeToForeign $ toNullable qual, unsafeToForeign uri, unsafeToForeign suggestionType ]
+addCompletionImport ident mod qual uri ns = c addCompletionImportCmd $
+  Just [ unsafeToForeign ident, unsafeToForeign $ toNullable mod, unsafeToForeign $ toNullable qual, unsafeToForeign uri, unsafeToForeign ns ]
 
 addModuleImportCmd :: CommandInfo
 addModuleImportCmd = CommandInfo "Add module import" "addModuleImport"

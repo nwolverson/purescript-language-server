@@ -34,12 +34,12 @@ addCompletionImport' :: WorkspaceEdit -> Notify -> DocumentStore -> Settings -> 
 addCompletionImport' existingEdit log docs config state@(ServerState { port, modules, conn }) args = do
   let shouldAddImport = autocompleteAddImport config
   case conn, (runExcept <<< readString) <$> args, shouldAddImport of
-    Just conn, [ Right identifier, mod, qual, Right uriRaw, Right suggestionType ], true -> do
+    Just conn, [ Right identifier, mod, qual, Right uriRaw, Right ns ], true -> do
       let uri = DocumentUri uriRaw
       doc <- liftEffect $ getDocument docs uri
       version <- liftEffect $ getVersion doc
       text <- liftEffect $ getText doc
-      edit <- addCompletionImportEdit log docs config state { identifier, mod: hush mod, qual: hush qual, uri } doc version text (parseSuggestionType suggestionType)
+      edit <- addCompletionImportEdit log docs config state { identifier, mod: hush mod, qual: hush qual, uri } doc version text (parseNS ns)
       case edit of
         Right edits -> do
           void $ applyEdit conn (fold $ existingEdit : edits)
@@ -60,10 +60,21 @@ type CompletionImportArgs =
   , uri :: DocumentUri
   }
 
+parseNS :: String -> Maybe C.Namespace
+parseNS "NSValue" = Just C.NSValue
+parseNS "NSKind" = Just C.NSKind
+parseNS "NSType" = Just C.NSType
+parseNS _ = Nothing
+
+showNS C.NSValue = "NSValue"
+showNS C.NSKind = "NSKind"
+showNS C.NSType = "NSType"
+
+
 addCompletionImportEdit :: Notify -> DocumentStore -> Settings -> ServerState
- -> CompletionImportArgs -> TextDocument -> Number -> String -> Maybe SuggestionType
+ -> CompletionImportArgs -> TextDocument -> Number -> String -> Maybe C.Namespace
  -> Aff (Either Foreign (Array WorkspaceEdit))
-addCompletionImportEdit log docs config state@(ServerState { port, modules, conn, clientCapabilities }) { identifier, mod, qual, uri } doc version text suggestionType = do
+addCompletionImportEdit log docs config state@(ServerState { port, modules, conn, clientCapabilities }) { identifier, mod, qual, uri } doc version text ns = do
   let prelude = preludeModule config
   case port of
     Just port -> do
@@ -74,8 +85,8 @@ addCompletionImportEdit log docs config state@(ServerState { port, modules, conn
           Just mod', Nothing | mod' == prelude && noModule (isSameUnqualified prelude) ->
             addOpenImport modules port (un DocumentUri uri) text mod'
           mod', qual' -> do
-            liftEffect $ log Info $ "Adding import of " <> identifier <> " from " <> show mod' <> " with type filter " <> show suggestionType
-            addExplicitImport modules port (un DocumentUri uri) text mod' qual' identifier suggestionType
+            liftEffect $ log Info $ "Adding import of " <> identifier <> " from " <> show mod' <> " with type filter " <> show (showNS <$>  ns)
+            addExplicitImport modules port (un DocumentUri uri) text mod' qual' identifier ns
       case result of
         UpdatedImports newText -> do
           let edit = makeMinimalWorkspaceEdit clientCapabilities uri version text newText

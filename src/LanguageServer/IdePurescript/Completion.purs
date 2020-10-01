@@ -5,7 +5,7 @@ import Prelude
 import Data.Array (filter, mapMaybe)
 import Data.Array (length, null) as Arr
 import Data.FoldableWithIndex (foldMapWithIndex)
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toNullable)
 import Data.String (Pattern(..), Replacement(..), indexOf, joinWith, length, replaceAll, split, toUpper)
@@ -20,6 +20,7 @@ import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (TextDocumentPositionParams)
 import LanguageServer.IdePurescript.Commands (addCompletionImport)
 import LanguageServer.IdePurescript.Config as Config
+import LanguageServer.IdePurescript.Imports (showNS)
 import LanguageServer.IdePurescript.SuggestionRank (Ranking(..), cmapRanking)
 import LanguageServer.IdePurescript.SuggestionRank as SuggestionRank
 import LanguageServer.IdePurescript.Types (ServerState)
@@ -86,12 +87,12 @@ getCompletions docs settings state ({ textDocument, position }) = do
         # over CompletionItem (_
           { textEdit = toNullable $ Just $ edit text prefix
           })
-    convert uri sugg@(IdentSuggestion { origMod, exportMod, identifier, qualifier, suggestType, prefix, valueType, exportedFrom, documentation }) =
+    convert uri sugg@(IdentSuggestion { origMod, exportMod, identifier, qualifier, suggestType, prefix, valueType, exportedFrom, documentation, namespace }) =
         completionItem identifier (convertSuggest suggestType)
         # over CompletionItem (_
           { detail = toNullable $ Just valueType
           , documentation = toNullable $ Just $ markupContent $ (fromMaybe "" documentation) <> exportText
-          , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri (show suggestType)
+          , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri (maybe "" showNS namespace)
           , textEdit = toNullable $ Just $ edit identifier prefix
           , sortText = toNullable $ Just $ rankText <> "." <> identifier
           })
