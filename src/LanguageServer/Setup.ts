@@ -18,7 +18,7 @@ exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeP
                 // Tell the client that the server support code complete
                 completionProvider: {
                     resolveProvider: false,
-                    triggerCharacters: []
+                    triggerCharacters: ["."]
                 },
                 hoverProvider: true,
                 definitionProvider: true,

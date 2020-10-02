@@ -18,7 +18,7 @@ exports.initConnection = function (commands) { return function (cb) { return fun
                 // Tell the client that the server support code complete
                 completionProvider: {
                     resolveProvider: false,
-                    triggerCharacters: []
+                    triggerCharacters: ["."]
                 },
                 hoverProvider: true,
                 definitionProvider: true,
