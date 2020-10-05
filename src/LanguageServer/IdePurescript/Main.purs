@@ -38,7 +38,7 @@ import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.IdePurescript.FoldingRanges (getFoldingRanges)
 import LanguageServer.IdePurescript.Formatting (getFormattedDocument)
-import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules, organiseImports)
+import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules, organiseImports, organiseImportsDiagnostic)
 import LanguageServer.IdePurescript.References (getReferences)
 import LanguageServer.IdePurescript.Search (search)
 import LanguageServer.IdePurescript.Server (getEnvPursIdeSources, loadAll, retry, startServer')
@@ -227,7 +227,7 @@ main' { filename: logFile, config: cmdLineConfig } = do
     let uri = getUri document
     c <- liftEffect $ Ref.read config
     s <- liftEffect $ Ref.read state
-
+    organiseDiagnostics <- organiseImportsDiagnostic s logError document
     when (Config.fastRebuild c) do 
       liftEffect $ sendDiagnosticsBegin conn
       { pscErrors, diagnostics } <- getDiagnostics uri c s
@@ -242,7 +242,7 @@ main' { filename: logFile, config: cmdLineConfig } = do
           diagnostics = Object.insert (un DocumentUri uri) pscErrors (s1.diagnostics)
         , modulesFile = Nothing -- Force reload of modules on next request
         }) s) state
-        publishDiagnostics conn { uri, diagnostics: fileDiagnostics }
+        publishDiagnostics conn { uri, diagnostics: fileDiagnostics <> organiseDiagnostics }
         sendDiagnosticsEnd conn
 
   let onBuild docs c s arguments = do

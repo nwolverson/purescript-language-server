@@ -7,6 +7,7 @@ import Data.Array (catMaybes, concat, filter, foldl, head, length, mapMaybe, nub
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (un)
+import Data.Nullable as Nullable
 import Data.String (null, trim)
 import Data.String.Regex (regex)
 import Data.String.Regex.Flags (global, noFlags)
@@ -22,20 +23,21 @@ import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.IdePurescript.Assist (fixTypoActions)
 import LanguageServer.IdePurescript.Build (positionToRange)
-import LanguageServer.IdePurescript.Commands (Replacement, build, replaceAllSuggestions, replaceSuggestion, typedHole)
+import LanguageServer.IdePurescript.Commands (Replacement, build, organiseImports, replaceAllSuggestions, replaceSuggestion, typedHole)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (TextDocument, getTextAtRange, getVersion)
-import LanguageServer.Types (Command, DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), readRange, workspaceEdit)
+import LanguageServer.Types (Command, Diagnostic(..), DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), readRange, workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array Command)
-getActions documents settings state@(ServerState { diagnostics, conn: Just conn }) { textDocument, range } =
+getActions documents settings state@(ServerState { diagnostics, conn: Just conn }) { textDocument, range, context } =
   case Object.lookup (un DocumentUri $ docUri) diagnostics of
     Just errs -> do
       codeActions <- traverse commandForCode errs
       pure $
         (catMaybes $ map asCommand errs)
+        <> (catMaybes $ map diagnosticAsCommand context.diagnostics)
         <> fixAllCommand "Apply all suggestions" errs
         <> fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode && maybe false (\pos -> intersects (positionToRange pos) range) position) errs)
         <> concat codeActions
@@ -48,6 +50,10 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn 
       , intersects (positionToRange position) range = do
       Just $ replaceSuggestion (getTitle errorCode) docUri replacement replaceRange
     asCommand _ = Nothing
+
+    diagnosticAsCommand (Diagnostic { code }) | Nullable.toMaybe code == Just "HintOrganiseImports" =
+      Just $ organiseImports docUri
+    diagnosticAsCommand _ = Nothing
 
     getReplacementRange (RebuildError { position: Just position, suggestion: Just (PscSuggestion { replacement, replaceRange }) }) =
       Just $ { replacement, range: range' }
@@ -80,7 +86,6 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn 
         x | isUnknownToken x
           , { startLine, startColumn } <- position ->
             fixTypoActions documents settings state docUri (startLine-1) (startColumn-1)
-            -- singleton $ fixTypo docUri (startLine-1) (startColumn-1)
         _ -> pure []
     commandForCode _ = pure []
 

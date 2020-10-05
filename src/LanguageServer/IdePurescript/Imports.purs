@@ -5,15 +5,18 @@ import Prelude
 import Control.Error.Util (hush)
 import Control.Monad.Except (runExcept)
 import Data.Array (fold, singleton, (:))
+import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Foldable (all)
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (un, unwrap)
 import Data.Nullable (toNullable)
+import Data.Nullable as Nullable
+import Data.String.Utils (lines, startsWith)
+import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign (Foreign, readString, unsafeToForeign)
-import IdePurescript.Completion (SuggestionType, parseSuggestionType)
 import IdePurescript.Modules (ImportResult(..), addExplicitImport, addModuleImport, addQualifiedImport, organiseModuleImports)
 import IdePurescript.PscIde (getAvailableModules)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
@@ -22,8 +25,8 @@ import LanguageServer.Handlers (applyEdit)
 import LanguageServer.IdePurescript.Config (autocompleteAddImport, preludeModule)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeMinimalWorkspaceEdit)
-import LanguageServer.TextDocument (TextDocument, getText, getVersion)
-import LanguageServer.Types (DocumentStore, DocumentUri(DocumentUri), Settings, WorkspaceEdit)
+import LanguageServer.TextDocument (TextDocument, getText, getUri, getVersion)
+import LanguageServer.Types (Diagnostic(..), Position(..), DocumentStore, DocumentUri(DocumentUri), Range(..), Settings, WorkspaceEdit)
 import LanguageServer.Uri (uriToFilename)
 import PscIde.Command as C
 
@@ -66,6 +69,7 @@ parseNS "NSKind" = Just C.NSKind
 parseNS "NSType" = Just C.NSType
 parseNS _ = Nothing
 
+showNS :: C.Namespace -> String
 showNS C.NSValue = "NSValue"
 showNS C.NSKind = "NSKind"
 showNS C.NSType = "NSType"
@@ -162,7 +166,7 @@ organiseImports log docs config state args = do
       version <- liftEffect $ getVersion doc
       text <- liftEffect $ getText doc
       fileName <- liftEffect $ uriToFilename $ DocumentUri uri
-      res <- organiseModuleImports modules port' fileName text
+      res <- organiseModuleImports log modules port' fileName text
       case res of
         Just { result } -> do
           let edit = makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
@@ -178,3 +182,23 @@ organiseImports log docs config state args = do
 
     where
     successResult = unsafeToForeign $ toNullable Nothing
+
+organiseImportsDiagnostic :: ServerState -> (ErrorLevel -> String -> Effect Unit) -> TextDocument -> Aff (Array Diagnostic)
+organiseImportsDiagnostic s logError document = do
+  let uri = getUri document
+  version <- liftEffect $ getVersion document
+  text <- liftEffect $ getText document
+  fileName <- liftEffect $ uriToFilename uri
+  res <- organiseModuleImports logError (un ServerState s).modules (fromMaybe 0 (un ServerState s).port) fileName text
+  let lastImportLine = Array.findLastIndex (startsWith "import ") (lines text)
+  liftEffect $ case res of
+    -- Should we offer reorganise imports - will it do anything?
+    Just { result } | result /= text -> do
+      pure $ Array.singleton $ Diagnostic
+        { range: Range { start: Position { line: 0, character: 0 }, end: Position { line: fromMaybe 0 lastImportLine, character: 0 } }
+        , severity: Nullable.toNullable $ Just 4
+        , code: Nullable.toNullable $ Just "HintOrganiseImports"
+        , source: Nullable.toNullable Nothing
+        , message: "File imports are not in the compiler's standard formatting"
+        }
+    _ -> pure []

@@ -91,6 +91,8 @@ fixTypo uri row char = c fixTypoCmd $ Just $ [ unsafeToForeign uri, unsafeToFore
 fixTypo' :: String -> DocumentUri -> Int -> Int -> Foreign -> Command
 fixTypo' x uri row char tinfo = c (CommandInfo x "fixTypo") $ Just $ [ unsafeToForeign uri, unsafeToForeign row, unsafeToForeign char, tinfo ] 
 
+organiseImports :: DocumentUri -> Command
+organiseImports uri = c organiseImportsCmd $ Just $ [ unsafeToForeign uri ]
 
 commands :: Array String
 commands = cmdName <$> 

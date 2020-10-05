@@ -38,7 +38,7 @@ import Effect (Effect)
 import Effect.Aff (Aff, attempt)
 import Effect.Class (liftEffect)
 import Foreign.Object as Object
-import IdePurescript.Completion as Completion
+import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import IdePurescript.Regex (replace', match', test')
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
@@ -235,18 +235,19 @@ addQualifiedImport state port fileName text moduleName qualifier =
     isThisModule = Just moduleName == state.main
 
 
-organiseModuleImports :: State -> Int -> String -> String
+organiseModuleImports :: Notify -> State -> Int -> String -> String
   -> Aff (Maybe { state :: State, result :: String })
-organiseModuleImports state port fileName text = do
+organiseModuleImports log state port fileName text = do
   res <- withTempFile fileName text addBogusImport
-  pure $ case res of
+  case res of
     UpdatedImports result -> do
 
       let result' = intercalate "\n" $ 
                       Array.filter (not <<<  String.contains (Pattern qualifier)) $
                       lines result
-      Just { state, result: result' }
-    _ -> Nothing
+      liftEffect $ log Info (show $ lines result')
+      pure $ Just { state, result: result' }
+    _ ->pure Nothing
   where
   qualifier = "__IDE_IMPORT_HACK"
   addBogusImport tmpFile = P.qualifiedImport port tmpFile (Just tmpFile) "Prim" qualifier

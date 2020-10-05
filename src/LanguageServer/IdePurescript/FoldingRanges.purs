@@ -2,7 +2,6 @@ module LanguageServer.IdePurescript.FoldingRanges where
 
 import Prelude
 import Data.Array (findIndex, findLastIndex, fromFoldable)
-import Data.Foldable (length)
 import Data.Maybe (Maybe)
 import Data.Nullable as Nullable
 import Data.String.CodeUnits as CodeUnits
@@ -13,12 +12,11 @@ import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.String.Utils (startsWith)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
-import LanguageServer.Console (info)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (FoldingRangesParams)
 import LanguageServer.IdePurescript.Types (ServerState)
 import LanguageServer.TextDocument (getText, getVersion)
-import LanguageServer.Types (Connection, DocumentStore, FoldingRange(..), Settings, TextDocumentIdentifier(..))
+import LanguageServer.Types (DocumentStore, FoldingRange(..), Settings, TextDocumentIdentifier(..))
 
 getFoldingRanges :: DocumentStore -> Settings -> ServerState -> FoldingRangesParams -> Aff (Array FoldingRange)
 getFoldingRanges docs settings state { textDocument: TextDocumentIdentifier textDocId } =

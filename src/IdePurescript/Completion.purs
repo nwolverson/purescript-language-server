@@ -14,11 +14,10 @@ import Data.String.Utils (startsWith)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff)
-import IdePurescript.PscIde (getAvailableModules, getCompletion, getCompletion')
+import IdePurescript.PscIde (getAvailableModules, getCompletion')
 import IdePurescript.Regex (match', test')
 import IdePurescript.Tokens (identPart, modulePart, moduleRegex)
 import PscIde.Command (CompletionOptions(..), TypeInfo(..))
-import PscIde.Command as C
 import PscIde.Command as C
 
 type ModuleInfo =

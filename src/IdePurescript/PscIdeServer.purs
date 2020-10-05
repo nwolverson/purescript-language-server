@@ -31,8 +31,6 @@ import Node.Stream (onDataString)
 import PscIde.Server (Executable(Executable), LogLevel, defaultServerArgs, getSavedPort, pickFreshPort, savePort)
 import PscIde.Server as S
 
-import IdePurescript.Completion as IdeCompletion
-
 type Port = Int
 
 data ServerStartResult =
