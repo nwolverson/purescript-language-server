@@ -79,6 +79,15 @@ Config may be supplied via client-push on startup (`workspace.didChangeConfigura
 ## Config
 See [config defined in vscode plugin](https://github.com/nwolverson/vscode-ide-purescript/blob/master/package.json).
 
+### Usage with alternate backends
+
+When using the language server together with alternate backends, the only requirement is to stop `purs ide server` from attempting to generate JS when rebuilding, this is done via the config
+
+```json
+"purescript.codegenTargets": [ "corefn" ]
+```
+
+(and you should make sure the build command is in accordance with that, if used, eg specify `backend` in `spago` config).
 
 ## Commands
 
