@@ -4,8 +4,8 @@ import Prelude
 
 import Control.Monad.Except (runExcept)
 import Data.Array (catMaybes, concat, filter, foldl, head, length, mapMaybe, nubByEq, singleton, sortWith, (:))
-import Data.Either (Either(..))
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Either (Either(..), either)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Newtype (un)
 import Data.Nullable as Nullable
 import Data.String (null, trim)
@@ -19,28 +19,50 @@ import Foreign.Index ((!))
 import Foreign.Object as Object
 import IdePurescript.QuickFix (getTitle, isImport, isUnknownToken)
 import IdePurescript.Regex (replace', test')
+import LanguageServer.Console (log)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.IdePurescript.Assist (fixTypoActions)
 import LanguageServer.IdePurescript.Build (positionToRange)
 import LanguageServer.IdePurescript.Commands (Replacement, build, organiseImports, replaceAllSuggestions, replaceSuggestion, typedHole)
+import LanguageServer.IdePurescript.Commands as Commands
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (TextDocument, getTextAtRange, getVersion)
-import LanguageServer.Types (Command, Diagnostic(..), DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), readRange, workspaceEdit)
+import LanguageServer.Types (ClientCapabilities, CodeAction(..), CodeActionKind(..), CodeActionResult, Command(..), Diagnostic(..), DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionEmpty, codeActionResult, codeActionSource, codeActionSourceOrganizeImports, readRange, workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
-getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array Command)
-getActions documents settings state@(ServerState { diagnostics, conn: Just conn }) { textDocument, range, context } =
+m = Nullable.toMaybe
+
+codeActionLiteralsSupported :: ClientCapabilities -> Boolean
+codeActionLiteralsSupported c = c #
+  (_.textDocument >>> m) >>= (_.codeAction >>> m) >>= (_.codeActionLiteralSupport >>> m) # isJust
+
+codeActionToCommand :: Maybe ClientCapabilities -> Either CodeAction Command -> Maybe CodeActionResult
+codeActionToCommand capabilities action = codeActionResult <$>
+  if supportsLiteral then
+    Just action
+  else
+    either convert (Just <<< Right) action
+  where
+  supportsLiteral = maybe true codeActionLiteralsSupported capabilities
+  convert (CodeAction { command }) | Just c <- m command = Just $ Right c
+  convert _ = Nothing
+
+getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array CodeActionResult)
+getActions documents settings state@(ServerState { diagnostics, conn: Just conn, clientCapabilities }) { textDocument, range, context } =
   case Object.lookup (un DocumentUri $ docUri) diagnostics of
-    Just errs -> do
+    Just errs -> mapMaybe (codeActionToCommand clientCapabilities) <$> do
+      liftEffect$ log conn $ show clientCapabilities
+      liftEffect$ log conn $ "Literals supported: " <> show (codeActionLiteralsSupported <$> clientCapabilities)
+      
       codeActions <- traverse commandForCode errs
       pure $
-        (catMaybes $ map asCommand errs)
-        <> (catMaybes $ map diagnosticAsCommand context.diagnostics)
-        <> fixAllCommand "Apply all suggestions" errs
-        <> fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode && maybe false (\pos -> intersects (positionToRange pos) range) position) errs)
-        <> concat codeActions
+        (map Right $ catMaybes $ map asCommand errs)
+        <> (map Right $ fixAllCommand "Apply all suggestions" errs)
+        <> organiseImports
+        <> (allImportSuggestions errs)
+        <> (map Right $ concat codeActions)
     _ -> pure []
   where
     docUri = _.uri $ un TextDocumentIdentifier textDocument
@@ -51,15 +73,18 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn 
       Just $ replaceSuggestion (getTitle errorCode) docUri replacement replaceRange
     asCommand _ = Nothing
 
-    diagnosticAsCommand (Diagnostic { code }) | Nullable.toMaybe code == Just "HintOrganiseImports" =
-      Just $ organiseImports docUri
-    diagnosticAsCommand _ = Nothing
+    organiseImports = [ Left $ commandAction (CodeActionKind $ "source.organizeImports") (Commands.organiseImports docUri) ]
 
     getReplacementRange (RebuildError { position: Just position, suggestion: Just (PscSuggestion { replacement, replaceRange }) }) =
       Just $ { replacement, range: range' }
       where
       range' = positionToRange $ fromMaybe position replaceRange
     getReplacementRange _ = Nothing
+
+    allImportSuggestions errs = map (Left <<< commandAction codeActionEmpty) $
+      -- fixAllCommand "Organize Imports" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode ) errs)
+        fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode && 
+          maybe false (\pos -> intersects (positionToRange pos) range) position) errs)
 
     fixAllCommand text rebuildErrors = if length replacements > 0 then [ replaceAllSuggestions text docUri replacements ] else [ ]
       where
@@ -92,6 +117,13 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn 
     intersects (Range { start, end }) (Range { start: start', end: end' }) = start <= end' && start' <= end
 
 getActions _ _ _ _ = pure []
+
+commandAction kind c@(Command { title }) = CodeAction { title, kind, isPreferred: false, edit: Nullable.toNullable Nothing
+                                                      , command: Nullable.toNullable $ Just c }
+  
+  -- codeActionSourceOrganizeImports
+  -- codeActionEmpty
+ 
 
 
 

@@ -182,23 +182,3 @@ organiseImports log docs config state args = do
 
     where
     successResult = unsafeToForeign $ toNullable Nothing
-
-organiseImportsDiagnostic :: ServerState -> (ErrorLevel -> String -> Effect Unit) -> TextDocument -> Aff (Array Diagnostic)
-organiseImportsDiagnostic s logError document = do
-  let uri = getUri document
-  version <- liftEffect $ getVersion document
-  text <- liftEffect $ getText document
-  fileName <- liftEffect $ uriToFilename uri
-  res <- organiseModuleImports logError (un ServerState s).modules (fromMaybe 0 (un ServerState s).port) fileName text
-  let lastImportLine = Array.findLastIndex (startsWith "import ") (lines text)
-  liftEffect $ case res of
-    -- Should we offer reorganise imports - will it do anything?
-    Just { result } | result /= text -> do
-      pure $ Array.singleton $ Diagnostic
-        { range: Range { start: Position { line: 0, character: 0 }, end: Position { line: fromMaybe 0 lastImportLine, character: 0 } }
-        , severity: Nullable.toNullable $ Just 4
-        , code: Nullable.toNullable $ Just "HintOrganiseImports"
-        , source: Nullable.toNullable Nothing
-        , message: "File imports are not in the compiler's standard formatting"
-        }
-    _ -> pure []

@@ -4,6 +4,7 @@ import Prelude
 
 import Data.Array (concat, groupBy, sortWith, (:))
 import Data.Array.NonEmpty (toNonEmpty)
+import Data.Either (Either, either)
 import Data.Maybe (Maybe(..), fromMaybe, isNothing)
 import Data.Newtype (class Newtype, over)
 import Data.NonEmpty (foldl1, (:|))
@@ -13,6 +14,7 @@ import Foreign (F, Foreign, readInt)
 import Foreign.Index ((!))
 import Foreign.Object (Object)
 import Foreign.Object as Object
+import Unsafe.Coerce (unsafeCoerce)
 
 foreign import data Connection :: Type
 foreign import data DocumentStore :: Type
@@ -222,15 +224,20 @@ newtype Hover = Hover { contents :: MarkupContent, range :: Nullable Range }
 
 newtype Command = Command { title :: String, command :: String, arguments :: Nullable (Array Foreign) }
 
-newtype FoldingRange = FoldingRange 
-  { startLine :: Int
-  , startCharacter :: Nullable Int
-  , endLine :: Int
-  , endCharacter :: Nullable Int
-  , kind :: Nullable String -- | comment, imports, region
+derive instance newtypeCommand :: Newtype Command _
+
+newtype CodeAction = CodeAction 
+  { title :: String
+  , kind :: CodeActionKind
+  , isPreferred :: Boolean
+  , edit :: Nullable WorkspaceEdit
+  , command :: Nullable Command
   }
 
-derive instance newtypeCommand :: Newtype Command _
+foreign import data CodeActionResult :: Type
+
+codeActionResult :: Either CodeAction Command -> CodeActionResult
+codeActionResult = either unsafeCoerce unsafeCoerce
 
 newtype TextEdit = TextEdit { range :: Range, newText :: String }
 
@@ -326,9 +333,33 @@ intToFileChangeType = case _ of
   
 newtype FileEvent = FileEvent { uri :: DocumentUri, type :: FileChangeTypeCode }
 
+newtype FoldingRange = FoldingRange 
+  { startLine :: Int
+  , startCharacter :: Nullable Int
+  , endLine :: Int
+  , endCharacter :: Nullable Int
+  , kind :: Nullable String -- | comment, imports, region
+  }
 
-type ClientCapabilities = { workspace :: Nullable WorkspaceClientCapabilities }
+type ClientCapabilities = { workspace :: Nullable WorkspaceClientCapabilities, textDocument :: Nullable TextDocumentClientCapabilities }
 type WorkspaceClientCapabilities = { applyEdit :: Nullable Boolean, workspaceEdit :: Nullable WorkspaceEditClientCapabilities }
+
+type TextDocumentClientCapabilities = { codeAction :: Nullable CodeActionClientCapabilities }
+
+type CodeActionClientCapabilities = { codeActionLiteralSupport :: Nullable { codeActionKind :: { valueSet :: Array CodeActionKind }}, isPreferredSupport :: Nullable Boolean }
+
+newtype CodeActionKind = CodeActionKind String
+instance showCodeActionKind :: Show CodeActionKind where
+  show (CodeActionKind s) = "CodeActionKind " <> s
+
+codeActionEmpty = CodeActionKind ""
+codeActionQuickFix = CodeActionKind "quickfix"
+codeActionRefactor = CodeActionKind "refactor"
+codeActionRefactorExtract = CodeActionKind "refactor.extract"
+codeActionRefactorInline = CodeActionKind "refactor.inline"
+codeActionRefactorRewrite = CodeActionKind "refactor.rewrite"
+codeActionSource = CodeActionKind "source"
+codeActionSourceOrganizeImports = CodeActionKind "source.organizeImports"
 
 -- https://microsoft.github.io/language-server-protocol/specifications/specification-current/#workspaceEditClientCapabilities
 type WorkspaceEditClientCapabilities = { documentChanges :: Nullable Boolean }
