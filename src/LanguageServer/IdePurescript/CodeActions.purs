@@ -81,10 +81,12 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn,
       range' = positionToRange $ fromMaybe position replaceRange
     getReplacementRange _ = Nothing
 
+
     allImportSuggestions errs = map (Left <<< commandAction codeActionEmpty) $
       -- fixAllCommand "Organize Imports" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode ) errs)
-        fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode && 
-          maybe false (\pos -> intersects (positionToRange pos) range) position) errs)
+        fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode) errs)
+        -- TODO this seems to filter out all but 1 error?
+          -- maybe false (\pos -> intersects (positionToRange pos) range) position) errs)
 
     fixAllCommand text rebuildErrors = if length replacements > 0 then [ replaceAllSuggestions text docUri replacements ] else [ ]
       where
