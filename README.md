@@ -53,6 +53,10 @@ Use [vscode-ide-purescript](https://github.com/nwolverson/vscode-ide-purescript)
 
 Use [atom-ide-purescript](https://github.com/nwolverson/atom-ide-purescript).
 
+### Vim/LanguageClient_neovim
+
+Use [vimmer-ps](https://github.com/sriharshachilakapati/vimmer-ps).
+
 ### Vim/CoC
 
 Configuration with [coc.nvim](https://github.com/neoclide/coc.nvim/wiki/Language-servers#purescript):
