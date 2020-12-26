@@ -68,9 +68,16 @@ Configuration with [coc.nvim](https://github.com/neoclide/coc.nvim/wiki/Language
       "filetypes": ["purescript"],
       "trace.server": "off",
       "rootPatterns": ["bower.json", "psc-package.json", "spago.dhall"],
+      "initializationOptions" : { 
+        "addNpmPath"     : true,
+        "addSpagoSources": true,
+        "buildCommand"   : "spago build --purs-args --json-errors",
+        "autocompleteAllModules": true,
+        "autocompleteAddImport": true,
+        "fastRebuild": true
+      },
       "settings": {
         "purescript": {
-          "addSpagoSources": true // etc
         }
       }
     }
