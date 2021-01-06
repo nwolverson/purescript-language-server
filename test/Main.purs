@@ -4,9 +4,10 @@ import Prelude
 
 import Data.Array (concat)
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Nullable (toMaybe)
+import Data.Nullable (toMaybe, toNullable)
+import Effect (Effect)
 import LanguageServer.Text (makeMinimalWorkspaceEdit)
-import LanguageServer.Types (DocumentUri(..), Position(..), Range(..), TextDocumentEdit(..), TextEdit(..), WorkspaceEdit(..))
+import LanguageServer.Types (DocumentUri(..), Position(..), Range(..), TextDocumentEdit(..), TextEdit(..), WorkspaceEdit(..), ClientCapabilities)
 import Test.Unit (suite, test)
 import Test.Unit.Assert as Assert
 import Test.Unit.Main (runTest)
@@ -27,33 +28,45 @@ mkEdit n m t = TextEdit
     }
   , newText: t } 
 
-main :: _
+capabilities :: ClientCapabilities
+capabilities = 
+  { workspace: toNullable $ Just 
+    { applyEdit: toNullable $ Just true
+      , workspaceEdit: toNullable $ Just $ 
+        { documentChanges: toNullable $ Just true } 
+    }
+  }
+  
+makeEdit :: String -> String -> Maybe WorkspaceEdit
+makeEdit = makeMinimalWorkspaceEdit (Just capabilities) (DocumentUri "uri") 1.0
+
+main :: Effect Unit
 main = runTest do
   suite "workspace edit" do
     test "update line" do
-      let edit = makeMinimalWorkspaceEdit Nothing (DocumentUri "uri") 1.0 "A\nB\nC\n" "A\nXX\nC\n"
+      let edit = makeEdit "A\nB\nC\n" "A\nXX\nC\n"
       Assert.equal (Just [ mkEdit 1 2 "XX\n"]) (getEdit <$> edit)
     test "insert line" do
-      let edit = makeMinimalWorkspaceEdit Nothing (DocumentUri "uri") 1.0 "A\nC\n" "A\nB\nC\n"
+      let edit = makeEdit "A\nC\n" "A\nB\nC\n"
       Assert.equal (Just [ mkEdit 1 1 "B\n"]) (getEdit <$> edit)
     test "insert line with more context" do
-      let edit = makeMinimalWorkspaceEdit Nothing (DocumentUri "uri") 1.0 "A\n1\n2\n3\n4\n5\nC\n" "A\n1\n2\n3\nB\n4\n5\nC\n"
+      let edit = makeEdit "A\n1\n2\n3\n4\n5\nC\n" "A\n1\n2\n3\nB\n4\n5\nC\n"
       Assert.equal (Just [ mkEdit 4 4 "B\n"]) (getEdit <$> edit)
     test "no difference" do
-      let edit = makeMinimalWorkspaceEdit Nothing (DocumentUri "uri") 1.0 "A\nC\n" "A\nC\n"
+      let edit = makeEdit "A\nC\n" "A\nC\n"
       Assert.equal (Nothing) (getEdit <$> edit)
     test "first line changed" do
-      let edit = makeMinimalWorkspaceEdit Nothing (DocumentUri "uri") 1.0 "A\nB\nC\n" "X\nB\nC\n"
+      let edit = makeEdit "A\nB\nC\n" "X\nB\nC\n"
       Assert.equal (Just [ mkEdit 0 1 "X\n"]) (getEdit <$> edit)
     test "last line changed" do
-      let edit = makeMinimalWorkspaceEdit Nothing (DocumentUri "uri") 1.0 "A\nB\nC\n" "A\nB\nX\n"
+      let edit = makeEdit "A\nB\nC\n" "A\nB\nX\n"
       Assert.equal (Just [ mkEdit 2 3 "X\n"]) (getEdit <$> edit)
 
     test "CRLF" do
-      let edit = makeMinimalWorkspaceEdit Nothing (DocumentUri "uri") 1.0 "A\r\nC\r\n" "A\r\nB\r\nC\r\n"
+      let edit = makeEdit "A\r\nC\r\n" "A\r\nB\r\nC\r\n"
       Assert.equal (Just [ mkEdit 1 1 "B\n"]) (getEdit <$> edit)
 
     test "CRLF old-only" do
       -- If I have a CRLF file for some reason but IDE server gives me back LF
-      let edit = makeMinimalWorkspaceEdit Nothing (DocumentUri "uri") 1.0 "A\r\nC\r\n" "A\nB\nC\n"
+      let edit = makeEdit "A\r\nC\r\n" "A\nB\nC\n"
       Assert.equal (Just [ mkEdit 1 1 "B\n"]) (getEdit <$> edit)
