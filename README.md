@@ -45,6 +45,10 @@ And then use the resulting executable, e.g. `purescript-language-server --stdio`
 
 This language server is based on vscode-languageserver-node which means it should support `--stdio`, `--socket=[number]`, `--node-ipc` or `--pipe` methods of communication, see [vscode-languageserver-node](https://github.com/Microsoft/vscode-languageserver-node) for details.
 
+### Formatting provider
+
+The `purescript-language-server` comes with built-in support for [purty](https://gitlab.com/joneshf/purty) for formatting PureScript code. `purty` itself is not bundled with `purescript-language-server`, so you must either install it globally (e.g. `npm install -g purty`), or locally in your project (e.g. `npm install --save-dev purty`). When a formatting operation is requested via a language server command, `purescript-language-server` will attempt to find `purty` in your `$PATH`. If you're using a local `purty` install, you can configure the language server to include your local `npm` install path (i.e. `./node_modules/.bin`) using the `purescript.addNpmPath` setting. See below for information on configuring the language server for different editors.
+
 ### VSCode 
 
 Use [vscode-ide-purescript](https://github.com/nwolverson/vscode-ide-purescript).
@@ -59,9 +63,12 @@ Use [vimmer-ps](https://github.com/sriharshachilakapati/vimmer-ps).
 
 ### Vim/CoC
 
-Configuration with [coc.nvim](https://github.com/neoclide/coc.nvim/wiki/Language-servers#purescript):
+Configuration with [coc.nvim](https://github.com/neoclide/coc.nvim/wiki/Language-servers#purescript)
+
+Run `:CocConfig` and add `"purescript"` in the `"languageserver"` section as follows:
 
 ```jsonc
+  "languageserver": {
     "purescript": {
       "command": "purescript-language-server",
       "args": ["--stdio"],
@@ -70,10 +77,37 @@ Configuration with [coc.nvim](https://github.com/neoclide/coc.nvim/wiki/Language
       "rootPatterns": ["bower.json", "psc-package.json", "spago.dhall"],
       "settings": {
         "purescript": {
-          "addSpagoSources": true // etc
+          "addSpagoSources": true,
+          "addNpmPath": true // Set to true if using a local purty install for formatting
+          // etc
         }
       }
     }
+  }
+```
+
+CoC can be configured to format your code using the `purescript-language-server`'s formatting provider, which is backed by `purty`. If you don't have CoC-based code formatting setup in CoC already, you can add a command or key mapping like this:
+
+```vim
+command! -nargs=0  Format      :call CocAction('format')
+nmap               <leader>f   :Format<cr>
+```
+
+If you want the formatter to run on save, run `:CocConfig` and add `"purescript"` to the `"coc.preferences.formatOnSaveFiletypes"`:
+
+```jsonc
+  "coc.preferences.formatOnSaveFiletypes": [
+    // ...other languages
+    "purescript"
+  ]
+
+```
+
+You can also organize PureScript imports in Vim with a command and/or key mapping like this:
+
+```vim
+command! -nargs=0  OrganizeImports :call CocAction('runCommand', 'editor.action.organizeImport')
+nmap               <leader>o       :OrganizeImports<cr>
 ```
 
 ### Other clients
