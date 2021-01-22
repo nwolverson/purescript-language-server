@@ -3,18 +3,20 @@ module IdePurescript.QuickFix where
 import Prelude
 
 import Data.Foldable (elem)
-import Data.String (null)
+import Data.String (null, trim)
 import Data.String.Regex (regex)
-import Data.String.Regex.Flags (global, noFlags)
+import Data.String.Regex.Flags (noFlags)
 import IdePurescript.Regex (replace', test')
+import Data.String.Regex.Flags (global, noFlags)
 
 -- | Modify suggestion replacement text, removing extraneous newlines
 getReplacement :: String -> String -> String
-getReplacement replacement extraText =
-  let trailingNewline = test' (regex "\n\\s+$" noFlags) replacement
-      addNewline = trailingNewline && (not $ null extraText)
-  in
-      replace' (regex "\\s+\n" global) "\n" replacement
+getReplacement replacement' extraText =
+  (trim $ replace' (regex "\\s+\n" global) "\n" replacement')
+  <> if addNewline then "\n" else ""
+  where
+  trailingNewline = test' (regex "\n\\s+$" noFlags) replacement'
+  addNewline = trailingNewline && (not $ null extraText)
 
 -- | Get a title which explains what applying a compiler suggestion will do
 getTitle :: String -> String

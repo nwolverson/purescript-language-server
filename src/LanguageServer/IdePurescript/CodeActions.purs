@@ -17,7 +17,7 @@ import Effect.Class (liftEffect)
 import Foreign (F, Foreign, readArray, readString)
 import Foreign.Index ((!))
 import Foreign.Object as Object
-import IdePurescript.QuickFix (getTitle, isImport, isUnknownToken)
+import IdePurescript.QuickFix (getReplacement, getTitle, isImport, isUnknownToken)
 import IdePurescript.Regex (replace', test')
 import LanguageServer.Console (log)
 import LanguageServer.DocumentStore (getDocument)
@@ -173,15 +173,6 @@ getReplacementEdit doc { replacement, range } = do
                 else
                 range
   pure $ TextEdit { range: range', newText }
-  where
-    -- | Modify suggestion replacement text, removing extraneous newlines
-    getReplacement :: String -> String -> String
-    getReplacement replacement' extraText =
-      (trim $ replace' (regex "\\s+\n" global) "\n" replacement')
-      <> if addNewline then "\n" else ""
-      where
-      trailingNewline = test' (regex "\n\\s+$" noFlags) replacement'
-      addNewline = trailingNewline && (not $ null extraText)
 
 onReplaceAllSuggestions :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 onReplaceAllSuggestions docs config (ServerState { conn, clientCapabilities }) args =
