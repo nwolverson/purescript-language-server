@@ -5,9 +5,8 @@ import Prelude
 import Data.Foldable (elem)
 import Data.String (null, trim)
 import Data.String.Regex (regex)
-import Data.String.Regex.Flags (noFlags)
-import IdePurescript.Regex (replace', test')
 import Data.String.Regex.Flags (global, noFlags)
+import IdePurescript.Regex (replace', test')
 
 -- | Modify suggestion replacement text, removing extraneous newlines
 getReplacement :: String -> String -> String
