@@ -6,6 +6,7 @@ import Data.Array (concat)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Nullable (toMaybe, toNullable, null)
 import Effect (Effect)
+import IdePurescript.Tokens (identifierAtPoint)
 import LanguageServer.Text (makeMinimalWorkspaceEdit)
 import LanguageServer.Types (DocumentUri(..), Position(..), Range(..), TextDocumentEdit(..), TextEdit(..), WorkspaceEdit(..), ClientCapabilities)
 import Test.Unit (suite, test)
@@ -71,3 +72,19 @@ main = runTest do
       -- If I have a CRLF file for some reason but IDE server gives me back LF
       let edit = makeEdit "A\r\nC\r\n" "A\nB\nC\n"
       Assert.equal (Just [ mkEdit 1 1 "B\n"]) (getEdit <$> edit)
+
+    -- Type at point
+    test "identifierAtPoint: identifies $" do
+      let str = """$"""
+      let result = identifierAtPoint str 0
+      Assert.equal (result <#> _.word) (Just "$")
+    test """identifierAtPoint: identifies <>""" do
+      let str = """ 4 <> 3 """
+      let result = identifierAtPoint str 3
+      Assert.equal (result <#> _.word) (Just """<>""")
+      Assert.equal (result <#> _.range) (Just { left: 3, right: 5 })
+    test """identifierAtPoint: identifies /\""" do
+      let str = """ 4 /\ 3 """
+      let result = identifierAtPoint str 3
+      Assert.equal (result <#> _.word) (Just """/\""")
+      Assert.equal (result <#> _.range) (Just { left: 3, right: 5 })

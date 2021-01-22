@@ -15,7 +15,7 @@ modulePart :: String
 modulePart = """((?:[A-Z][A-Za-z0-9]*\.)*(?:[A-Z][A-Za-z0-9]*))"""
 
 identPart :: String
-identPart = "((?:[a-zA-Z_][a-zA-Z0-9_']*)|[:!#$%&*+\\./<=>?@\\^|~-]+)"
+identPart = """((?:[a-zA-Z_][a-zA-Z0-9_']*)|[:!#$%&*+\./<=>?@\^|~\\-]+)"""
 
 modulePrefix :: String
 modulePrefix = "(?:^|[^A-Za-z_.])(?:" <> modulePart <> """\.)"""
@@ -25,8 +25,8 @@ moduleRegex = regex (modulePrefix <> "?" <> identPart <> "?$") noFlags
 
 identifierAtPoint :: String -> Int -> Maybe { word :: String, range :: WordRange, qualifier :: Maybe String }
 identifierAtPoint line column =
-  let beforeRegex = regex "[a-zA-Z_0-9':!#$%&*+/<=>?@^|~-]*$" noFlags
-      afterRegex = regex "^[a-zA-Z_0-9':!#$%&*+/<=>?@^|~-]*" noFlags
+  let beforeRegex = regex """[a-zA-Z_0-9':!#$%&*+/<=>?@^|~\\-]*$""" noFlags
+      afterRegex = regex """^[a-zA-Z_0-9':!#$%&*+/<=>?@^|~\\-]*""" noFlags
       moduleEndRegex = regex (modulePrefix <> "$") noFlags
       textBefore = take column line
       textAfter = drop column line
