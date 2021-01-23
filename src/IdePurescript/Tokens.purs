@@ -5,9 +5,10 @@ import Prelude
 import Data.Array.NonEmpty as NEA
 import Data.Either (Either, either)
 import Data.Maybe (Maybe(..))
-import Data.String (length, take, drop)
+import Data.String (Pattern(..), contains, drop, length, take)
 import Data.String.Regex (Regex, match, regex)
 import Data.String.Regex.Flags (noFlags)
+import IdePurescript.Regex (test')
 
 type WordRange = { left :: Int, right :: Int }
 
@@ -43,3 +44,11 @@ identifierAtPoint line column =
         in
           Just { word : s<>s', range : wordRange (length s) (length s'), qualifier }
     _, _ -> Nothing
+
+startsWithCapitalLetter :: String -> Boolean
+startsWithCapitalLetter = test' (regex "^[A-Z]" noFlags)
+
+containsArrow :: String -> Boolean
+containsArrow type' =
+  contains (Pattern "->") type' || contains (Pattern "→") type'
+  -- What happens for ->> or "->!"? Can we be more precise to identify functions?

@@ -7,7 +7,7 @@ import Data.Array (concatMap, filter, head, intersect, sortBy, (:))
 import Data.Array as Array
 import Data.Either (Either)
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.String (Pattern(..), contains, indexOf, length)
+import Data.String (Pattern(..), indexOf, length)
 import Data.String.Regex (Regex, regex)
 import Data.String.Regex.Flags (noFlags)
 import Data.String.Utils (startsWith)
@@ -15,8 +15,8 @@ import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff)
 import IdePurescript.PscIde (getAvailableModules, getCompletion')
-import IdePurescript.Regex (match', test')
-import IdePurescript.Tokens (identPart, modulePart, moduleRegex)
+import IdePurescript.Regex (match')
+import IdePurescript.Tokens (containsArrow, identPart, modulePart, moduleRegex, startsWithCapitalLetter)
 import PscIde.Command (CompletionOptions(..), TypeInfo(..))
 import PscIde.Command as C
 
@@ -59,7 +59,6 @@ data SuggestionResult =
   | IdentSuggestion { origMod :: String, exportMod :: String, exportedFrom :: Array String, identifier :: String, qualifier :: Maybe String, valueType :: String, suggestType :: SuggestionType, namespace :: Maybe C.Namespace, prefix :: String, documentation :: Maybe String }
   | QualifierSuggestion { text :: String }
 
-
 getSuggestions :: Int -> {
     line :: String,
     moduleInfo :: ModuleInfo,
@@ -80,7 +79,7 @@ getSuggestions port
     case match' explicitImportRegex line of
       Just [ Just _, Just mod, Just token ] -> do
         let cc ns = Tuple ns <$> getCompletion' Nothing [C.PrefixFilter token, C.NamespaceFilter [ ns ] ] port mainModule Nothing [ mod ] getQualifiedModule opts
-        completions <- traverse cc [ C.NSValue, C.NSType, C.NSKind ]
+        completions <- traverse cc [ C.NSValue, C.NSType ]
         pure $ concatMap (\(Tuple n cs) -> result Nothing token (Just n) <$> cs) completions
       _ -> pure []
   else
@@ -92,7 +91,7 @@ getSuggestions port
           pure $ map (modResult prefix) completions
         else do
           let cc ns = Tuple ns <$> getCompletion' Nothing [C.PrefixFilter token, C.NamespaceFilter [ ns ] ] port mainModule mod ("Prim":modules) getQualifiedModule opts
-          completions <- traverse cc [ C.NSValue, C.NSType, C.NSKind ]
+          completions <- traverse cc [ C.NSValue, C.NSType ]
           pure $ 
             matchingQualifiers token <> 
             concatMap (\(Tuple n cs) -> result mod token (Just n) <$> cs) completions
@@ -125,8 +124,8 @@ getSuggestions port
           case ns of
             Just C.NSKind -> Kind
             Just C.NSType -> Type
-            Just C.NSValue | test' (regex "^[A-Z]" noFlags) identifier -> DCtor
-                           | contains (Pattern "->") type' || contains (Pattern "→") type' -> Function
+            Just C.NSValue   | startsWithCapitalLetter identifier -> DCtor
+                             | containsArrow type' -> Function
             Just C.NSValue -> Value
             Nothing -> Value
           -- if ns == Just C.NSKind then Kind
