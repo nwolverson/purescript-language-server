@@ -7,7 +7,7 @@ import Control.Monad.Except (runExcept)
 import Data.Array (fold, singleton, (:))
 import Data.Array as Array
 import Data.Either (Either(..))
-import Data.Foldable (all)
+import Data.Foldable (all, for_)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (un, unwrap)
 import Data.Nullable (toNullable)
@@ -28,6 +28,7 @@ import LanguageServer.Text (makeMinimalWorkspaceEdit)
 import LanguageServer.TextDocument (TextDocument, getText, getUri, getVersion)
 import LanguageServer.Types (Diagnostic(..), Position(..), DocumentStore, DocumentUri(DocumentUri), Range(..), Settings, WorkspaceEdit)
 import LanguageServer.Uri (uriToFilename)
+import LanguageServer.Window as Window
 import PscIde.Command as C
 
 addCompletionImport :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
@@ -87,7 +88,7 @@ addCompletionImportEdit log docs config state@(ServerState { port, modules, conn
           Just mod', Just qual' | noModule (isSameQualified mod' qual') ->
             addQualifiedImport modules port (un DocumentUri uri) text mod' qual'
           Just mod', Nothing | mod' == prelude && noModule (isSameUnqualified prelude) ->
-            addOpenImport modules port (un DocumentUri uri) text mod'
+            addModuleImport modules port (un DocumentUri uri) text mod'
           mod', qual' -> do
             liftEffect $ log Info $ "Adding import of " <> identifier <> " from " <> show mod' <> " with type filter " <> show (showNS <$>  ns)
             addExplicitImport modules port (un DocumentUri uri) text mod' qual' identifier ns
@@ -96,10 +97,19 @@ addCompletionImportEdit log docs config state@(ServerState { port, modules, conn
           let edit = makeMinimalWorkspaceEdit clientCapabilities uri version text newText
           pure $ Right $ maybe [] singleton edit
         AmbiguousImport imps -> liftEffect do
+          liftEffect $ for_ conn (_ `Window.showError`
+            ("Could not import " <> text <> " because there is more than one option"))
           log Warning "Found ambiguous imports"
           pure $ Left $ unsafeToForeign $ (\(C.TypeInfo { module' }) -> module') <$> imps
-        -- Failed import is not unusual - e.g. already existing import will hit this case.
-        FailedImport -> pure $ Right []
+        -- UnnecessaryImport is not unusual - e.g. already existing import will hit this case
+        -- And so will things that are implicitly imported because they live under Prim
+        -- - e.g. Array or String
+        UnnecessaryImport -> do
+          pure $ Right []
+        -- Failed imports are now rare and will display an error
+        FailedImport msg -> do 
+          liftEffect $ for_ conn (_ `Window.showError` ("Failed to import: `" <> identifier <> "`. Error: " <> msg))
+          pure $ Right []
     _ -> pure $ Right [] 
 
     where
@@ -113,14 +123,6 @@ addCompletionImportEdit log docs config state@(ServerState { port, modules, conn
       { moduleName, qualifier: Nothing } -> mod == moduleName
       _ -> false
 
-    -- addModuleImport discards the result data type and wraps it in Maybe. We
-    -- need to add it back for the types to unify.
-    addOpenImport modules port uri text mod =
-      addModuleImport modules port uri text mod <#> case _ of
-        Just r -> r { result = UpdatedImports r.result }
-        Nothing -> { state: modules, result: FailedImport }
-
-
 addModuleImport' :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 addModuleImport' log docs config state args = do
   let ServerState { port, modules, conn, clientCapabilities } = state
@@ -130,14 +132,15 @@ addModuleImport' log docs config state args = do
       version <- liftEffect $ getVersion doc
       text <- liftEffect $ getText doc
       fileName <- liftEffect $ uriToFilename $ DocumentUri uri
-      res <- addModuleImport modules port' fileName text mod'
+      { result: res } <- addModuleImport modules port' fileName text mod'
       case res of
-        Just { result } -> do
+        UpdatedImports result  -> do
           let edit = makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
           case conn, edit of
             Just conn', Just edit' -> void $ applyEdit conn' edit'
             _, _ -> pure unit
-        _ -> pure unit
+        _ -> 
+          pure unit
       pure successResult
 
     _, args'-> do
