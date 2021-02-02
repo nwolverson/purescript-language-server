@@ -1,5 +1,111 @@
 # Changelog
 
+### 0.14.4 
+
+- Ident namespaces - multiple completions requested, to provide correct imports for importing same-named identifiers in different namespaces
+- Organise imports code action - provides a code action to trigger the command purescript.organiseImports, this is of kind source.organizeImports
+
+### 0.14.3
+
+- Add command organiseImports - takes 1 uri param, organises imports …
+
+### 0.14.2
+### 0.14.1
+
+- Temporarily disable broken import namespace filter
+
+### 0.14.0
+
+- Formatting provider using purty
+- Fix some issues in goto definition
+- Fix some issues in find references
+- Change typo code action no longer requires custom LSP client support, instead gives multiple code actions
+- Fix code action range
+- Fix build command parsing
+
+### 0.13.7
+
+- Fix case split/add clause
+
+### 0.13.6
+
+- Server start improvements
+- Fix code actions not working for hole/typo due to range inversion
+- Update obsolete settings 
+
+### 0.13.5
+
+- Published artifacts fix
+
+### 0.13.4
+
+- Filter overlapping edits (better apply-all suggestions)
+- Deduplicate replacments
+
+
+### 0.13.3 
+
+- CWD issues on server start - generally relevant to unusual situations or other LSP clients
+
+### 0.13.2
+
+- Fixing broken release
+
+### 0.13.1 
+
+- check if PURS_IDE_SOURCES env var is being used in startup
+
+### 0.13.0
+
+- allow setting package source globs using PURS_IDE_SOURCES
+- allow Prim modules to be completed
+- new LS pull-based configuration API
+- Complete existing module qualifiers 
+- Startup logging improvements
+
+
+### 0.12.8
+
+- Add fold provider for imports
+
+
+### 0.12.7
+
+Spago support:
+
+- Propagate the entire environment when running the build command. #45
+- Recognise spago.dhall as identifying a Purescript project.
+- Add new config option for calling `spago sources` to get sources globs
+
+### 0.12.6
+
+- Fix relative path issue in diagnostics
+
+### 0.12.5 
+
+- Improve initial load failure case (slow startup)
+
+### 0.12.4
+
+- Correct use of root path/ root uri
+- Update arg parsing, add error log option
+
+### 0.12.3 
+
+- Build error improvements
+
+### 0.12.2
+
+- Allow codegen targets to be specified
+
+### 0.12.1
+
+- Fix incorrect range check suppressing all specific error code actions
+
+### 0.12.0
+
+- PureScript 0.12.0 compat
+
 ### 0.11.0
 
 - Add find references command (requires purs 0.12). Currently works at the value level
