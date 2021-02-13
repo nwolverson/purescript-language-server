@@ -4,7 +4,7 @@ import Prelude
 
 import Data.Array (concat)
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Nullable (toMaybe, toNullable)
+import Data.Nullable (toMaybe, toNullable, null)
 import Effect (Effect)
 import LanguageServer.Text (makeMinimalWorkspaceEdit)
 import LanguageServer.Types (DocumentUri(..), Position(..), Range(..), TextDocumentEdit(..), TextEdit(..), WorkspaceEdit(..), ClientCapabilities)
@@ -35,6 +35,7 @@ capabilities =
       , workspaceEdit: toNullable $ Just $ 
         { documentChanges: toNullable $ Just true } 
     }
+  , textDocument: null
   }
   
 makeEdit :: String -> String -> Maybe WorkspaceEdit
