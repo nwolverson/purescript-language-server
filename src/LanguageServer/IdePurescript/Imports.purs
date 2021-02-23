@@ -125,19 +125,25 @@ addModuleImport' :: Notify -> DocumentStore -> Settings -> ServerState -> Array 
 addModuleImport' log docs config state args = do
   let ServerState { port, modules, conn, clientCapabilities } = state
   case port, (runExcept <<< readString) <$> args of
-    Just port', [ Right mod', qual', Right uri ] -> do
+    Just port', [ Right mod', qual', ident, Right uri ] -> do
       doc <- liftEffect $ getDocument docs (DocumentUri uri)
       version <- liftEffect $ getVersion doc
       text <- liftEffect $ getText doc
       fileName <- liftEffect $ uriToFilename $ DocumentUri uri
-      res <- addModuleImport modules port' fileName text mod'
-      case res of
-        Just { result } -> do
-          let edit = makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
-          case conn, edit of
-            Just conn', Just edit' -> void $ applyEdit conn' edit'
-            _, _ -> pure unit
-        _ -> pure unit
+      edit <- addCompletionImportEdit log docs config state 
+        { identifier: fromMaybe "" $ hush ident
+        , qual: hush qual'
+        , mod: Just mod'
+        , uri: DocumentUri uri
+        }
+        doc 
+        version 
+        text 
+        Nothing
+      case conn, edit of
+        Just conn', Right edits -> do
+          void $ applyEdit conn' (fold edits)
+        _, _ -> pure unit
       pure successResult
 
     _, args'-> do
@@ -146,7 +152,6 @@ addModuleImport' log docs config state args = do
 
     where
     successResult = unsafeToForeign $ toNullable Nothing
-
 
 getAllModules :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 getAllModules log docs config state args =
