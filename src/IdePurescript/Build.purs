@@ -14,6 +14,7 @@ import Effect (Effect)
 import Effect.Aff (Aff, error, makeAff)
 import Effect.Class (liftEffect)
 import Effect.Exception (catchException)
+import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Foreign.Object as Object
 import IdePurescript.Exec (findBins, getPathVar)
@@ -67,17 +68,19 @@ build logCb buildOptions@{ command: Command cmd args, directory, useNpmDir } = d
       Just cp -> do
         logCb Info $ "Running build command: " <> intercalate " " (cmd : args)
         CP.onError cp (cb <<< Left <<< CP.toStandardError)
-        result <- Ref.new ""
-        let res :: String -> Effect Unit
-            res s = Ref.modify_ (_ <> s) result
+        errOutput <- Ref.new ""
+        outOutput <- Ref.new ""
+        let res :: Ref String -> String -> Effect Unit
+            res r s = Ref.modify_ (_ <> s) r
 
-        catchException err $ S.onDataString (CP.stderr cp) Encoding.UTF8 res
-        catchException err $ S.onDataString (CP.stdout cp) Encoding.UTF8 $ logCb Success
+        catchException err $ S.onDataString (CP.stderr cp) Encoding.UTF8 (res errOutput)
+        catchException err $ S.onDataString (CP.stdout cp) Encoding.UTF8 (res outOutput)
 
         CP.onClose cp (\exit -> case exit of
           CP.Normally n | n == 0 || n == 1 -> do
-            pursOutput <- Ref.read result
-            let lines = split (Pattern "\n") pursOutput
+            pursError <- Ref.read (errOutput)
+            pursOutput <- Ref.read (outOutput)
+            let lines = split (Pattern "\n") $ pursError <> pursOutput
                 { yes: json, no: toLog } = Array.partition (\s -> indexOf (Pattern "{\"") s == Just 0) lines
             logCb Info $ joinWith "\n" toLog
             case parsePscOutput <$> json of
