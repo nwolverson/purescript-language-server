@@ -60,9 +60,9 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn,
       pure $
         (map Right $ catMaybes $ map asCommand errs)
         <> (map Right $ fixAllCommand "Apply all suggestions" errs)
-        <> organiseImports
         <> (allImportSuggestions errs)
         <> (map Right $ concat codeActions)
+        <> organiseImports
     _ -> pure []
   where
     docUri = _.uri $ un TextDocumentIdentifier textDocument
