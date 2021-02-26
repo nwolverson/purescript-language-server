@@ -4,7 +4,7 @@ import Prelude
 
 import Control.Error.Util (hush)
 import Control.Monad.Except (runExcept)
-import Data.Array (fold, singleton, (:))
+import Data.Array (fold, fromFoldable, singleton, (:))
 import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Foldable (all)
@@ -125,21 +125,30 @@ addModuleImport' :: Notify -> DocumentStore -> Settings -> ServerState -> Array 
 addModuleImport' log docs config state args = do
   let ServerState { port, modules, conn, clientCapabilities } = state
   case port, (runExcept <<< readString) <$> args of
-    Just port', [ Right mod', qual', ident, Right uri ] -> do
+    Just port', [ Right mod', qual', Right uri ] -> do
       doc <- liftEffect $ getDocument docs (DocumentUri uri)
       version <- liftEffect $ getVersion doc
       text <- liftEffect $ getText doc
       fileName <- liftEffect $ uriToFilename $ DocumentUri uri
-      edit <- addCompletionImportEdit log docs config state 
-        { identifier: fromMaybe "" $ hush ident
-        , qual: hush qual'
-        , mod: Just mod'
-        , uri: DocumentUri uri
-        }
-        doc 
-        version 
-        text 
-        Nothing
+      edit <- case qual' of
+        Right _ ->
+          addCompletionImportEdit log docs config state 
+            { identifier: ""
+            , qual: hush qual'
+            , mod: Just mod'
+            , uri: DocumentUri uri
+            }
+            doc 
+            version 
+            text 
+            Nothing
+        Left _ -> do
+          res <- addModuleImport modules port' fileName text mod'
+          case res of
+            Just { result } -> do
+              pure $ Right $ fromFoldable $ makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
+            Nothing -> pure $ Right []
+
       case conn, edit of
         Just conn', Right edits -> do
           void $ applyEdit conn' (fold edits)
