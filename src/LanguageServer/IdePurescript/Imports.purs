@@ -5,15 +5,11 @@ import Prelude
 import Control.Error.Util (hush)
 import Control.Monad.Except (runExcept)
 import Data.Array (fold, singleton, (:))
-import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Foldable (all, for_)
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (un, unwrap)
 import Data.Nullable (toNullable)
-import Data.Nullable as Nullable
-import Data.String.Utils (lines, startsWith)
-import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign (Foreign, readString, unsafeToForeign)
@@ -25,8 +21,8 @@ import LanguageServer.Handlers (applyEdit)
 import LanguageServer.IdePurescript.Config (autocompleteAddImport, preludeModule)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeMinimalWorkspaceEdit)
-import LanguageServer.TextDocument (TextDocument, getText, getUri, getVersion)
-import LanguageServer.Types (Diagnostic(..), Position(..), DocumentStore, DocumentUri(DocumentUri), Range(..), Settings, WorkspaceEdit)
+import LanguageServer.TextDocument (TextDocument, getText, getVersion)
+import LanguageServer.Types (DocumentStore, DocumentUri(DocumentUri), Settings, WorkspaceEdit)
 import LanguageServer.Uri (uriToFilename)
 import LanguageServer.Window as Window
 import PscIde.Command as C
@@ -38,7 +34,7 @@ addCompletionImport' :: WorkspaceEdit -> Notify -> DocumentStore -> Settings -> 
 addCompletionImport' existingEdit log docs config state@(ServerState { port, modules, conn }) args = do
   let shouldAddImport = autocompleteAddImport config
   case conn, (runExcept <<< readString) <$> args, shouldAddImport of
-    Just conn, [ Right identifier, mod, qual, Right uriRaw, Right ns ], true -> do
+    Just conn', [ Right identifier, mod, qual, Right uriRaw, Right ns ], true -> do
       let uri = DocumentUri uriRaw
       doc <- liftEffect $ getDocument docs uri
       version <- liftEffect $ getVersion doc
@@ -46,13 +42,13 @@ addCompletionImport' existingEdit log docs config state@(ServerState { port, mod
       edit <- addCompletionImportEdit log docs config state { identifier, mod: hush mod, qual: hush qual, uri } doc version text (parseNS ns)
       case edit of
         Right edits -> do
-          void $ applyEdit conn (fold $ existingEdit : edits)
+          void $ applyEdit conn' (fold $ existingEdit : edits)
           pure $ unsafeToForeign $ toNullable Nothing
         Left res -> do
-          void $ applyEdit conn existingEdit
+          void $ applyEdit conn' existingEdit
           pure res
-    Just conn, _, _ ->  do
-      void $ applyEdit conn existingEdit
+    Just conn', _, _ ->  do
+      void $ applyEdit conn' existingEdit
       pure $ unsafeToForeign $ toNullable Nothing
     _, _, _ -> pure $ unsafeToForeign $ toNullable Nothing
 
@@ -82,16 +78,16 @@ addCompletionImportEdit :: Notify -> DocumentStore -> Settings -> ServerState
 addCompletionImportEdit log docs config state@(ServerState { port, modules, conn, clientCapabilities }) { identifier, mod, qual, uri } doc version text ns = do
   let prelude = preludeModule config
   case port of
-    Just port -> do
+    Just port' -> do
       { state: modulesState', result } <-
         case mod, qual of
           Just mod', Just qual' | noModule (isSameQualified mod' qual') ->
-            addQualifiedImport modules port (un DocumentUri uri) text mod' qual'
+            addQualifiedImport modules port' (un DocumentUri uri) text mod' qual'
           Just mod', Nothing | mod' == prelude && noModule (isSameUnqualified prelude) ->
-            addModuleImport modules port (un DocumentUri uri) text mod'
+            addModuleImport modules port' (un DocumentUri uri) text mod'
           mod', qual' -> do
             liftEffect $ log Info $ "Adding import of " <> identifier <> " from " <> show mod' <> " with type filter " <> show (showNS <$>  ns)
-            addExplicitImport modules port (un DocumentUri uri) text mod' qual' identifier ns
+            addExplicitImport modules port' (un DocumentUri uri) text mod' qual' identifier ns
       case result of
         UpdatedImports newText -> do
           let edit = makeMinimalWorkspaceEdit clientCapabilities uri version text newText
@@ -115,12 +111,12 @@ addCompletionImportEdit log docs config state@(ServerState { port, modules, conn
     where
 
     noModule f = all (not f <<< unwrap) modules.modules
-    isSameQualified mod qual = case _ of
-      { moduleName: mod', qualifier: Just qual'} -> mod == mod' && qual == qual'
+    isSameQualified mod' qual' = case _ of
+      { moduleName: mod'', qualifier: Just qual''} -> mod' == mod'' && qual' == qual''
       _ -> false
 
-    isSameUnqualified mod = case _ of
-      { moduleName, qualifier: Nothing } -> mod == moduleName
+    isSameUnqualified mod' = case _ of
+      { moduleName, qualifier: Nothing } -> mod' == moduleName
       _ -> false
 
 addModuleImport' :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
