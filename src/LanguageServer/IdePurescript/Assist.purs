@@ -29,7 +29,6 @@ import LanguageServer.Types (Command, DocumentStore, DocumentUri(..), Position(.
 import PscIde (defaultCompletionOptions, suggestTypos)
 import PscIde as P
 import PscIde.Command (DeclarationType(..), TypeInfo(..), declarationTypeFromString, declarationTypeToString)
-import PscIde.Command as C
 
 lineRange' :: Int -> Int -> Range
 lineRange' line character = lineRange $ Position { line, character }
