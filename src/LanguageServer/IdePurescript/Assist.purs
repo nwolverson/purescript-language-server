@@ -13,6 +13,7 @@ import Effect.Class (liftEffect)
 import Foreign (F, Foreign, readInt, readString, unsafeFromForeign, unsafeToForeign)
 import Foreign.Index ((!))
 import Foreign.NullOrUndefined (readNullOrUndefined)
+import IdePurescript.Completion (declarationTypeToNamespace)
 import IdePurescript.PscIde (eitherToErr)
 import IdePurescript.PscIdeServer (Notify)
 import IdePurescript.Tokens (containsArrow, identifierAtPoint, startsWithCapitalLetter)
@@ -27,7 +28,7 @@ import LanguageServer.TextDocument (getText, getTextAtRange, getVersion)
 import LanguageServer.Types (Command, DocumentStore, DocumentUri(..), Position(..), Range(..), Settings, readRange)
 import PscIde (defaultCompletionOptions, suggestTypos)
 import PscIde as P
-import PscIde.Command (DeclarationType(..), TypeInfo(..), declarationTypeToString)
+import PscIde.Command (DeclarationType(..), TypeInfo(..), declarationTypeFromString, declarationTypeToString)
 import PscIde.Command as C
 
 lineRange' :: Int -> Int -> Range
@@ -173,19 +174,8 @@ fixTypo log docs settings state@(ServerState { port, conn, modules, clientCapabi
                         }
           edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range word
       -- TODO suggestion type
-          namespace = declarationTypeToNamespace declarationType
+          namespace = declarationTypeToNamespace =<< declarationTypeFromString declarationType
       addCompletionImport' edit log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign Nothing, unsafeToForeign uri, unsafeToForeign (maybe "" showNS namespace) ]
-
-    declarationTypeToNamespace = case _ of -- Should this live somewhere else?
-      "value" -> Just C.NSValue
-      "type" -> Just C.NSType
-      "typeSynonym" -> Just C.NSType
-      "dataConstructor" -> Just C.NSType
-      "typeClass" -> Just C.NSType
-      "valueOperator" -> Just C.NSValue
-      "typeOperator" -> Just C.NSType
-      "moduleName" -> Nothing
-      _ -> Nothing
 
 fillTypedHole :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 fillTypedHole logFn docs settings state args = do

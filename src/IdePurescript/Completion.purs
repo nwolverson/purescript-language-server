@@ -17,7 +17,7 @@ import Effect.Aff (Aff)
 import IdePurescript.PscIde (getAvailableModules, getCompletion')
 import IdePurescript.Regex (match')
 import IdePurescript.Tokens (containsArrow, identPart, modulePart, moduleRegex, startsWithCapitalLetter)
-import PscIde.Command (CompletionOptions(..), TypeInfo(..))
+import PscIde.Command (CompletionOptions(..), DeclarationType(..), Namespace, TypeInfo(..))
 import PscIde.Command as C
 
 type ModuleInfo =
@@ -117,28 +117,19 @@ getSuggestions port
         _ -> Nothing
 
     modResult prefix moduleName = ModuleSuggestion { text: moduleName, suggestType: Module, prefix }
-    result qualifier prefix ns (TypeInfo {type', identifier, module': origMod, exportedFrom, documentation }) =
+    result qualifier prefix ns (TypeInfo {type', identifier, module': origMod, exportedFrom, documentation, declarationType }) =
       IdentSuggestion { origMod, exportMod, identifier, qualifier, suggestType, prefix, valueType: type', namespace: ns, exportedFrom, documentation }
       where
+        -- use the declaration type of the result if available, or the ns we filtered the request by if we're doing that
+        resolvedNS = (declarationType >>= declarationTypeToNamespace)  <|> ns
         suggestType = 
-          case ns of
+          case resolvedNS of
             Just C.NSKind -> Kind
             Just C.NSType -> Type
             Just C.NSValue   | startsWithCapitalLetter identifier -> DCtor
                              | containsArrow type' -> Function
             Just C.NSValue -> Value
             Nothing -> Value
-          -- if ns == Just C.NSKind then Kind
-          -- else Value
-          -- else if 
-          -- if type' == "Type" then Type
-          -- else if type' == "kind" then Kind
-          -- else if test' (regex "(->|→) Type$" noFlags) type' then Type -- type constructor
-          -- -- else if identifier == "Baz" then Module
-          -- else if contains (Pattern "Type") type' then Type
-          -- else if test' (regex "^[A-Z]" noFlags) identifier then DCtor
-          -- else if contains (Pattern "->") type' || contains (Pattern "→") type' then Function
-          -- else Value
 
         -- Strategies for picking the re-export to choose
         -- 1. User configuration of preferred modules (ordered list)
@@ -152,3 +143,14 @@ getSuggestions port
         prefixModule = head $
           sortBy (\a b -> length a `compare` length b) $
           filter (\m -> startsWith (m <> ".") origMod) exportedFrom
+
+declarationTypeToNamespace :: DeclarationType -> Maybe Namespace
+declarationTypeToNamespace = case _ of -- Should this live somewhere else?
+  DeclValue -> Just C.NSValue
+  DeclType -> Just C.NSType
+  DeclTypeSynonym -> Just C.NSType
+  DeclDataConstructor -> Just C.NSValue
+  DeclTypeClass -> Just C.NSType
+  DeclValueOperator -> Just C.NSValue
+  DeclTypeOperator -> Just C.NSType
+  DeclModule -> Nothing
