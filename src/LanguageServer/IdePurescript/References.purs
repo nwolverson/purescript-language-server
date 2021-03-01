@@ -37,7 +37,6 @@ getReferences docs settings state ({ textDocument, position }) = do
         case info of
           Just (Command.TypeInfo { module', type' }) -> do
             let ns = case type' of
-                      "kind" -> NSKind
                       "Type" -> NSType
                       _ | endsWith "-> Type" type' -> NSType
                       _ -> NSValue

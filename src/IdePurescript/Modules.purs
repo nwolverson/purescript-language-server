@@ -149,7 +149,11 @@ findImportInsertPos text =
 
 foreign import tmpDir :: Effect String
 
-data ImportResult = UpdatedImports String | AmbiguousImport (Array C.TypeInfo) | FailedImport
+data ImportResult 
+  = UpdatedImports String 
+  | AmbiguousImport (Array C.TypeInfo) 
+  | UnnecessaryImport
+  | FailedImport String
 
 makeTempFile :: Path -> String -> Aff Path
 makeTempFile fileName text = do
@@ -168,20 +172,18 @@ withTempFile fileName text action = do
   answer <- case res of
     Right (C.SuccessFile _) -> UpdatedImports <$> FS.readTextFile UTF8 tmpFile
     Right (C.MultipleResults a) -> pure $ AmbiguousImport a
-    _ -> pure FailedImport
+    Right (C.SuccessText st) -> pure (FailedImport (intercalate "\n" st))
+    Left err -> pure (FailedImport err)
   _ <- attempt $ FS.unlink tmpFile
   pure answer
 
-addModuleImport :: State -> Int -> String -> String -> String
-  -> Aff (Maybe { state :: State, result :: String })
+addModuleImport :: State -> Int -> String -> String -> String -> Aff { state :: State, result :: ImportResult }
 addModuleImport state port fileName text moduleName =
   case shouldAdd of
-    false -> pure Nothing
+    false -> pure { state, result: UnnecessaryImport }
     true -> do
-      res <- withTempFile fileName text addImport
-      pure $ case res of
-        UpdatedImports result -> Just { state, result }
-        _ -> Nothing
+      result <- withTempFile fileName text addImport
+      pure { state, result }
   where
   addImport tmpFile = P.implicitImport port tmpFile (Just tmpFile) [] moduleName
   shouldAdd =
@@ -191,7 +193,7 @@ addExplicitImport :: State -> Int -> String -> String -> Maybe String -> Maybe S
   -> Aff { state :: State, result :: ImportResult }
 addExplicitImport state port fileName text moduleName qualifier identifier ns =
   case shouldAdd of
-    false -> pure { state, result: FailedImport }
+    false -> pure { state, result: UnnecessaryImport }
     true -> do
       result <- withTempFile fileName text addImport
       let state' = case result of
@@ -229,7 +231,7 @@ addQualifiedImport :: State -> Int -> String -> String -> String -> String
 addQualifiedImport state port fileName text moduleName qualifier =
   if not isThisModule
     then { state, result: _ } <$> withTempFile fileName text addImport
-    else pure { state, result: FailedImport }
+    else pure { state, result: UnnecessaryImport }
   where
     addImport tmpFile = P.qualifiedImport port tmpFile (Just tmpFile) moduleName qualifier
     isThisModule = Just moduleName == state.main

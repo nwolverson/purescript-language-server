@@ -2,9 +2,8 @@ module LanguageServer.TextDocument where
 
 import Prelude
 
-import Data.String (drop, take)
 import Effect (Effect)
-import LanguageServer.Types (DocumentUri, Position, Range(..))
+import LanguageServer.Types (DocumentUri, Position, Range)
 
 foreign import data TextDocument :: Type
 

@@ -352,13 +352,21 @@ newtype CodeActionKind = CodeActionKind String
 instance showCodeActionKind :: Show CodeActionKind where
   show (CodeActionKind s) = "CodeActionKind " <> s
 
+codeActionEmpty :: CodeActionKind
 codeActionEmpty = CodeActionKind ""
+codeActionQuickFix :: CodeActionKind
 codeActionQuickFix = CodeActionKind "quickfix"
+codeActionRefactor :: CodeActionKind
 codeActionRefactor = CodeActionKind "refactor"
+codeActionRefactorExtract :: CodeActionKind
 codeActionRefactorExtract = CodeActionKind "refactor.extract"
+codeActionRefactorInline :: CodeActionKind
 codeActionRefactorInline = CodeActionKind "refactor.inline"
+codeActionRefactorRewrite :: CodeActionKind
 codeActionRefactorRewrite = CodeActionKind "refactor.rewrite"
+codeActionSource :: CodeActionKind
 codeActionSource = CodeActionKind "source"
+codeActionSourceOrganizeImports :: CodeActionKind
 codeActionSourceOrganizeImports = CodeActionKind "source.organizeImports"
 
 -- https://microsoft.github.io/language-server-protocol/specifications/specification-current/#workspaceEditClientCapabilities

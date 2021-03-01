@@ -5,15 +5,11 @@ import Prelude
 import Control.Error.Util (hush)
 import Control.Monad.Except (runExcept)
 import Data.Array (fold, singleton, (:))
-import Data.Array as Array
 import Data.Either (Either(..))
-import Data.Foldable (all)
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Foldable (all, for_)
+import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (un, unwrap)
 import Data.Nullable (toNullable)
-import Data.Nullable as Nullable
-import Data.String.Utils (lines, startsWith)
-import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign (Foreign, readString, unsafeToForeign)
@@ -25,9 +21,10 @@ import LanguageServer.Handlers (applyEdit)
 import LanguageServer.IdePurescript.Config (autocompleteAddImport, preludeModule)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeMinimalWorkspaceEdit)
-import LanguageServer.TextDocument (TextDocument, getText, getUri, getVersion)
-import LanguageServer.Types (Diagnostic(..), Position(..), DocumentStore, DocumentUri(DocumentUri), Range(..), Settings, WorkspaceEdit)
+import LanguageServer.TextDocument (TextDocument, getText, getVersion)
+import LanguageServer.Types (DocumentStore, DocumentUri(DocumentUri), Settings, WorkspaceEdit)
 import LanguageServer.Uri (uriToFilename)
+import LanguageServer.Window as Window
 import PscIde.Command as C
 
 addCompletionImport :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
@@ -37,7 +34,7 @@ addCompletionImport' :: WorkspaceEdit -> Notify -> DocumentStore -> Settings -> 
 addCompletionImport' existingEdit log docs config state@(ServerState { port, modules, conn }) args = do
   let shouldAddImport = autocompleteAddImport config
   case conn, (runExcept <<< readString) <$> args, shouldAddImport of
-    Just conn, [ Right identifier, mod, qual, Right uriRaw, Right ns ], true -> do
+    Just conn', [ Right identifier, mod, qual, Right uriRaw, Right ns ], true -> do
       let uri = DocumentUri uriRaw
       doc <- liftEffect $ getDocument docs uri
       version <- liftEffect $ getVersion doc
@@ -45,13 +42,13 @@ addCompletionImport' existingEdit log docs config state@(ServerState { port, mod
       edit <- addCompletionImportEdit log docs config state { identifier, mod: hush mod, qual: hush qual, uri } doc version text (parseNS ns)
       case edit of
         Right edits -> do
-          void $ applyEdit conn (fold $ existingEdit : edits)
+          void $ applyEdit conn' (fold $ existingEdit : edits)
           pure $ unsafeToForeign $ toNullable Nothing
         Left res -> do
-          void $ applyEdit conn existingEdit
+          void $ applyEdit conn' existingEdit
           pure res
-    Just conn, _, _ ->  do
-      void $ applyEdit conn existingEdit
+    Just conn', _, _ ->  do
+      void $ applyEdit conn' existingEdit
       pure $ unsafeToForeign $ toNullable Nothing
     _, _, _ -> pure $ unsafeToForeign $ toNullable Nothing
 
@@ -81,45 +78,46 @@ addCompletionImportEdit :: Notify -> DocumentStore -> Settings -> ServerState
 addCompletionImportEdit log docs config state@(ServerState { port, modules, conn, clientCapabilities }) { identifier, mod, qual, uri } doc version text ns = do
   let prelude = preludeModule config
   case port of
-    Just port -> do
+    Just port' -> do
       { state: modulesState', result } <-
         case mod, qual of
           Just mod', Just qual' | noModule (isSameQualified mod' qual') ->
-            addQualifiedImport modules port (un DocumentUri uri) text mod' qual'
+            addQualifiedImport modules port' (un DocumentUri uri) text mod' qual'
           Just mod', Nothing | mod' == prelude && noModule (isSameUnqualified prelude) ->
-            addOpenImport modules port (un DocumentUri uri) text mod'
+            addModuleImport modules port' (un DocumentUri uri) text mod'
           mod', qual' -> do
             liftEffect $ log Info $ "Adding import of " <> identifier <> " from " <> show mod' <> " with type filter " <> show (showNS <$>  ns)
-            addExplicitImport modules port (un DocumentUri uri) text mod' qual' identifier ns
+            addExplicitImport modules port' (un DocumentUri uri) text mod' qual' identifier ns
       case result of
         UpdatedImports newText -> do
           let edit = makeMinimalWorkspaceEdit clientCapabilities uri version text newText
           pure $ Right $ maybe [] singleton edit
         AmbiguousImport imps -> liftEffect do
+          liftEffect $ for_ conn (_ `Window.showError`
+            ("Could not import " <> text <> " because there is more than one option"))
           log Warning "Found ambiguous imports"
           pure $ Left $ unsafeToForeign $ (\(C.TypeInfo { module' }) -> module') <$> imps
-        -- Failed import is not unusual - e.g. already existing import will hit this case.
-        FailedImport -> pure $ Right []
+        -- UnnecessaryImport is not unusual - e.g. already existing import will hit this case
+        -- And so will things that are implicitly imported because they live under Prim
+        -- - e.g. Array or String
+        UnnecessaryImport -> do
+          pure $ Right []
+        -- Failed imports are now rare and will display an error
+        FailedImport msg -> do 
+          liftEffect $ for_ conn (_ `Window.showError` ("Failed to import: `" <> identifier <> "`. Error: " <> msg))
+          pure $ Right []
     _ -> pure $ Right [] 
 
     where
 
     noModule f = all (not f <<< unwrap) modules.modules
-    isSameQualified mod qual = case _ of
-      { moduleName: mod', qualifier: Just qual'} -> mod == mod' && qual == qual'
+    isSameQualified mod' qual' = case _ of
+      { moduleName: mod'', qualifier: Just qual''} -> mod' == mod'' && qual' == qual''
       _ -> false
 
-    isSameUnqualified mod = case _ of
-      { moduleName, qualifier: Nothing } -> mod == moduleName
+    isSameUnqualified mod' = case _ of
+      { moduleName, qualifier: Nothing } -> mod' == moduleName
       _ -> false
-
-    -- addModuleImport discards the result data type and wraps it in Maybe. We
-    -- need to add it back for the types to unify.
-    addOpenImport modules port uri text mod =
-      addModuleImport modules port uri text mod <#> case _ of
-        Just r -> r { result = UpdatedImports r.result }
-        Nothing -> { state: modules, result: FailedImport }
-
 
 addModuleImport' :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 addModuleImport' log docs config state args = do
@@ -130,14 +128,15 @@ addModuleImport' log docs config state args = do
       version <- liftEffect $ getVersion doc
       text <- liftEffect $ getText doc
       fileName <- liftEffect $ uriToFilename $ DocumentUri uri
-      res <- addModuleImport modules port' fileName text mod'
+      { result: res } <- addModuleImport modules port' fileName text mod'
       case res of
-        Just { result } -> do
+        UpdatedImports result  -> do
           let edit = makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
           case conn, edit of
             Just conn', Just edit' -> void $ applyEdit conn' edit'
             _, _ -> pure unit
-        _ -> pure unit
+        _ -> 
+          pure unit
       pure successResult
 
     _, args'-> do

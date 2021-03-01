@@ -5,28 +5,30 @@ import Prelude
 import Control.Monad.Except (runExcept)
 import Data.Array (fold, intercalate, take, (!!))
 import Data.Either (Either(..), either)
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (over)
 import Data.String (trim)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign (F, Foreign, readInt, readString, unsafeFromForeign, unsafeToForeign)
 import Foreign.Index ((!))
+import Foreign.NullOrUndefined (readNullOrUndefined)
 import IdePurescript.PscIde (eitherToErr)
 import IdePurescript.PscIdeServer (Notify)
-import IdePurescript.Tokens (identifierAtPoint)
+import IdePurescript.Tokens (containsArrow, identifierAtPoint, startsWithCapitalLetter)
 import LanguageServer.Console (log)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (applyEdit)
 import LanguageServer.IdePurescript.Commands as Commands
-import LanguageServer.IdePurescript.Imports (addCompletionImport, addCompletionImport', addCompletionImportEdit)
+import LanguageServer.IdePurescript.Imports (addCompletionImport, addCompletionImport', addCompletionImportEdit, showNS)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (getText, getTextAtRange, getVersion)
 import LanguageServer.Types (Command, DocumentStore, DocumentUri(..), Position(..), Range(..), Settings, readRange)
 import PscIde (defaultCompletionOptions, suggestTypos)
 import PscIde as P
-import PscIde.Command (TypeInfo(..))
+import PscIde.Command (DeclarationType(..), TypeInfo(..), declarationTypeToString)
+import PscIde.Command as C
 
 lineRange' :: Int -> Int -> Range
 lineRange' line character = lineRange $ Position { line, character }
@@ -61,7 +63,7 @@ caseSplit docs settings state args = do
     _, Just conn', [ argUri, argLine, argChar, argType ] ->
         liftEffect $ log conn' $ show [ show $ runExcept $ readString argUri, show $ runExcept $ readInt argLine , show $ runExcept $ readInt argChar, show $ runExcept $ readString argType ]
     _, _, _ -> do 
-        liftEffect $ maybe (pure unit) (flip log "fial match") conn
+        liftEffect $ maybe (pure unit) (flip log "fail match") conn
         pure unit
 
 addClause :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
@@ -86,7 +88,12 @@ addClause docs settings state args = do
             pure unit
     _, _, _ -> pure unit
 
-newtype TypoResult = TypoResult { identifier :: String, mod :: String }
+newtype TypoResult 
+  = TypoResult 
+      { identifier :: String
+      , mod :: String
+      , declarationType :: String 
+      }
 
 encodeTypoResult :: TypoResult -> Foreign
 encodeTypoResult = unsafeToForeign
@@ -95,7 +102,9 @@ decodeTypoResult :: Foreign -> F TypoResult
 decodeTypoResult obj = do
   identifier <- obj ! "identifier" >>= readString
   mod <- obj ! "mod" >>= readString
-  pure $ TypoResult { identifier, mod }
+  declarationType <- fromMaybe "" <$> 
+    (obj ! "declarationType" >>= readNullOrUndefined readString)
+  pure $ TypoResult { identifier, mod , declarationType }
 
 fixTypoActions :: DocumentStore -> Settings -> ServerState -> DocumentUri -> Int -> Int -> Aff (Array Command)
 fixTypoActions docs settings state@(ServerState { port, conn, modules, clientCapabilities }) docUri line char =
@@ -111,18 +120,35 @@ fixTypoActions docs settings state@(ServerState { port, conn, modules, clientCap
             Left _ -> []
             Right infos ->
               take 10 $
-              map (\tinfo@(TypeInfo { identifier, module' }) ->
+              map (\tinfo@(TypeInfo { type', identifier, module', declarationType }) ->
                 Commands.fixTypo' 
                   do
+                    let decTypeString = renderDeclarationType type' identifier declarationType
                     if identifier == word then
-                      "Import " <> identifier <> " (" <> module' <> ")"
+                      "Import" <> decTypeString <> identifier <> " (" <> module' <> ")"
                     else
                       "Replace with " <> identifier <> " (" <> module' <> ")"  
                   docUri line char
-                  (encodeTypoResult $ TypoResult { identifier, mod: module' }))
+                  (encodeTypoResult $ TypoResult { identifier, mod: module', declarationType: maybe "" declarationTypeToString declarationType }))
                 infos
         Nothing -> pure []
     _, _ -> pure []
+    where
+      renderDeclarationType type' identifier = case _ of
+        Nothing -> " : "
+        Just DeclTypeOperator -> " type-level operator: "
+        Just DeclType -> " type: "
+        Just DeclTypeSynonym -> " type synonym: "
+        Just DeclDataConstructor -> " data constructor: "
+        Just DeclTypeClass -> " type class: "
+        Just DeclValueOperator -> " operator: "
+        Just DeclModule -> " module: " -- I don't really think this will happen
+        Just DeclValue -> 
+          if startsWithCapitalLetter identifier then
+          " data constructor: " else 
+          if containsArrow type' then
+          " function: " else
+          " value: "
 
 fixTypo :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 fixTypo log docs settings state@(ServerState { port, conn, modules, clientCapabilities }) args = do
@@ -135,18 +161,31 @@ fixTypo log docs settings state@(ServerState { port, conn, modules, clientCapabi
         lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
         version <- liftEffect $ getVersion doc
         case identifierAtPoint lineText char, (runExcept <<< decodeTypoResult) <$> args !! 3 of
-            Just { range }, Just (Right (TypoResult { identifier, mod })) -> void $ replace conn' uri version line range identifier mod
+            Just { range }, Just (Right (TypoResult { identifier, mod, declarationType })) -> 
+              void $ replace conn' uri version line range identifier mod declarationType
             _, _ -> pure unit
     _, _, _, _, _ -> pure unit
 
   where
-    replace conn' uri version line {left, right} word mod = do 
+    replace conn' uri version line {left, right} word mod declarationType = do 
       let range = Range { start: Position { line, character: left }
                         , end: Position { line, character: right }
                         }
           edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range word
       -- TODO suggestion type
-      addCompletionImport' edit log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign Nothing, unsafeToForeign uri, unsafeToForeign "" ]
+          namespace = declarationTypeToNamespace declarationType
+      addCompletionImport' edit log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign Nothing, unsafeToForeign uri, unsafeToForeign (maybe "" showNS namespace) ]
+
+    declarationTypeToNamespace = case _ of -- Should this live somewhere else?
+      "value" -> Just C.NSValue
+      "type" -> Just C.NSType
+      "typeSynonym" -> Just C.NSType
+      "dataConstructor" -> Just C.NSType
+      "typeClass" -> Just C.NSType
+      "valueOperator" -> Just C.NSValue
+      "typeOperator" -> Just C.NSType
+      "moduleName" -> Nothing
+      _ -> Nothing
 
 fillTypedHole :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 fillTypedHole logFn docs settings state args = do

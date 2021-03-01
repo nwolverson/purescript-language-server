@@ -7,31 +7,32 @@ import Data.Array (catMaybes, concat, filter, foldl, head, length, mapMaybe, nub
 import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Newtype (un)
+import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
-import Data.String (null, trim)
 import Data.String.Regex (regex)
-import Data.String.Regex.Flags (global, noFlags)
+import Data.String.Regex.Flags (noFlags)
 import Data.Traversable (traverse)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign (F, Foreign, readArray, readString)
 import Foreign.Index ((!))
 import Foreign.Object as Object
-import IdePurescript.QuickFix (getTitle, isImport, isUnknownToken)
-import IdePurescript.Regex (replace', test')
+import IdePurescript.QuickFix (getReplacement, getTitle, isImport, isUnknownToken)
+import IdePurescript.Regex (replace')
 import LanguageServer.Console (log)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.IdePurescript.Assist (fixTypoActions)
 import LanguageServer.IdePurescript.Build (positionToRange)
-import LanguageServer.IdePurescript.Commands (Replacement, build, organiseImports, replaceAllSuggestions, replaceSuggestion, typedHole)
+import LanguageServer.IdePurescript.Commands (Replacement, build, replaceAllSuggestions, replaceSuggestion, typedHole)
 import LanguageServer.IdePurescript.Commands as Commands
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (TextDocument, getTextAtRange, getVersion)
-import LanguageServer.Types (ClientCapabilities, CodeAction(..), CodeActionKind(..), CodeActionResult, Command(..), Diagnostic(..), DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionEmpty, codeActionResult, codeActionSource, codeActionSourceOrganizeImports, readRange, workspaceEdit)
+import LanguageServer.Types (ClientCapabilities, CodeAction(..), CodeActionKind(..), CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionEmpty, codeActionResult, readRange, workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
+m :: forall a. Nullable a -> Maybe a
 m = Nullable.toMaybe
 
 codeActionLiteralsSupported :: ClientCapabilities -> Boolean
@@ -120,6 +121,7 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn,
 
 getActions _ _ _ _ = pure []
 
+commandAction :: CodeActionKind -> Command -> CodeAction
 commandAction kind c@(Command { title }) = CodeAction { title, kind, isPreferred: false, edit: Nullable.toNullable Nothing
                                                       , command: Nullable.toNullable $ Just c }
   
@@ -173,15 +175,6 @@ getReplacementEdit doc { replacement, range } = do
                 else
                 range
   pure $ TextEdit { range: range', newText }
-  where
-    -- | Modify suggestion replacement text, removing extraneous newlines
-    getReplacement :: String -> String -> String
-    getReplacement replacement' extraText =
-      (trim $ replace' (regex "\\s+\n" global) "\n" replacement')
-      <> if addNewline then "\n" else ""
-      where
-      trailingNewline = test' (regex "\n\\s+$" noFlags) replacement'
-      addNewline = trailingNewline && (not $ null extraText)
 
 onReplaceAllSuggestions :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 onReplaceAllSuggestions docs config (ServerState { conn, clientCapabilities }) args =
