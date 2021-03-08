@@ -68,6 +68,7 @@ defaultServerState = ServerState
   , conn: Nothing
   , modules: initialModulesState
   , modulesFile: Nothing
+  , buildQueue: Object.empty
   , diagnostics: Object.empty
   , clientCapabilities: Nothing
   }
@@ -200,6 +201,18 @@ getPort :: Ref ServerState -> Effect (Maybe Int)
 getPort state = do
   (_.port <<< unwrap) <$> Ref.read state
 
+-- | Builds documents in queue (which where opened on server startup)
+buildDocumentsInQueue :: Ref Foreign ->
+  Connection -> Ref ServerState ->
+  (ErrorLevel -> String -> Effect Unit) ->
+  Effect Unit
+buildDocumentsInQueue config conn state logError = do
+  queue <- (_.buildQueue <<< unwrap) <$> Ref.read state
+  let docs = Object.values $ queue
+  launchAff_
+    $ sequence_
+    $ map (rebuildAndSendDiagnostics config conn state logError) docs
+
 -- | Tries to start IDE server at workspace root
 mkStartPscIdeServer :: Ref Foreign -> Connection -> Ref ServerState -> Notify -> Aff Unit
 mkStartPscIdeServer config conn state logError = do
@@ -220,6 +233,7 @@ mkStartPscIdeServer config conn state logError = do
         (over ServerState $ _ { port = Just port, deactivate = quit })
         state
     _ -> pure unit
+  liftEffect $ buildDocumentsInQueue config conn state logError
 
 connect :: Ref ServerState -> Effect Connection
 connect state =
@@ -433,6 +447,20 @@ handleEvents config conn state documents logError = do
   onDidChangeContent documents $ \{ document } -> do
     Console.log $ "onDidChangeContent:" <> (show $ getUri document)
     Ref.modify_ (over ServerState (_ { modulesFile = Nothing })) state
+
+  -- On document opened rebuild it,
+  -- or place it in a queue if no IDE server started
+  onDidOpenDocument documents \{ document } -> launchAffLog do
+    liftEffect $ Console.log $ "onDidOpenDocument" <> (show $ getUri document)
+    mbPort <- liftEffect $ getPort state
+    case mbPort of
+      Just p -> rebuildAndSendDiagnostics config conn state logError document
+      _ -> do
+        let uri = (un DocumentUri $ getUri document)
+        liftEffect $
+          Ref.modify_ (over ServerState (\st -> st
+          { buildQueue = Object.insert uri document (st.buildQueue)
+          })) state
 
   onDidSaveDocument documents \{ document } -> launchAffLog do
     liftEffect $ Console.log $ "onDidSaveDocument" <> (show $ getUri document)

@@ -8,6 +8,7 @@ import Effect.Aff (Aff)
 import Foreign (Foreign)
 import Foreign.Object (Object)
 import IdePurescript.Modules (State)
+import LanguageServer.TextDocument (TextDocument)
 import LanguageServer.Types (Connection, DocumentStore, DocumentUri, Settings, ClientCapabilities)
 import PscIde.Command (RebuildError)
 
@@ -18,6 +19,7 @@ newtype ServerState = ServerState
   , conn :: Maybe Connection
   , modules :: State
   , modulesFile :: Maybe DocumentUri
+  , buildQueue :: Object TextDocument
   , diagnostics :: Object (Array RebuildError)
   , clientCapabilities :: Maybe ClientCapabilities
   }
@@ -25,4 +27,3 @@ newtype ServerState = ServerState
 derive instance newtypeServerState :: Newtype ServerState _
 
 type CommandHandler a = DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff a
-
