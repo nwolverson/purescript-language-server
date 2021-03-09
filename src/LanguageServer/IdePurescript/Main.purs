@@ -135,10 +135,6 @@ mkRunHandler
   handlerName docUri f b =
   Promise.fromAff do
     mbConn <- liftEffect $ getConnection state
-    case mbConn of
-      Just conn -> liftEffect $ log conn $ ("event:" <> handlerName)
-      _ -> pure unit
-
     c <- liftEffect $ Ref.read config
     ms <- maybe (pure Nothing) (updateModules state documents) (docUri b)
     s <- maybe' (\_ -> liftEffect $ Ref.read state) pure ms
@@ -445,13 +441,11 @@ handleEvents config conn state documents logError = do
         _ -> pure unit
 
   onDidChangeContent documents $ \{ document } -> do
-    Console.log $ "onDidChangeContent:" <> (show $ getUri document)
     Ref.modify_ (over ServerState (_ { modulesFile = Nothing })) state
 
   -- On document opened rebuild it,
   -- or place it in a queue if no IDE server started
   onDidOpenDocument documents \{ document } -> launchAffLog do
-    liftEffect $ Console.log $ "onDidOpenDocument" <> (show $ getUri document)
     mbPort <- liftEffect $ getPort state
     case mbPort of
       Just p -> rebuildAndSendDiagnostics config conn state logError document
@@ -463,7 +457,6 @@ handleEvents config conn state documents logError = do
           })) state
 
   onDidSaveDocument documents \{ document } -> launchAffLog do
-    liftEffect $ Console.log $ "onDidSaveDocument" <> (show $ getUri document)
     rebuildAndSendDiagnostics config conn state logError document
 
 
