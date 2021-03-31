@@ -9,6 +9,8 @@ import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Newtype (un)
 import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
+import Data.String (Pattern(..))
+import Data.String as String
 import Data.String.Regex (regex)
 import Data.String.Regex.Flags (noFlags)
 import Data.Traversable (traverse)
@@ -60,8 +62,8 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn,
       codeActions <- traverse commandForCode errs
       pure $
         (map Right $ catMaybes $ map asCommand errs)
-        <> (map Right $ fixAllCommand "Apply all suggestions" errs)
-        <> (allImportSuggestions errs)
+        <> (map Right $ fixAllCommand "Apply all suggestions" $ notImplicitPrelude errs)
+        <> (allImportSuggestions $ notImplicitPrelude errs)
         <> (map Right $ concat codeActions)
         <> organiseImports
     _ -> pure []
@@ -82,6 +84,8 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn,
       range' = positionToRange $ fromMaybe position replaceRange
     getReplacementRange _ = Nothing
 
+
+    notImplicitPrelude = filter (\(RebuildError { errorCode, message }) -> not (errorCode == "ImplicitImport" && String.contains (Pattern "Module Prelude") message))
 
     allImportSuggestions errs = map (Left <<< commandAction codeActionEmpty) $
       -- fixAllCommand "Organize Imports" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode ) errs)
