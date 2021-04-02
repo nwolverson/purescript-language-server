@@ -4,7 +4,7 @@ import Prelude
 
 import Control.Error.Util (hush)
 import Control.Monad.Except (runExcept)
-import Data.Array (fold, singleton, (:))
+import Data.Array (fold, fromFoldable, singleton, (:))
 import Data.Either (Either(..))
 import Data.Foldable (all, for_)
 import Data.Maybe (Maybe(..), maybe)
@@ -128,15 +128,29 @@ addModuleImport' log docs config state args = do
       version <- liftEffect $ getVersion doc
       text <- liftEffect $ getText doc
       fileName <- liftEffect $ uriToFilename $ DocumentUri uri
-      { result: res } <- addModuleImport modules port' fileName text mod'
-      case res of
-        UpdatedImports result  -> do
-          let edit = makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
-          case conn, edit of
-            Just conn', Just edit' -> void $ applyEdit conn' edit'
-            _, _ -> pure unit
-        _ -> 
-          pure unit
+      edit <- case qual' of
+        Right _ ->
+          addCompletionImportEdit log docs config state 
+            { identifier: ""
+            , qual: hush qual'
+            , mod: Just mod'
+            , uri: DocumentUri uri
+            }
+            doc 
+            version 
+            text 
+            Nothing
+        Left _ -> do
+          { result: res } <- addModuleImport modules port' fileName text mod'
+          case res of
+            UpdatedImports result  -> do
+              pure $ Right $ fromFoldable $ makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
+            _ -> pure $ Right []
+
+      case conn, edit of
+        Just conn', Right edits -> do
+          void $ applyEdit conn' (fold edits)
+        _, _ -> pure unit
       pure successResult
 
     _, args'-> do
@@ -145,7 +159,6 @@ addModuleImport' log docs config state args = do
 
     where
     successResult = unsafeToForeign $ toNullable Nothing
-
 
 getAllModules :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 getAllModules log docs config state args =
