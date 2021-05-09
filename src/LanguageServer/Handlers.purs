@@ -67,6 +67,10 @@ foreign import sendDiagnosticsBegin :: Connection -> Effect Unit
 
 foreign import sendDiagnosticsEnd :: Connection -> Effect Unit
 
+foreign import sendCleanBegin :: Connection -> Effect Unit
+
+foreign import sendCleanEnd :: Connection -> Effect Unit
+
 foreign import onExit :: Connection -> (Effect Unit) -> Effect Unit
 
 foreign import onShutdown :: Connection -> (Res Unit) -> Effect Unit

@@ -58,6 +58,12 @@ buildCmd = CommandInfo "Build" "build"
 build :: Command
 build = c buildCmd Nothing
 
+cleanCmd :: CommandInfo
+cleanCmd = CommandInfo "Clean" "clean"
+
+clean :: Command
+clean = c cleanCmd Nothing
+
 typedHoleCmd :: CommandInfo
 typedHoleCmd = CommandInfo "Insert typed hole suggestion" "typedHole"
 
@@ -101,6 +107,7 @@ commands = cmdName <$>
   , addClauseCmd
   , replaceSuggestionCmd
   , buildCmd
+  , cleanCmd
   , startPscIdeCmd
   , stopPscIdeCmd
   , restartPscIdeCmd
