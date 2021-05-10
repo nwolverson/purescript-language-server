@@ -26,8 +26,8 @@ clean settings = do
 
 removeDir :: String -> Aff Unit
 removeDir path = do
-  stats' <- FS.stat path
-  case isDirectory stats' of
+  stats <- FS.stat path
+  case isDirectory stats of
     false -> FS.unlink path
     true -> do
       allFiles <- FS.readdir path
