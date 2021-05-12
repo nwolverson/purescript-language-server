@@ -3,13 +3,12 @@ module LanguageServer.IdePurescript.Clean where
 import Prelude
 import Data.Array (foldMap)
 import Data.Either (Either(..))
-import Data.Maybe (fromMaybe)
-import Data.String (Pattern(..), stripPrefix, stripSuffix)
 import Effect.Aff (Aff, attempt, message)
 import LanguageServer.IdePurescript.Config (effectiveOutputDirectory)
 import LanguageServer.Types (Settings)
 import Node.FS.Aff as FS
 import Node.FS.Stats (isDirectory)
+import Node.Path as Path
 
 clean :: Settings -> Aff (Either String String)
 clean settings = do
@@ -37,8 +36,4 @@ removeDir path = do
       FS.rmdir path
 
 joinPaths :: String -> String -> String
-joinPaths parent child = strippedParent <> "/" <> strippedChild
-  where
-  strippedParent = fromMaybe parent (stripSuffix (Pattern "/") parent)
-
-  strippedChild = fromMaybe child (stripPrefix (Pattern "/") child)
+joinPaths parent child = Path.concat [ parent, child ]
