@@ -316,14 +316,14 @@ autoStartPcsIdeServer config conn state logError documents  = do
         $ resolvePath $ Config.effectiveOutputDirectory c
 
       hasPackageFile <- or <$> traverse (FS.exists <=< liftEffect  <<< resolvePath)
-        ["bower.json", "psc-package.json", "spago.dhall"]
+        ["bower.json", "psc-package.json", "spago.dhall", "flake.nix"]
 
       envIdeSources <- Server.getEnvPursIdeSources
 
       when (not hasPackageFile && isNothing envIdeSources) do
         liftEffect $ showError conn
           ( "It doesn't look like the workspace root is a PureScript project"
-            <> "(has bower.json/psc-package.json/spago.dhall)."
+            <> "(has bower.json/psc-package.json/spago.dhall/flake.nix)."
             <> "The PureScript project should be opened as a root workspace folder."
           )
 
