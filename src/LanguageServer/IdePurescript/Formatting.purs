@@ -11,6 +11,8 @@ import Effect.Aff (Aff, attempt, makeAff)
 import Effect.Class (liftEffect)
 import Effect.Exception (catchException, error)
 import Effect.Ref as Ref
+import Foreign (unsafeToForeign)
+import Foreign as Foreign
 import IdePurescript.Build (Command(..), spawn)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.DocumentStore (getDocument)
@@ -34,32 +36,31 @@ getFormattedDocument logCb docs settings serverState { textDocument: TextDocumen
     Right "" -> pure []
     Right newText -> pure [ mkTextEdit text newText ]
 
-formatWithPurty :: Notify ->Settings -> ServerState -> String -> Aff String
+formatWithPurty :: Notify -> Settings -> ServerState -> String -> Aff String
 formatWithPurty logCb settings state text = do
   case state of 
     ServerState { root: Just directory } -> do
-      { cp: cp' } <- spawn { command: Command "purty" [ "format", "-" ], directory, useNpmDir: Config.addNpmPath settings }
       makeAff $ \cb -> do
         let succ = cb <<< Right
             err = cb <<< Left
-        case cp' of
-          Nothing -> err $ error "Didn't find purty in PATH" 
-          Just cp -> do
-            CP.onError cp (cb <<< Left <<< CP.toStandardError)
-            result <- Ref.new ""
-            let res :: String -> Effect Unit
-                res s = Ref.modify_ (_ <> s) result
+        cp <- spawn { command: Command "purty" [ "format", "-" ], directory, useNpmDir: Config.addNpmPath settings }
+        CP.onError cp (err <<< CP.toStandardError)
+        result <- Ref.new ""
+        let res :: String -> Effect Unit
+            res s = Ref.modify_ (_ <> s) result
 
-            catchException err $ S.onDataString (CP.stderr cp) Encoding.UTF8 $ err <<< error
-            catchException err $ S.onDataString (CP.stdout cp) Encoding.UTF8 res
+        catchException err $ S.onDataString (CP.stderr cp) Encoding.UTF8 $ err <<< error
+        catchException err $ S.onDataString (CP.stdout cp) Encoding.UTF8 res
 
-            CP.onClose cp \exit -> case exit of
-              CP.Normally n | n == 0 || n == 1 ->
-                Ref.read result >>= succ
-              _ -> err $ error "purty process exited abnormally"
+        CP.onClose cp \exit -> case exit of
+          CP.Normally n | n == 0 || n == 1 ->
+            Ref.read result >>= succ
+          _ -> err $ error "purty process exited abnormally"
+        
+        when (not $ Foreign.isUndefined $ unsafeToForeign $ CP.pid cp) do
+          catchException err $ void $ S.writeString (CP.stdin cp) UTF8 text (pure unit)
+          catchException err$ S.end (CP.stdin cp) (pure unit)
 
-            void $ S.writeString (CP.stdin cp) UTF8 text (pure unit)
-            S.end (CP.stdin cp) (pure unit)
 
         pure mempty
     _ -> pure ""

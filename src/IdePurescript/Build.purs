@@ -42,8 +42,19 @@ type BuildResult =
   , success :: Boolean
   }
 
-spawn :: BuildOptions -> Aff { cmdBins :: Array Executable, cp :: Maybe ChildProcess }
+-- Spawn with npm path, NO support for windows PATHEXT
+spawn :: BuildOptions -> Effect ChildProcess
 spawn { command: Command cmd args, directory, useNpmDir } = do
+  env <- if useNpmDir then do     
+      pathVar <- getPathVar useNpmDir directory
+      env <- getEnv
+      pure $ Just $ Object.insert "PATH" (either identity identity pathVar) env
+    else pure Nothing
+  CP.spawn cmd args (CP.defaultSpawnOptions { cwd = Just directory, env = env })
+
+-- Spawn with npm path, "which" call (windows support) and version info gathering
+spawnWithVersion :: BuildOptions -> Aff { cmdBins :: Array Executable, cp :: Maybe ChildProcess }
+spawnWithVersion { command: Command cmd args, directory, useNpmDir } = do
   pathVar <- liftEffect $ getPathVar useNpmDir directory
   cmdBins <- findBins pathVar cmd
   cp <- liftEffect $ case uncons cmdBins of
@@ -56,7 +67,7 @@ spawn { command: Command cmd args, directory, useNpmDir } = do
 
 build :: Notify -> BuildOptions -> Aff (Either String BuildResult)
 build logCb buildOptions@{ command: Command cmd args, directory, useNpmDir } = do
-  { cmdBins, cp: cp' } <- spawn buildOptions
+  { cmdBins, cp: cp' } <- spawnWithVersion buildOptions
   makeAff $ \cb -> do
     let succ = cb <<< Right
         err = cb <<< Left
