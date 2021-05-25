@@ -83,6 +83,6 @@ removeDirectory processor dirPath contentFullPaths = do
   let
     dirRemovalMsg :: String
     dirRemovalMsg = "Directory \"" <> dirPath <> "\" was removed" <> "\n"
-  msgs <- traverse (processor true) contentFullPaths
+  _ <- traverse (processor true) contentFullPaths
   FS.rmdir dirPath
-  pure $ (fold msgs) <> dirRemovalMsg
+  pure dirRemovalMsg
