@@ -59,7 +59,7 @@ build :: Command
 build = c buildCmd Nothing
 
 cleanCmd :: CommandInfo
-cleanCmd = CommandInfo "Clean" "clean"
+cleanCmd = CommandInfo "Clean compiled output" "clean"
 
 clean :: Command
 clean = c cleanCmd Nothing
