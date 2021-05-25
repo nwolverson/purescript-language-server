@@ -299,6 +299,7 @@ cleanProject ::
   DocumentStore -> Foreign -> ServerState -> Array Foreign -> Aff Unit
 cleanProject conn _ _ _ config _ _ = do
   liftEffect $ sendCleanBegin conn
+  liftEffect $ info conn "Started cleaning compiled output"
   clean config
     >>= case _ of
       Left err ->
@@ -308,6 +309,7 @@ cleanProject conn _ _ _ config _ _ = do
       Right msg ->
         liftEffect do
           log conn $ msg
+  liftEffect $ info conn "Finished cleaning compiled output"          
   liftEffect $ sendCleanEnd conn
 
 launchAffLog' :: forall a. Notify -> Aff a -> Effect Unit
