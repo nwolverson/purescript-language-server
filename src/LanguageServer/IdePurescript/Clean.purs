@@ -20,7 +20,7 @@ clean settings = do
     outputDir = effectiveOutputDirectory settings
   attempedStats <- attempt $ FS.stat outputDir
   case attempedStats of
-    Left err -> pure $ Left $ "Could not find directory to clean:\n" <> message err
+    Left err -> pure $ Left $ "Could not find directory to clean. " <> message err
     Right stats -> case isDirectory stats of
       false -> pure $ Left $ "Target \"" <> outputDir <> "\" is not a directory"
       true -> do
