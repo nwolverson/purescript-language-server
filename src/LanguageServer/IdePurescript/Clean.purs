@@ -1,8 +1,12 @@
 module LanguageServer.IdePurescript.Clean where
 
 import Prelude
-import Data.Array (foldMap)
+
+import Data.Array (find, fold)
 import Data.Either (Either(..))
+import Data.Maybe (Maybe(..))
+import Data.String (length)
+import Data.Traversable (traverse)
 import Effect.Aff (Aff, attempt, message)
 import LanguageServer.IdePurescript.Config (effectiveOutputDirectory)
 import LanguageServer.Types (Settings)
@@ -20,20 +24,65 @@ clean settings = do
     Right stats -> case isDirectory stats of
       false -> pure $ Left $ "Target \"" <> outputDir <> "\" is not a directory"
       true -> do
-        removeDir outputDir
-        pure $ Right $ "Successfully removed directory \"" <> outputDir <> "\""
+        msg <- (processDir false) outputDir
+        case length msg of
+          0 -> pure $ Right $ "Nothing to clean in directory \"" <> outputDir <> "\""
+          _ -> pure $ Right $ msg <> "Successfully cleaned directory \"" <> outputDir <> "\""
 
-removeDir :: String -> Aff Unit
-removeDir path = do
+type Processor = Boolean -> Path.FilePath -> Aff String
+processDir :: Processor
+processDir markedForRemoval path = do
   stats <- FS.stat path
   case isDirectory stats of
-    false -> FS.unlink path
+    false -> do
+      case markedForRemoval of
+        true -> removeFile path
+        false -> do
+          case maybeRemovableFile path of
+            Nothing -> pure ""
+            _ -> removeFile path
     true -> do
-      allFiles <- FS.readdir path
+      contentPartialPaths <- FS.readdir path
       let
-        allPaths = map (joinPaths path) allFiles
-      foldMap removeDir allPaths
-      FS.rmdir path
+        contentFullPaths :: Array Path.FilePath
+        contentFullPaths = map (joinPaths path) contentPartialPaths
+        removeDir :: Path.FilePath -> Array Path.FilePath -> Aff String
+        removeDir = removeDirectory processDir
+      case markedForRemoval of
+        true -> removeDir path contentFullPaths
+        false -> case maybeRemovableContents contentPartialPaths of
+          Nothing -> do
+            msgs <- traverse (processDir false) contentFullPaths
+            pure $ fold msgs
+          _ -> removeDir path contentFullPaths
 
-joinPaths :: String -> String -> String
+joinPaths :: Path.FilePath -> Path.FilePath -> Path.FilePath
 joinPaths parent child = Path.concat [ parent, child ]
+
+removeFile :: Path.FilePath -> Aff String
+removeFile filePath = do
+  FS.unlink filePath
+  pure ("File \"" <> filePath <> "\" was removed" <> "\n")
+
+filesToRemove :: Array Path.FilePath
+filesToRemove = ["cache-db.json"]
+
+maybeRemovableFile :: Path.FilePath -> Maybe Path.FilePath
+maybeRemovableFile filePath = find (\ x -> x == (Path.basename filePath)) filesToRemove
+
+directoryRemovalMarker :: Path.FilePath
+directoryRemovalMarker = "externs.cbor"
+
+maybeRemovableContents :: Array Path.FilePath -> Maybe (Array Path.FilePath)
+maybeRemovableContents dirContents = case find (\ x -> x == directoryRemovalMarker) dirContents of
+  Nothing -> Nothing
+  _ -> Just dirContents
+
+removeDirectory :: Processor -> Path.FilePath -> Array Path.FilePath -> Aff String
+removeDirectory processor dirPath contentFullPaths = do
+  let
+    dirRemovalMsg :: String
+    dirRemovalMsg = "Directory \"" <> dirPath <> "\" was removed" <> "\n"
+  msgs <- traverse (processor true) contentFullPaths
+  FS.rmdir dirPath
+  pure $ (fold msgs) <> dirRemovalMsg
