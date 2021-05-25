@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Clean where
 
 import Prelude
-
 import Data.Array (find, fold)
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
@@ -29,7 +28,9 @@ clean settings = do
           0 -> pure $ Right $ "Nothing to clean in directory \"" <> outputDir <> "\""
           _ -> pure $ Right $ msg <> "Successfully cleaned directory \"" <> outputDir <> "\""
 
-type Processor = Boolean -> Path.FilePath -> Aff String
+type Processor
+  = Boolean -> Path.FilePath -> Aff String
+
 processDir :: Processor
 processDir markedForRemoval path = do
   stats <- FS.stat path
@@ -46,6 +47,7 @@ processDir markedForRemoval path = do
       let
         contentFullPaths :: Array Path.FilePath
         contentFullPaths = map (joinPaths path) contentPartialPaths
+
         removeDir :: Path.FilePath -> Array Path.FilePath -> Aff String
         removeDir = removeDirectory processDir
       case markedForRemoval of
@@ -65,16 +67,16 @@ removeFile filePath = do
   pure ("File \"" <> filePath <> "\" was removed" <> "\n")
 
 filesToRemove :: Array Path.FilePath
-filesToRemove = ["cache-db.json"]
+filesToRemove = [ "cache-db.json" ]
 
 maybeRemovableFile :: Path.FilePath -> Maybe Path.FilePath
-maybeRemovableFile filePath = find (\ x -> x == (Path.basename filePath)) filesToRemove
+maybeRemovableFile filePath = find (\x -> x == (Path.basename filePath)) filesToRemove
 
 directoryRemovalMarker :: Path.FilePath
 directoryRemovalMarker = "externs.cbor"
 
 maybeRemovableContents :: Array Path.FilePath -> Maybe (Array Path.FilePath)
-maybeRemovableContents dirContents = case find (\ x -> x == directoryRemovalMarker) dirContents of
+maybeRemovableContents dirContents = case find (\x -> x == directoryRemovalMarker) dirContents of
   Nothing -> Nothing
   _ -> Just dirContents
 
