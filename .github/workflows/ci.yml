@@ -17,10 +17,9 @@ jobs:
         with:
           node-version: "12"
 
+      - name: Install dependencies
+        run: |
+          npm ci
+
       - name: Build source
         run: npm run-script build
-
-      - name: Run tests
-        run: |
-          bower install
-          npm run-script test --if-present
