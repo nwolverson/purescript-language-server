@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: purescript-contrib/setup-purescript@main
+
+      - uses: actions/setup-node@v1
+        with:
+          node-version: "12"
+
+      - name: Build source
+        run: npm run-script build
+
+      - name: Run tests
+        run: |
+          bower install
+          npm run-script test --if-present
