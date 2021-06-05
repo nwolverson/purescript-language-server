@@ -37,7 +37,7 @@ getFormattedDocument logCb docs settings serverState { textDocument: TextDocumen
     Right newText -> pure [ mkTextEdit text newText ]
 
 formatWithPurty :: Notify -> Settings -> ServerState -> String -> Aff String
-formatWithPurty logCb settings state text = do
+formatWithPurty _ settings state text = do
   case state of 
     ServerState { root: Just directory } -> do
       makeAff $ \cb -> do

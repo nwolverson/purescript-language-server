@@ -66,7 +66,7 @@ spawnWithVersion { command: Command cmd args, directory, useNpmDir } = do
   pure { cmdBins, cp }
 
 build :: Notify -> BuildOptions -> Aff (Either String BuildResult)
-build logCb buildOptions@{ command: Command cmd args, directory, useNpmDir } = do
+build logCb buildOptions@{ command: Command cmd args } = do
   { cmdBins, cp: cp' } <- spawnWithVersion buildOptions
   makeAff $ \cb -> do
     let succ = cb <<< Right

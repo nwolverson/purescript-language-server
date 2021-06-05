@@ -82,7 +82,7 @@ getDiagnostics uri settings state = do
   let targets = codegenTargets settings
   case state of
     ServerState { port: Just port, root: Just root } -> do
-      { errors, success } <- rebuild port filename targets
+      { errors } <- rebuild port filename targets
       liftEffect $ convertDiagnostics root settings errors
     _ -> pure emptyDiagnostics
 
@@ -112,5 +112,5 @@ fullBuild logCb _ settings state _ = do
           liftEffect $ Right <$> convertDiagnostics directory settings errors
     _, Nothing ->
       pure $ Left "Error parsing build command"
-    ServerState { port, conn, root }, _ -> do
+    ServerState { port, root }, _ -> do
       pure $ Left $ "Error running build: port=" <> show port <> ", root=" <> show root

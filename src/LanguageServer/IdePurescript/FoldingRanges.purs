@@ -15,14 +15,13 @@ import Effect.Class (liftEffect)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (FoldingRangesParams)
 import LanguageServer.IdePurescript.Types (ServerState)
-import LanguageServer.TextDocument (getText, getVersion)
+import LanguageServer.TextDocument (getText)
 import LanguageServer.Types (DocumentStore, FoldingRange(..), Settings, TextDocumentIdentifier(..))
 
 getFoldingRanges :: DocumentStore -> Settings -> ServerState -> FoldingRangesParams -> Aff (Array FoldingRange)
-getFoldingRanges docs settings state { textDocument: TextDocumentIdentifier textDocId } =
+getFoldingRanges docs _ _ { textDocument: TextDocumentIdentifier textDocId } =
   liftEffect do
     doc <- getDocument docs textDocId.uri
-    version <- getVersion doc
     text <- getText doc
     pure <<< fromFoldable
       $ getImportsSection text

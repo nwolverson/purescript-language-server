@@ -40,7 +40,6 @@ moduleAtPoint line column =
       afterRegex = regex ("^" <> afterPart) noFlags
       wordRange left right = { left: column - left, right: column + right }
       match' r t = either (const Nothing) (\r' -> match r' t) r
-      wr = wordRange 0 0
   in
   case NEA.toArray <$> match' beforeRegex textBefore, NEA.toArray <$> match' afterRegex textAfter of
     Just [_, Just m1], Just [_, Just m2, _] ->
@@ -48,13 +47,13 @@ moduleAtPoint line column =
     _, _ -> Nothing
 
 getTooltips :: DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams -> Aff (Nullable Hover)
-getTooltips docs settings state ({ textDocument, position }) = do
+getTooltips docs _ state ({ textDocument, position }) = do
   doc <- liftEffect $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
   text <- liftEffect $ getTextAtRange doc $ lineRange position
-  let { port, modules, conn } = un ServerState state
+  let { port, modules } = un ServerState state
       char = _.character $ un Position $ position
   case port, identifierAtPoint text char, moduleAtPoint text char of
-    Just port', _, Just { word, range } -> do
+    Just _, _, Just { word, range } -> do
       let mod = getQualModule word (un ServerState state).modules
       pure $ toNullable $ case uncons mod of 
         Just { head } -> 

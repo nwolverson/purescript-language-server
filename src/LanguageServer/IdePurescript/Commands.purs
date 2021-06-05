@@ -13,7 +13,7 @@ cmdName :: CommandInfo -> String
 cmdName (CommandInfo _ command) = "purescript." <> command
 
 c :: CommandInfo -> Maybe (Array Foreign) -> Command
-c cmd@(CommandInfo title command) args = Command { title, command: cmdName cmd, arguments: toNullable args }
+c cmd@(CommandInfo title _) args = Command { title, command: cmdName cmd, arguments: toNullable args }
 
 data CommandInfo = CommandInfo String String
 

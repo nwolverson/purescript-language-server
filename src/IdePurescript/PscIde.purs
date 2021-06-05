@@ -9,11 +9,7 @@ import Data.Argonaut.Decode (class DecodeJson, decodeJson, (.:))
 import Data.Array (head, null)
 import Data.Either (Either(Right, Left))
 import Data.Maybe (maybe, Maybe(..))
-import Data.Nullable (toNullable, Nullable)
-import Data.String.Regex (regex)
-import Data.String.Regex.Flags (global)
 import Effect.Aff (Aff, error)
-import IdePurescript.Regex (replace')
 import PscIde as P
 import PscIde.Command (CompletionOptions, TypePosition)
 import PscIde.Command as C
@@ -33,15 +29,6 @@ cwd = result runMsg <<< P.cwd
 
 runMsg :: C.Message -> String
 runMsg (C.Message m) = m
-
-getImports' :: Int -> String -> Aff (Array { module :: String, qualifier :: Nullable String })
-getImports' port s = result conv $ P.listImports port s
-  where
-  conv (C.ImportList { moduleName, imports }) = conv' <$> imports
-  conv' (C.Import {moduleName, qualifier}) = {
-    "module": moduleName,
-    qualifier: toNullable qualifier
-  }
 
 getAvailableModules :: Int -> Aff (Array String)
 getAvailableModules = result conv <<< P.listAvailableModules
@@ -63,10 +50,6 @@ primModules = ["Prim"
               ,"Prim.Symbol"
               ,"Prim.TypeError"
               ]
-
-abbrevType :: String -> String
-abbrevType = replace' r "$1"
-  where r = regex """(?:\w+\.)+(\w+)""" $ global
 
 type TypeResult = {type :: String, identifier :: String, module :: String, position :: Maybe TypePosition}
 

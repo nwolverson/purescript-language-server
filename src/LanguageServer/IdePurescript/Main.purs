@@ -114,13 +114,6 @@ updateModules state documents uri =
       pure $ Just s
     _ -> pure Nothing
 
-getCon :: Ref ServerState -> Effect Unit
-getCon state = do
-  mbConn <- getConnection state
-  case mbConn of
-    Just conn -> log conn "x"
-    _ -> pure unit
-
 mkRunHandler ::
   Ref Foreign ->
   Ref ServerState ->
@@ -130,11 +123,8 @@ mkRunHandler ::
   (Settings -> ServerState -> b -> Aff a) ->
   b ->
   Effect (Promise a)
-mkRunHandler
-  config state documents
-  handlerName docUri f b =
+mkRunHandler config state documents _handlerName docUri f b =
   Promise.fromAff do
-    mbConn <- liftEffect $ getConnection state
     c <- liftEffect $ Ref.read config
     ms <- maybe (pure Nothing) (updateModules state documents) (docUri b)
     s <- maybe' (\_ -> liftEffect $ Ref.read state) pure ms
@@ -186,11 +176,6 @@ getWorkspaceRoot :: Ref ServerState -> Effect String
 getWorkspaceRoot state = do
   root <- (_.root <<< unwrap) <$> Ref.read state
   maybe Process.cwd pure root
-
--- | Read connection from state
-getConnection :: Ref ServerState -> Effect (Maybe Connection)
-getConnection state = do
-  (_.conn <<< unwrap) <$> Ref.read state
 
 -- | Read port from state
 getPort :: Ref ServerState -> Effect (Maybe Int)
@@ -351,7 +336,7 @@ rebuildAndSendDiagnostics ::
   Notify ->
   TextDocument ->
   Aff Unit
-rebuildAndSendDiagnostics config conn state logError document = do
+rebuildAndSendDiagnostics config conn state _logError document = do
   let uri = getUri document
   c <- liftEffect $ Ref.read config
   s <- liftEffect $ Ref.read state
@@ -440,7 +425,7 @@ handleEvents config conn state documents logError = do
 
         _ -> pure unit
 
-  onDidChangeContent documents $ \{ document } -> do
+  onDidChangeContent documents $ \_ -> do
     Ref.modify_ (over ServerState (_ { modulesFile = Nothing })) state
 
   -- On document opened rebuild it,
@@ -448,7 +433,7 @@ handleEvents config conn state documents logError = do
   onDidOpenDocument documents \{ document } -> launchAffLog do
     mbPort <- liftEffect $ getPort state
     case mbPort of
-      Just p -> rebuildAndSendDiagnostics config conn state logError document
+      Just _ -> rebuildAndSendDiagnostics config conn state logError document
       _ -> do
         let uri = (un DocumentUri $ getUri document)
         liftEffect $
@@ -534,7 +519,7 @@ handleCommands config conn state documents logError = do
             liftEffect $ logError Error $ show err
             pure noResult
           Right _ -> pure noResult
-      simpleHandler h d c s a = h $> noResult
+      simpleHandler h _ _ _ _ = h $> noResult
 
   let handlers :: Object (CommandHandler Foreign)
       handlers = Object.fromFoldable $ first cmdName <$>

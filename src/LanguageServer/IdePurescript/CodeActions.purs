@@ -53,7 +53,7 @@ codeActionToCommand capabilities action = codeActionResult <$>
   convert _ = Nothing
 
 getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array CodeActionResult)
-getActions documents settings state@(ServerState { diagnostics, conn: Just conn, clientCapabilities }) { textDocument, range, context } =
+getActions documents settings state@(ServerState { diagnostics, conn: Just conn, clientCapabilities }) { textDocument, range } =
   case Object.lookup (un DocumentUri $ docUri) diagnostics of
     Just errs -> mapMaybe (codeActionToCommand clientCapabilities) <$> do
       liftEffect$ log conn $ show clientCapabilities
@@ -89,7 +89,7 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn,
 
     allImportSuggestions errs = map (Left <<< commandAction codeActionEmpty) $
       -- fixAllCommand "Organize Imports" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode ) errs)
-        fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode) errs)
+        fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode }) -> isImport errorCode) errs)
         -- TODO this seems to filter out all but 1 error?
           -- maybe false (\pos -> intersects (positionToRange pos) range) position) errs)
 
@@ -143,14 +143,14 @@ afterEnd (Range { end: end@(Position { line, character }) }) =
     }
 
 toNextLine :: Range -> Range
-toNextLine (Range { start, end: end@(Position { line, character }) }) =
+toNextLine (Range { start, end: Position { line } }) =
   Range
     { start
     , end: Position { line: line+1, character: 0 }
     }
 
 onReplaceSuggestion :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
-onReplaceSuggestion docs config (ServerState { conn, clientCapabilities }) args =
+onReplaceSuggestion docs _ (ServerState { conn, clientCapabilities }) args =
   case conn, args of
     Just conn', [ uri', replacement', range' ]
       | Right uri <- runExcept $ readString uri'
@@ -169,7 +169,6 @@ onReplaceSuggestion docs config (ServerState { conn, clientCapabilities }) args 
 
 getReplacementEdit :: TextDocument -> Replacement -> Aff TextEdit
 getReplacementEdit doc { replacement, range } = do
-  origText <- liftEffect $ getTextAtRange doc range
   afterText <- liftEffect $ replace' (regex "\n$" noFlags) "" <$> getTextAtRange doc (afterEnd range)
 
   let newText = getReplacement replacement afterText
@@ -181,7 +180,7 @@ getReplacementEdit doc { replacement, range } = do
   pure $ TextEdit { range: range', newText }
 
 onReplaceAllSuggestions :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
-onReplaceAllSuggestions docs config (ServerState { conn, clientCapabilities }) args =
+onReplaceAllSuggestions docs _ (ServerState { conn, clientCapabilities }) args =
   case conn, args of
     Just conn', [ uri', suggestions' ]
       | Right uri <- runExcept $ readString uri'
