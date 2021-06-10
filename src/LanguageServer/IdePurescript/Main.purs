@@ -14,6 +14,7 @@ import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toMaybe, toNullable)
 import Data.Profunctor.Strong (first)
 import Data.String (Pattern(..), contains)
+import Data.String as String
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
@@ -194,9 +195,22 @@ buildDocumentsInQueue config conn state logError = do
     $ sequence_
     $ map (rebuildAndSendDiagnostics config conn state logError) docs
 
+buildWarningDialog :: Connection -> Ref ServerState -> DocumentStore -> Foreign -> (ErrorLevel -> String -> Effect Unit) -> String -> Aff Unit
+buildWarningDialog conn state documents settings logError msg = do
+  let buildOption = "Build project"
+  action <- showWarningWithActions conn
+    ( msg
+      <> ". \n\nEnsure project is built with the same purs version as the IDE server is using"
+    )
+    [ buildOption ]
+  when (action == Just buildOption) do
+    liftEffect $ info conn $ "Building by request from warning dialog"
+    s <- liftEffect $ Ref.read state
+    buildProject conn state logError documents settings s []
+
 -- | Tries to start IDE server at workspace root
-mkStartPscIdeServer :: Ref Foreign -> Connection -> Ref ServerState -> Notify -> Aff Unit
-mkStartPscIdeServer config conn state logError = do
+mkStartPscIdeServer :: Ref Foreign -> Connection -> Ref ServerState -> DocumentStore -> Notify -> Aff Unit
+mkStartPscIdeServer config conn state documents logError = do
   let workspaceRoot = getWorkspaceRoot state
   liftEffect $ logError Info "Starting IDE server"
   rootPath <- liftEffect workspaceRoot
@@ -205,9 +219,14 @@ mkStartPscIdeServer config conn state logError = do
   Server.retry logError 6 case startRes of
     { port: Just port, quit } -> do
       Server.loadAll port >>= case _ of
+        Left msg | String.contains (Pattern "Version mismatch for the externs") msg -> do
+          liftEffect $ info conn $ "Error loading modules: " <> msg
+          buildWarningDialog conn state documents settings logError $
+            msg <> ". Ensure project is built with the same purs version as the IDE server is using"
+
         Left msg -> liftEffect
           $ logError Info $ "Non-fatal error loading modules: " <> msg
-        _ -> pure unit
+        _ -> pure unit 
 
       liftEffect
         $ Ref.modify_
@@ -290,7 +309,7 @@ autoStartPcsIdeServer ::
 autoStartPcsIdeServer config conn state logError documents  = do
     let workspaceRoot = getWorkspaceRoot state
     let launchAffLog = launchAffLog' logError
-    let startPscIdeServer = mkStartPscIdeServer config conn state logError
+    let startPscIdeServer = mkStartPscIdeServer config conn state documents logError
     let resolvePath p = workspaceRoot >>= \root -> resolve [ root ] p
     -- Ensure we only run once
     c <- liftEffect $ Ref.read config
@@ -317,16 +336,8 @@ autoStartPcsIdeServer config conn state logError documents  = do
         let message = "Output directory does not exist at '" <> outputDir <> "'"
         liftEffect $ info conn message
 
-        let buildOption = "Build project"
-        action <- showWarningWithActions conn
-          ( message
-            <> ". Ensure project is built, or check configuration of output directory"
-            <> " and build command."
-          )
-          [ buildOption ]
-        when (action == Just buildOption) do
-          s <- liftEffect $ Ref.read state
-          buildProject conn state logError documents c s []
+        buildWarningDialog conn state documents c logError $
+          message <> ". Ensure project is built, or check configuration of output directory and build command."
 
 -- | Builds module and provides diagnostics
 rebuildAndSendDiagnostics ::
@@ -506,7 +517,7 @@ handleCommands ::
 handleCommands config conn state documents logError = do
   let onBuild = buildProject conn state logError
       stopPscIdeServer = mkStopPscIdeServer state logError
-      startPscIdeServer = mkStartPscIdeServer config conn state logError
+      startPscIdeServer = mkStartPscIdeServer config conn state documents logError
       restartPscIdeServer = do
         apathize stopPscIdeServer
         startPscIdeServer

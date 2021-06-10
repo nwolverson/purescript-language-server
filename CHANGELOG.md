@@ -1,5 +1,6 @@
 # Changelog
 
+- Show a warning dialog (with build option) on start if we get an externs out of date error
 
 ### 0.15.1
 
