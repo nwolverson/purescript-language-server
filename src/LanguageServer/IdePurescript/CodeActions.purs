@@ -21,7 +21,6 @@ import Foreign.Index ((!))
 import Foreign.Object as Object
 import IdePurescript.QuickFix (getReplacement, getTitle, isImport, isUnknownToken)
 import IdePurescript.Regex (replace')
-import LanguageServer.Console (log)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.IdePurescript.Assist (fixTypoActions)
@@ -56,9 +55,6 @@ getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Af
 getActions documents settings state@(ServerState { diagnostics, conn: Just conn, clientCapabilities }) { textDocument, range } =
   case Object.lookup (un DocumentUri $ docUri) diagnostics of
     Just errs -> mapMaybe (codeActionToCommand clientCapabilities) <$> do
-      liftEffect$ log conn $ show clientCapabilities
-      liftEffect$ log conn $ "Literals supported: " <> show (codeActionLiteralsSupported <$> clientCapabilities)
-      
       codeActions <- traverse commandForCode errs
       pure $
         (map Right $ catMaybes $ map asCommand errs)
