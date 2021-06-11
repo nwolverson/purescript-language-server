@@ -1,6 +1,7 @@
 # Changelog
 
 - Show a warning dialog (with build option) on start if we get an externs out of date error
+- Remove deprecated editor mode/polling purs ide config (Removed in 0.13.8)
 
 ### 0.15.1
 

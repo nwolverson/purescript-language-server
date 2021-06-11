@@ -71,8 +71,6 @@ type ServerSettings =
   , combinedExe :: Boolean
   , glob :: Array String
   , logLevel :: Maybe LogLevel
-  , editorMode :: Boolean
-  , polling :: Boolean
   , outputDirectory :: Maybe String
   , port :: Maybe Int
   }
@@ -124,7 +122,7 @@ startServer' settings@({ exe: server }) path addNpmBin cb logCb = do
 
 -- | Start a psc-ide server instance, or find one already running on the expected port, checking if it has the right path.
 startServer :: Notify -> ServerSettings -> String -> Aff ServerStartResult
-startServer logCb { exe, combinedExe, glob, logLevel, editorMode, polling, outputDirectory, port: configuredPort } rootPath = do
+startServer logCb { exe, combinedExe, glob, logLevel, outputDirectory, port: configuredPort } rootPath = do
   case configuredPort of 
     -- Connect to existing server or launch one on this port
     Just port -> joinServer port configuredPort "Using configured port"
@@ -155,8 +153,6 @@ startServer logCb { exe, combinedExe, glob, logLevel, editorMode, polling, outpu
       , port = Just port
       , source = glob
       , logLevel = logLevel
-      , editorMode = editorMode
-      , polling = polling
       , outputDirectory = outputDirectory
       })
     where
