@@ -42,6 +42,10 @@ export const sendDiagnosticsBegin = (conn: IConnection) => () => conn.sendNotifi
 
 export const sendDiagnosticsEnd = (conn: IConnection) => () => conn.sendNotification(new NotificationType0('textDocument/diagnosticsEnd'));
 
+export const sendCleanBegin = (conn: IConnection) => () => conn.sendNotification(new NotificationType0('textDocument/cleanBegin'));
+
+export const sendCleanEnd = (conn: IConnection) => () => conn.sendNotification(new NotificationType0('textDocument/cleanEnd'));
+
 export const onExecuteCommand = (conn: IConnection) => registerHandler(conn.onExecuteCommand);
 
 export const onDidChangeWatchedFiles = (conn: IConnection) => registerNotificationHandler(conn.onDidChangeWatchedFiles);

@@ -33,11 +33,12 @@ import IdePurescript.Modules (getModulesForFileTemp, initialModulesState)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.Console (error, info, log, warn)
 import LanguageServer.DocumentStore (getDocument, onDidChangeContent, onDidOpenDocument, onDidSaveDocument)
-import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onDocumentFormatting, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendDiagnosticsBegin, sendDiagnosticsEnd)
+import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendCleanBegin, sendCleanEnd, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fillTypedHole, fixTypo)
 import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnostics)
+import LanguageServer.IdePurescript.Clean (clean)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
-import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, organiseImportsCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
+import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cleanCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, organiseImportsCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
 import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.IdePurescript.FoldingRanges (getFoldingRanges)
@@ -294,6 +295,27 @@ buildProject
                     showError conn err
   liftEffect $ sendDiagnosticsEnd conn
 
+-- | Deletes output from previous build
+cleanProject ::
+  Connection ->
+  Ref ServerState ->
+  Notify ->
+  DocumentStore -> Foreign -> ServerState -> Array Foreign -> Aff Unit
+cleanProject conn _ _ _ config _ _ = do
+  liftEffect $ sendCleanBegin conn
+  liftEffect $ info conn "Started cleaning compiled output"
+  clean config
+    >>= case _ of
+      Left err ->
+        liftEffect do
+          error conn err
+          showError conn err
+      Right msg ->
+        liftEffect do
+          log conn $ msg
+  liftEffect $ info conn "Finished cleaning compiled output"          
+  liftEffect $ sendCleanEnd conn
+
 launchAffLog' :: forall a. Notify -> Aff a -> Effect Unit
 launchAffLog' logError =
   runAff_ (either (logError Error <<< show) (const $ pure unit))
@@ -516,6 +538,7 @@ handleCommands ::
   Effect Unit
 handleCommands config conn state documents logError = do
   let onBuild = buildProject conn state logError
+      onClean = cleanProject conn state logError
       stopPscIdeServer = mkStopPscIdeServer state logError
       startPscIdeServer = mkStartPscIdeServer config conn state documents logError
       restartPscIdeServer = do
@@ -539,6 +562,7 @@ handleCommands config conn state documents logError = do
         , Tuple replaceSuggestionCmd $ voidHandler onReplaceSuggestion
         , Tuple replaceAllSuggestionsCmd $ voidHandler onReplaceAllSuggestions
         , Tuple buildCmd $ voidHandler onBuild
+        , Tuple cleanCmd $ voidHandler onClean
         , Tuple addCompletionImportCmd $ addCompletionImport logError
         , Tuple addModuleImportCmd $ voidHandler $ addModuleImport' logError
         , Tuple organiseImportsCmd $ organiseImports logError
