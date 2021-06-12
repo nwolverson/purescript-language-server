@@ -2,6 +2,7 @@ module IdePurescript.Exec where
 
 import Prelude
 
+import Control.Alt ((<|>))
 import Data.Either (either, Either(..))
 import Data.Maybe (fromMaybe, maybe, Maybe(..))
 import Effect (Effect)
@@ -10,8 +11,8 @@ import Effect.Class (liftEffect)
 import Foreign.Object as Object
 import Node.Path as Path
 import Node.Process (getEnv, lookupEnv)
-import PscIde.Server (findBins', Executable)
-
+import Node.Which (which')
+import PscIde.Server (Executable(..), findBins')
 
 findBins :: forall a. Either a String -> String -> Aff (Array Executable)
 findBins pathVar server = do
@@ -22,6 +23,11 @@ findBins pathVar server = do
     , env: either (const Nothing) (Just <<< flip (Object.insert "PATH") env) pathVar
     }
     server
+
+findBinsNoVersion :: forall a. { path :: Maybe String, pathExt :: Maybe String | a } -> String -> Aff (Array Executable)
+findBinsNoVersion { path, pathExt } executable = do
+  bins <- which' { path, pathExt } executable <|> pure []
+  pure $ (\bin -> Executable bin Nothing) <$> bins
 
 getPathVar :: Boolean -> String -> Effect (Either String String)
 getPathVar addNpmBin rootDir = do

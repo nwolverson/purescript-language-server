@@ -12,7 +12,7 @@ replace' (Left _) _ s = s
 replace' (Right r) t s = R.replace r t s
 
 match' :: forall a. Either a R.Regex -> String -> Maybe (Array (Maybe String))
-match' (Left _) s = Nothing
+match' (Left _) _ = Nothing
 match' (Right r) s = NEA.toArray <$> R.match r s
 
 test' :: forall a. Either a R.Regex -> String -> Boolean

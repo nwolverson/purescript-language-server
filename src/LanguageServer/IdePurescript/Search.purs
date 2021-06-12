@@ -31,7 +31,7 @@ decodeSearchResult obj = do
   pure $ SearchResult { identifier, typ, mod }
 
 search :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
-search docs config state args = case state, runExcept $ traverse readString args of 
+search _ _ state args = case state, runExcept $ traverse readString args of 
   ServerState { port: Just port, modules }, Right [ text ] -> do
     loadedModules <- getLoadedModules port
     let getQualifiedModule = (flip getQualModule) modules

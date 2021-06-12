@@ -1,5 +1,22 @@
 # Changelog
 
+- Show a warning dialog (with build option) on start if we get an externs out of date error
+- Remove deprecated editor mode/polling purs ide config (Removed in 0.13.8)
+
+### 0.15.1
+
+- Add `flake.nix` and `shell.nix` to the list of files that indicate a PS project may be present #136, #137 (@ursi)
+- Change the way the `purty` formatter is spawned to make it faster
+- Don't fix implicit prelude in all (import) suggestions. #108
+- Add auto build of opened files #125 (@wclr)
+- Build with PureScript 0.14.x, CI udpates
+
+### 0.15.0
+
+- Add support for importing conflicting identifiers #118 (@i-am-the-slime)
+- Parse build output from both stdout/stderr (required for PureScript 0.14.0). #111
+- Prioritize "Organise Imports" action lower than others #113
+
 ### 0.14.4 
 
 - Ident namespaces - multiple completions requested, to provide correct imports for importing same-named identifiers in different namespaces
@@ -63,11 +80,9 @@
 - Complete existing module qualifiers 
 - Startup logging improvements
 
-
 ### 0.12.8
 
 - Add fold provider for imports
-
 
 ### 0.12.7
 

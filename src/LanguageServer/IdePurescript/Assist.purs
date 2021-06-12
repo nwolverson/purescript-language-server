@@ -34,13 +34,13 @@ lineRange' :: Int -> Int -> Range
 lineRange' line character = lineRange $ Position { line, character }
 
 lineRange :: Position -> Range
-lineRange pos@(Position { line, character }) = Range 
+lineRange pos = Range 
     { start: pos # over Position (_ { character = 0 })
     , end: pos # over Position (_ { character = (top :: Int) })
     }
 
 caseSplit :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
-caseSplit docs settings state args = do
+caseSplit docs _ state args = do
   let ServerState { port, conn, clientCapabilities } = state
   case port, conn, args of
     Just port', Just conn', [ argUri, argLine, argChar, argType ]
@@ -67,7 +67,7 @@ caseSplit docs settings state args = do
         pure unit
 
 addClause :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
-addClause docs settings state args = do
+addClause docs _ state args = do
   let ServerState { port, conn, clientCapabilities } = state
   case port, conn, args of
     Just port', Just conn', [ argUri, argLine, argChar ]
@@ -80,7 +80,7 @@ addClause docs settings state args = do
 
             version <- liftEffect $ getVersion doc
             case identifierAtPoint lineText char of
-                Just { range: { left, right } } -> do
+                Just _ -> do
                     lines <- eitherToErr $ P.addClause port' lineText false
                     let edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version (lineRange' line char) $ intercalate "\n" $ map trim lines
                     void $ applyEdit conn' edit
@@ -107,20 +107,19 @@ decodeTypoResult obj = do
   pure $ TypoResult { identifier, mod , declarationType }
 
 fixTypoActions :: DocumentStore -> Settings -> ServerState -> DocumentUri -> Int -> Int -> Aff (Array Command)
-fixTypoActions docs settings state@(ServerState { port, conn, modules, clientCapabilities }) docUri line char =
+fixTypoActions docs _ (ServerState { port, conn, modules }) docUri line char =
   case port, conn of
-    Just port', Just conn' -> do
+    Just port', Just _ -> do
       doc <- liftEffect $ getDocument docs docUri
       lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
-      version <- liftEffect $ getVersion doc
       case identifierAtPoint lineText char of
-        Just { word, range } -> do
+        Just { word } -> do
           res <- suggestTypos port' word 2 modules.main defaultCompletionOptions
           pure $ case res of 
             Left _ -> []
             Right infos ->
               take 10 $
-              map (\tinfo@(TypeInfo { type', identifier, module', declarationType }) ->
+              map (\(TypeInfo { type', identifier, module', declarationType }) ->
                 Commands.fixTypo' 
                   do
                     let decTypeString = renderDeclarationType type' identifier declarationType
@@ -151,9 +150,9 @@ fixTypoActions docs settings state@(ServerState { port, conn, modules, clientCap
           " value: "
 
 fixTypo :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
-fixTypo log docs settings state@(ServerState { port, conn, modules, clientCapabilities }) args = do
+fixTypo log docs settings state@(ServerState { port, conn, clientCapabilities }) args = do
   unsafeToForeign <$> case port, conn, args !! 0, args !! 1, args !! 2 of
-    Just port', Just conn', Just argUri, Just argLine, Just argChar
+    Just _, Just _, Just argUri, Just argLine, Just argChar
       | Right uri <- runExcept $ readString argUri
       , Right line <- runExcept $ readInt argLine -- TODO: Can this be a Position?
       , Right char <- runExcept $ readInt argChar -> do
@@ -162,12 +161,12 @@ fixTypo log docs settings state@(ServerState { port, conn, modules, clientCapabi
         version <- liftEffect $ getVersion doc
         case identifierAtPoint lineText char, (runExcept <<< decodeTypoResult) <$> args !! 3 of
             Just { range }, Just (Right (TypoResult { identifier, mod, declarationType })) -> 
-              void $ replace conn' uri version line range identifier mod declarationType
+              void $ replace uri version line range identifier mod declarationType
             _, _ -> pure unit
     _, _, _, _, _ -> pure unit
 
   where
-    replace conn' uri version line {left, right} word mod declarationType = do 
+    replace uri version line {left, right} word mod declarationType = do 
       let range = Range { start: Position { line, character: left }
                         , end: Position { line, character: right }
                         }
@@ -180,7 +179,7 @@ fillTypedHole :: Notify -> DocumentStore -> Settings -> ServerState -> Array For
 fillTypedHole logFn docs settings state args = do
   let ServerState { port, conn, clientCapabilities } = state
   case port, conn, args of
-    Just port', Just conn', [ _, argUri, range', argChoice ]
+    Just _, Just conn', [ _, argUri, range', argChoice ]
       | Right range <- runExcept $ readRange range'
       , Right uri <- runExcept $ readString argUri
       , TypeInfo { identifier, module': mod } <- readTypeInfo argChoice

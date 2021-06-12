@@ -27,7 +27,7 @@ import PscIde.Command as Command
 
 getReferences :: DocumentStore -> Settings -> ServerState -> ReferenceParams
   -> Aff (Array Location)
-getReferences docs settings state ({ textDocument, position }) = do
+getReferences docs _ state ({ textDocument, position }) = do
     doc <- liftEffect $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
     text <- liftEffect $ getTextAtRange doc (mkRange position)
     let { port, modules, root } = un ServerState $ state
@@ -57,7 +57,7 @@ getReferences docs settings state ({ textDocument, position }) = do
         , range: Range { start: convPosition start, end: convPosition end }
         }
 
-    mkRange pos@(Position { line, character }) = Range
+    mkRange pos = Range
         { start: pos # over Position (_ { character = 0 })
         , end: pos # over Position (\c -> c { character = c.character + 100 })
         }

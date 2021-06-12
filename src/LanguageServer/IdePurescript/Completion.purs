@@ -59,7 +59,7 @@ getCompletions docs settings state ({ textDocument, position }) = do
         { items: arr
         , isIncomplete: Config.autocompleteLimit settings == Just (Arr.length arr)
         }
-    mkRange pos@(Position { line, character }) = Range
+    mkRange pos = Range
         { start: pos # over Position (_ { character = 0 })
         , end: pos
         }
@@ -87,7 +87,7 @@ getCompletions docs settings state ({ textDocument, position }) = do
         # over CompletionItem (_
           { textEdit = toNullable $ Just $ edit text prefix
           })
-    convert uri sugg@(IdentSuggestion { origMod, exportMod, identifier, qualifier, suggestType, prefix, valueType, exportedFrom, documentation, namespace }) =
+    convert uri sugg@(IdentSuggestion { origMod, exportMod, identifier, qualifier, suggestType, prefix, valueType, documentation, namespace }) =
         completionItem identifier (convertSuggest suggestType)
         # over CompletionItem (_
           { detail = toNullable $ Just valueType

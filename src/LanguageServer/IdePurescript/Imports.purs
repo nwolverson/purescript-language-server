@@ -31,7 +31,7 @@ addCompletionImport :: Notify -> DocumentStore -> Settings -> ServerState -> Arr
 addCompletionImport = addCompletionImport' mempty
 
 addCompletionImport' :: WorkspaceEdit -> Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
-addCompletionImport' existingEdit log docs config state@(ServerState { port, modules, conn }) args = do
+addCompletionImport' existingEdit log docs config state@(ServerState { conn }) args = do
   let shouldAddImport = autocompleteAddImport config
   case conn, (runExcept <<< readString) <$> args, shouldAddImport of
     Just conn', [ Right identifier, mod, qual, Right uriRaw, Right ns ], true -> do
@@ -75,11 +75,11 @@ showNS C.NSType = "NSType"
 addCompletionImportEdit :: Notify -> DocumentStore -> Settings -> ServerState
  -> CompletionImportArgs -> TextDocument -> Number -> String -> Maybe C.Namespace
  -> Aff (Either Foreign (Array WorkspaceEdit))
-addCompletionImportEdit log docs config state@(ServerState { port, modules, conn, clientCapabilities }) { identifier, mod, qual, uri } doc version text ns = do
+addCompletionImportEdit log _ config (ServerState { port, modules, conn, clientCapabilities }) { identifier, mod, qual, uri } _ version text ns = do
   let prelude = preludeModule config
   case port of
     Just port' -> do
-      { state: modulesState', result } <-
+      { result } <-
         case mod, qual of
           Just mod', Just qual' | noModule (isSameQualified mod' qual') ->
             addQualifiedImport modules port' (un DocumentUri uri) text mod' qual'
@@ -161,16 +161,16 @@ addModuleImport' log docs config state args = do
     successResult = unsafeToForeign $ toNullable Nothing
 
 getAllModules :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
-getAllModules log docs config state args =
+getAllModules log _ _ state _ =
   case state of
-    ServerState { port: Just port, modules, conn } ->
+    ServerState { port: Just port } ->
       unsafeToForeign <$> getAvailableModules port
     _ -> do
       liftEffect $ log Error "Fail case"
       pure $ unsafeToForeign []
 
 organiseImports :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
-organiseImports log docs config state args = do
+organiseImports log docs _ state args = do
   let ServerState { port, modules, conn, clientCapabilities } = state
   case port, (runExcept <<< readString) <$> args of
     Just port', [ Right uri ] -> do

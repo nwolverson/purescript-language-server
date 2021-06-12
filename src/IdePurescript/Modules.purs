@@ -112,7 +112,7 @@ mkImplicit :: String -> Module
 mkImplicit m = Module { qualifier: Nothing, importType: Implicit, moduleName: m }
 
 getUnqualActiveModules :: State -> Maybe String -> Array String
-getUnqualActiveModules state@{modules, main} ident = getModules include state
+getUnqualActiveModules state ident = getModules include state
   where
   include (Module { qualifier: Just _ }) = false
   include (Module { importType: Explicit idents }) = maybe false (\x -> x `elem` idents || ("(" <> x <> ")") `elem` idents) ident

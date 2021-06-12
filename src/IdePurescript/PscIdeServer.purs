@@ -12,14 +12,13 @@ import Prelude
 
 import Data.Array (length, head)
 import Data.Either (either)
-import Data.Int (fromNumber)
+import Data.Int as Int
 import Data.Maybe (Maybe(Just, Nothing), fromMaybe, isNothing, maybe)
 import Data.String (Pattern(Pattern), split, toLower)
 import Data.Traversable (traverse, traverse_)
 import Effect (Effect)
 import Effect.Aff (Aff, attempt, try)
 import Effect.Class (liftEffect)
-import Global (readInt)
 import IdePurescript.Exec (getPathVar, findBins)
 import IdePurescript.PscIde (cwd) as PscIde
 import Node.ChildProcess (ChildProcess, stderr, stdout)
@@ -52,11 +51,9 @@ type Notify = ErrorLevel -> String -> Effect Unit
 
 data Version = Version Int Int Int
 
-
-
 parseVersion :: String -> Maybe Version
 parseVersion s =
-  case traverse fromNumber $ readInt 10 <$> split (Pattern ".") s of
+  case traverse Int.fromString $ split (Pattern ".") s of
     Just [a, b, c] -> Just $ Version a b c
     _ -> Nothing
 
@@ -74,8 +71,6 @@ type ServerSettings =
   , combinedExe :: Boolean
   , glob :: Array String
   , logLevel :: Maybe LogLevel
-  , editorMode :: Boolean
-  , polling :: Boolean
   , outputDirectory :: Maybe String
   , port :: Maybe Int
   }
@@ -89,7 +84,7 @@ startServer' ::
   -> Notify
   -> Notify
   -> Aff { quit :: Aff Unit, port :: Maybe Int }
-startServer' settings@({ exe: server, glob }) path addNpmBin cb logCb = do
+startServer' settings@({ exe: server }) path addNpmBin cb logCb = do
   pathVar <- liftEffect $ getPathVar addNpmBin path
   serverBins <- findBins pathVar server
   case head serverBins of
@@ -97,7 +92,7 @@ startServer' settings@({ exe: server, glob }) path addNpmBin cb logCb = do
       liftEffect $ cb Info $ "Couldn't find IDE server, check PATH. Looked for: "
         <> server <> " in PATH: " <> either identity identity pathVar
       pure { quit: pure unit, port: Nothing }
-    Just (Executable bin version) -> do
+    Just (Executable bin _version) -> do
       liftEffect $ logCb Info $ "Resolved IDE server paths (npm-bin: " <> show addNpmBin <> ") from PATH of " <> either identity identity pathVar <> " (1st is used):"
       traverse_ (\(Executable x vv) ->
         liftEffect $ logCb Info $ x <> ": " <> fromMaybe "ERROR" vv) serverBins
@@ -127,7 +122,7 @@ startServer' settings@({ exe: server, glob }) path addNpmBin cb logCb = do
 
 -- | Start a psc-ide server instance, or find one already running on the expected port, checking if it has the right path.
 startServer :: Notify -> ServerSettings -> String -> Aff ServerStartResult
-startServer logCb { exe, combinedExe, glob, logLevel, editorMode, polling, outputDirectory, port: configuredPort } rootPath = do
+startServer logCb { exe, combinedExe, glob, logLevel, outputDirectory, port: configuredPort } rootPath = do
   case configuredPort of 
     -- Connect to existing server or launch one on this port
     Just port -> joinServer port configuredPort "Using configured port"
@@ -158,8 +153,6 @@ startServer logCb { exe, combinedExe, glob, logLevel, editorMode, polling, outpu
       , port = Just port
       , source = glob
       , logLevel = logLevel
-      , editorMode = editorMode
-      , polling = polling
       , outputDirectory = outputDirectory
       })
     where
@@ -181,7 +174,7 @@ startServer logCb { exe, combinedExe, glob, logLevel, editorMode, polling, outpu
 
 -- | Stop a psc-ide server. Currently implemented by asking it nicely, but potentially by killing it if that doesn't work...
 stopServer :: Int -> String -> ChildProcess -> Aff Unit
-stopServer port rootPath cp = do
+stopServer port rootPath _cp = do
   oldPort <- liftEffect $ S.getSavedPort rootPath
   _ <- try $ liftEffect $ when (oldPort == Just port) $ S.deleteSavedPort rootPath
   S.stopServer port
