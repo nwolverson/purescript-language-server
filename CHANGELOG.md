@@ -1,5 +1,8 @@
 # Changelog
 
+- The code action with kind `source.organizeImports` is now the action which applies all compiler suggestions
+  for unused imports, `source.sortImports` is added (previously "Organize imports") to align with the changes for JS/TS
+  languages in vscode 1.57. This can be used with `editor.codeActionsOnSave` or key-bound with `editor.action.sourceAction`.
 - Show a warning dialog (with build option) on start if we get an externs out of date error
 - Remove deprecated editor mode/polling purs ide config (Removed in 0.13.8)
 

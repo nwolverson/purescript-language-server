@@ -1,4 +1,4 @@
-import { IConnection, createConnection,InitializeParams, IPCMessageReader, IPCMessageWriter, TextDocuments, Location, Hover, TextDocumentSyncKind } from 'vscode-languageserver';
+import { IConnection, createConnection,InitializeParams, IPCMessageReader, IPCMessageWriter, TextDocuments, Location, Hover, TextDocumentSyncKind, CodeActionKind } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeParams, conn: IConnection}) => () => void) => (): IConnection => {
     const conn = createConnection();
@@ -24,7 +24,7 @@ exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeP
                 definitionProvider: true,
                 workspaceSymbolProvider: true,
                 documentSymbolProvider: true,
-                codeActionProvider: true,
+                codeActionProvider: { codeActionKinds: [ CodeActionKind.Empty, CodeActionKind.SourceOrganizeImports, "source.sortImports", CodeActionKind.SourceFixAll, CodeActionKind.Source ] },
                 executeCommandProvider: (params.initializationOptions||{}).executeCommandProvider === false
                     ? undefined : {
                         commands

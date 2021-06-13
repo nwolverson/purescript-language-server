@@ -33,8 +33,8 @@ addCompletionImport ident mod qual uri ns = c addCompletionImportCmd $
 addModuleImportCmd :: CommandInfo
 addModuleImportCmd = CommandInfo "Add module import" "addModuleImport"
 
-organiseImportsCmd :: CommandInfo
-organiseImportsCmd = CommandInfo "Organise imports" "organiseImports"
+sortImportsCmd :: CommandInfo
+sortImportsCmd = CommandInfo "Sort/reformat imports" "sortImports"
 
 replaceSuggestionCmd :: CommandInfo
 replaceSuggestionCmd = CommandInfo "Apply Suggestion" "replaceSuggestion"
@@ -97,8 +97,8 @@ fixTypo uri row char = c fixTypoCmd $ Just $ [ unsafeToForeign uri, unsafeToFore
 fixTypo' :: String -> DocumentUri -> Int -> Int -> Foreign -> Command
 fixTypo' x uri row char tinfo = c (CommandInfo x "fixTypo") $ Just $ [ unsafeToForeign uri, unsafeToForeign row, unsafeToForeign char, tinfo ] 
 
-organiseImports :: DocumentUri -> Command
-organiseImports uri = c organiseImportsCmd $ Just $ [ unsafeToForeign uri ]
+sortImports :: DocumentUri -> Command
+sortImports uri = c sortImportsCmd $ Just $ [ unsafeToForeign uri ]
 
 commands :: Array String
 commands = cmdName <$> 

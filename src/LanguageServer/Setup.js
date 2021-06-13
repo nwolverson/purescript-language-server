@@ -24,7 +24,7 @@ exports.initConnection = function (commands) { return function (cb) { return fun
                 definitionProvider: true,
                 workspaceSymbolProvider: true,
                 documentSymbolProvider: true,
-                codeActionProvider: true,
+                codeActionProvider: { codeActionKinds: [vscode_languageserver_1.CodeActionKind.Empty, vscode_languageserver_1.CodeActionKind.SourceOrganizeImports, "source.sortImports", vscode_languageserver_1.CodeActionKind.SourceFixAll, vscode_languageserver_1.CodeActionKind.Source] },
                 executeCommandProvider: (params.initializationOptions || {}).executeCommandProvider === false
                     ? undefined : {
                     commands: commands

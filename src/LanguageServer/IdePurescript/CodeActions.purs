@@ -30,7 +30,7 @@ import LanguageServer.IdePurescript.Commands as Commands
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Text (makeWorkspaceEdit)
 import LanguageServer.TextDocument (TextDocument, getTextAtRange, getVersion)
-import LanguageServer.Types (ClientCapabilities, CodeAction(..), CodeActionKind(..), CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionEmpty, codeActionResult, readRange, workspaceEdit)
+import LanguageServer.Types (ClientCapabilities, CodeAction(..), CodeActionKind, CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 m :: forall a. Nullable a -> Maybe a
@@ -59,9 +59,9 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn,
       pure $
         (map Right $ catMaybes $ map asCommand errs)
         <> (map Right $ fixAllCommand "Apply all suggestions" $ notImplicitPrelude errs)
-        <> (allImportSuggestions $ notImplicitPrelude errs)
+        <> (organizeImports $ notImplicitPrelude errs)
         <> (map Right $ concat codeActions)
-        <> organiseImports
+        <> sortImports
     _ -> pure []
   where
     docUri = _.uri $ un TextDocumentIdentifier textDocument
@@ -72,22 +72,21 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn,
       Just $ replaceSuggestion (getTitle errorCode) docUri replacement replaceRange
     asCommand _ = Nothing
 
-    organiseImports = [ Left $ commandAction (CodeActionKind $ "source.organizeImports") (Commands.organiseImports docUri) ]
-
     getReplacementRange (RebuildError { position: Just position, suggestion: Just (PscSuggestion { replacement, replaceRange }) }) =
       Just $ { replacement, range: range' }
       where
       range' = positionToRange $ fromMaybe position replaceRange
     getReplacementRange _ = Nothing
 
-
     notImplicitPrelude = filter (\(RebuildError { errorCode, message }) -> not (errorCode == "ImplicitImport" && String.contains (Pattern "Module Prelude") message))
 
-    allImportSuggestions errs = map (Left <<< commandAction codeActionEmpty) $
-      -- fixAllCommand "Organize Imports" (filter (\(RebuildError { errorCode, position }) -> isImport errorCode ) errs)
-        fixAllCommand "Apply all import suggestions" (filter (\(RebuildError { errorCode }) -> isImport errorCode) errs)
-        -- TODO this seems to filter out all but 1 error?
-          -- maybe false (\pos -> intersects (positionToRange pos) range) position) errs)
+    -- Sort/format imports via purs ide
+    sortImports = [ Left $ commandAction codeActionSourceSortImports (Commands.sortImports docUri) ]
+
+    -- Apply all import suggestions from the compiler
+    -- TODO this should probably sort too!
+    organizeImports errs = map (Left <<< commandAction codeActionSourceOrganizeImports) $
+        fixAllCommand "Organize Imports" (filter (\(RebuildError { errorCode }) -> isImport errorCode) errs)
 
     fixAllCommand text rebuildErrors = if length replacements > 0 then [ replaceAllSuggestions text docUri replacements ] else [ ]
       where
@@ -127,9 +126,6 @@ commandAction kind c@(Command { title }) = CodeAction { title, kind, isPreferred
   
   -- codeActionSourceOrganizeImports
   -- codeActionEmpty
- 
-
-
 
 afterEnd :: Range -> Range
 afterEnd (Range { end: end@(Position { line, character }) }) =

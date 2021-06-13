@@ -367,6 +367,11 @@ codeActionRefactorRewrite :: CodeActionKind
 codeActionRefactorRewrite = CodeActionKind "refactor.rewrite"
 codeActionSource :: CodeActionKind
 codeActionSource = CodeActionKind "source"
+
+-- | source.sortImports added in VSCode 1.57 for JS/TS
+codeActionSourceSortImports :: CodeActionKind
+codeActionSourceSortImports = CodeActionKind "source.sortImports"
+
 codeActionSourceOrganizeImports :: CodeActionKind
 codeActionSourceOrganizeImports = CodeActionKind "source.organizeImports"
 
