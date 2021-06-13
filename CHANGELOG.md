@@ -1,5 +1,7 @@
 # Changelog
 
+### 0.15.2
+
 - The code action with kind `source.organizeImports` is now the action which applies all compiler suggestions
   for unused imports, `source.sortImports` is added (previously "Organize imports") to align with the changes for JS/TS
   languages in vscode 1.57. This can be used with `editor.codeActionsOnSave` or key-bound with `editor.action.sourceAction`.
