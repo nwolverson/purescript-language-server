@@ -38,8 +38,10 @@ jobs:
 
       - name: Prepare Bundled JS
         run: |
+          npm install -g parcel
+          parcel build server.js
           echo "#!/usr/bin/env node" > bundle.js
-          cat server.js >> bundle.js
+          cat dist/server.js >> bundle.js
 
       - name: Upload Release Asset
         id: upload-release-asset
