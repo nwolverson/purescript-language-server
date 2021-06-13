@@ -83,6 +83,15 @@ newtype Location = Location { uri :: DocumentUri, range :: Range }
 
 derive instance newtypeLocation :: Newtype Location _
 
+newtype LocationLink = LocationLink { originSelectionRange :: Nullable Range, targetUri :: DocumentUri, targetRange :: Range, targetSelectionRange :: Range }
+
+foreign import data GotoDefinitionResult :: Type
+
+gotoDefinitionResult :: Either Location LocationLink -> GotoDefinitionResult
+gotoDefinitionResult = either unsafeCoerce unsafeCoerce
+
+
+
 newtype Diagnostic = Diagnostic
     { range :: Range
     , severity :: Nullable Int -- 1 (Error) - 4 (Hint)
@@ -345,7 +354,8 @@ newtype FoldingRange = FoldingRange
 type ClientCapabilities = { workspace :: Nullable WorkspaceClientCapabilities, textDocument :: Nullable TextDocumentClientCapabilities }
 type WorkspaceClientCapabilities = { applyEdit :: Nullable Boolean, workspaceEdit :: Nullable WorkspaceEditClientCapabilities }
 
-type TextDocumentClientCapabilities = { codeAction :: Nullable CodeActionClientCapabilities }
+type TextDocumentClientCapabilities = { codeAction :: Nullable CodeActionClientCapabilities, definition :: Nullable DefinitionClientCapabilities }
+type DefinitionClientCapabilities = { linkSupport :: Nullable Boolean }
 
 type CodeActionClientCapabilities = { codeActionLiteralSupport :: Nullable { codeActionKind :: { valueSet :: Array CodeActionKind }}, isPreferredSupport :: Nullable Boolean }
 

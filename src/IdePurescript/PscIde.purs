@@ -1,6 +1,6 @@
 module IdePurescript.PscIde (getCompletion, getCompletion', cwd, loadDeps, getType, eitherToErr
   , getPursuitModuleCompletion, getPursuitCompletion, getAvailableModules, getLoadedModules, SearchResult, ModuleSearchResult
-  , getTypeInfo) where
+  , getTypeInfo, getModuleInfo) where
 
 import Prelude
 
@@ -11,7 +11,7 @@ import Data.Either (Either(Right, Left))
 import Data.Maybe (maybe, Maybe(..))
 import Effect.Aff (Aff, error)
 import PscIde as P
-import PscIde.Command (CompletionOptions, TypePosition)
+import PscIde.Command (CompletionOptions, DeclarationType(..), TypePosition)
 import PscIde.Command as C
 
 eitherToErr :: forall a. Aff (Either String a) -> (Aff a)
@@ -59,6 +59,12 @@ getTypeInfo port text currentModule modulePrefix unqualModules getQualifiedModul
   result head $ P.type' port text moduleFilters currentModule
   where
     moduleFilters = [ C.ModuleFilter $ maybe unqualModules getQualifiedModule modulePrefix ]
+
+getModuleInfo :: Int -> String -> Aff (Maybe C.TypeInfo)
+getModuleInfo port text =
+  result head $ P.type' port text filters Nothing
+  where
+    filters = [ C.DeclarationFilter [ DeclModule ] ]
 
 getType :: Int -> String -> Maybe String -> Maybe String -> Array String -> (String -> Array String)
   -> Aff String

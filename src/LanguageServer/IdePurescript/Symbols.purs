@@ -2,23 +2,28 @@ module LanguageServer.IdePurescript.Symbols where
 
 import Prelude
 
+import Control.Alt ((<|>))
+import Control.Apply (lift2)
 import Data.Array (catMaybes, singleton)
-import Data.Maybe (Maybe(Nothing, Just), maybe)
+import Data.Either (Either(..))
+import Data.Maybe (Maybe(..), isJust, maybe)
 import Data.Newtype (over, un)
-import Data.Nullable (toNullable, Nullable)
+import Data.Nullable (Nullable, toNullable)
+import Data.Nullable as Nullable
 import Data.String (Pattern(..), contains)
 import Data.String as Str
+import Data.String as String
 import Data.Traversable (traverse)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import IdePurescript.Modules (getQualModule, getUnqualActiveModules)
-import IdePurescript.PscIde (getCompletion, getLoadedModules, getTypeInfo)
+import IdePurescript.PscIde (getCompletion, getLoadedModules, getModuleInfo, getTypeInfo)
 import IdePurescript.Tokens (identifierAtPoint)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (TextDocumentPositionParams, WorkspaceSymbolParams, DocumentSymbolParams)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.TextDocument (getTextAtRange)
-import LanguageServer.Types (DocumentStore, Location(..), Position(..), Range(..), Settings, SymbolInformation(..), SymbolKind(..), TextDocumentIdentifier(..), symbolKindToInt)
+import LanguageServer.Types (ClientCapabilities, DocumentStore, GotoDefinitionResult, Location(..), LocationLink(..), Position(..), Range(..), Settings, SymbolInformation(..), SymbolKind(..), TextDocumentIdentifier(..), gotoDefinitionResult, symbolKindToInt)
 import LanguageServer.Uri (filenameToUri)
 import Node.Path (resolve)
 import PscIde.Command (CompletionOptions(..))
@@ -31,26 +36,71 @@ convTypePosition :: Command.TypePosition -> Range
 convTypePosition (Command.TypePosition {start, end}) = Range { start: convPosition start, end: convPosition end }
 
 getDefinition :: DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams
-  -> Aff (Nullable Location)
-getDefinition docs _ state ({ textDocument, position }) = do
+  -> Aff (Nullable GotoDefinitionResult)
+getDefinition docs _ state@(ServerState {conn: Just conn, clientCapabilities: Just clientCapabilities }) ({ textDocument, position }) = do
     doc <- liftEffect $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
-    text <- liftEffect $ getTextAtRange doc (mkRange position)
+    text <- liftEffect $ getTextAtRange doc (mkLineRange position)
     let { port, modules, root } = un ServerState $ state
     case port, root, identifierAtPoint text (_.character $ un Position position) of
-      Just port', Just root', Just { word, qualifier } -> do
-        info <- getTypeInfo port' word modules.main qualifier (getUnqualActiveModules modules $ Just word) (flip getQualModule modules)
-        liftEffect $ toNullable <$> case info of
-          Just (Command.TypeInfo { definedAt: Just (Command.TypePosition { name, start }) }) -> do
+      Just port', Just root', Just identRes@{ word, qualifier, range } -> do
+        info <- lift2 (<|>) (moduleInfo port' identRes range) (typeInfo port' modules identRes)
+        liftEffect $ toNullable <$> case info of 
+          Just { typePos: Command.TypePosition { name, start }, originRange } -> do
             uri <- filenameToUri =<< resolve [ root' ] name
-            let range = Range { start: convPosition start, end: convPosition start }
-            pure $ Just $ Location { uri, range }
-          _ -> pure $ Nothing
+            let startRange = Range { start: convPosition start, end: convPosition start }
+            pure $ Just $ mkResult uri originRange startRange
+          Nothing -> pure Nothing
       _, _, _ -> pure $ toNullable Nothing
     where
-    mkRange pos = Range
+
+    moduleInfo port' { word, qualifier, range } { right } = do
+      let fullModule = case qualifier of 
+                    Just q -> q <> "." <> word
+                    Nothing -> word
+      let left = right - (String.length fullModule)
+      info <- getModuleInfo port' fullModule
+      pure $ case info of
+        Just (Command.TypeInfo { definedAt: Just typePos }) ->
+          Just { typePos, originRange: Just $ mkNewRange position left right }
+        _ -> Nothing
+    typeInfo  port' modules { word, qualifier, range } = do
+      info <- getTypeInfo port' word modules.main qualifier (getUnqualActiveModules modules $ Just word) (flip getQualModule modules)
+      pure $ case info of
+        Just (Command.TypeInfo { definedAt: Just typePos }) -> Just { typePos, originRange: Nothing }
+        _ -> Nothing
+
+    mkLineRange pos = Range
         { start: pos # over Position (_ { character = 0 })
         , end: pos # over Position (\c -> c { character = c.character + 100 })
         }
+    mkNewRange pos left right = 
+      Range { start: over Position (_ { character = left }) pos, end: over Position (_ { character = right }) pos }
+    mkResult uri (Just sourceRange) range = 
+      if locationLinkSupported clientCapabilities
+      then gotoDefinitionResult $ Right $ LocationLink
+        { originSelectionRange: toNullable $ Just sourceRange
+        , targetRange: over Range (\rr -> rr 
+            { start = over Position (\pp -> pp { character = 0 }) rr.start
+            , end = over Position (\pp -> pp { line = pp.line+1 } ) rr.end
+            }) range
+        , targetSelectionRange:  over Range (\rr -> rr 
+            { start = over Position (\pp -> pp { character = 0 }) rr.start
+            , end = over Position (\pp -> pp { line = pp.line+1 } ) rr.end
+            }) range
+        , targetUri: uri
+        }
+      else gotoDefinitionResult $ Left $ Location { uri, range }
+    mkResult uri Nothing range = gotoDefinitionResult $ Left $ Location { uri, range }
+
+
+    locationLinkSupported :: ClientCapabilities -> Boolean
+    locationLinkSupported c = c # (_.textDocument >>> m) >>= (_.definition >>> m) >>= (_.linkSupport >>> m) # isJust
+
+    m :: forall a. Nullable a -> Maybe a
+    m = Nullable.toMaybe
+
+getDefinition _ _ _ _ = pure $ toNullable Nothing
+
 
 getDocumentSymbols :: Settings -> ServerState -> DocumentSymbolParams
   -> Aff (Array SymbolInformation)
