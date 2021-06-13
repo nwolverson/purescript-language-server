@@ -38,7 +38,7 @@ jobs:
 
       - name: Prepare Bundled JS
         run: |
-          npm install -g parcel
+          npm install -g parcel@1.12.4
           parcel build server.js
           echo "#!/usr/bin/env node" > bundle.js
           cat dist/server.js >> bundle.js
