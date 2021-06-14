@@ -42,13 +42,19 @@ type BuildResult =
   , success :: Boolean
   }
 
+-- check if retrieved (copied) env object has "PATH" property, then use it,
+-- otherwise use "Path" (for windows)
+getPathProp :: Object.Object String -> String
+getPathProp env =
+  if Object.member "PATH" env then "PATH" else "Path"
+
 -- Spawn with npm path, NO support for windows PATHEXT
 spawn :: BuildOptions -> Effect ChildProcess
 spawn { command: Command cmd args, directory, useNpmDir } = do
-  env <- if useNpmDir then do     
+  env <- if useNpmDir then do
       pathVar <- getPathVar useNpmDir directory
       env <- getEnv
-      pure $ Just $ Object.insert "PATH" (either identity identity pathVar) env
+      pure $ Just $ Object.insert (getPathProp env) (either identity identity pathVar) env
     else pure Nothing
   CP.spawn cmd args (CP.defaultSpawnOptions { cwd = Just directory, env = env })
 
@@ -60,7 +66,7 @@ spawnWithVersion { command: Command cmd args, directory, useNpmDir } = do
   cp <- liftEffect $ case uncons cmdBins of
     Just { head: Executable cmdBin _ } -> do
       env <- liftEffect getEnv
-      let childEnv = Object.insert "PATH" (either identity identity pathVar) env
+      let childEnv = Object.insert (getPathProp env) (either identity identity pathVar) env
       Just <$> CP.spawn cmdBin args (CP.defaultSpawnOptions { cwd = Just directory, env = Just childEnv })
     _ -> pure Nothing
   pure { cmdBins, cp }
