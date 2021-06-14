@@ -16,6 +16,7 @@ You can edit this file as you like.
   , "contravariant"
   , "control"
   , "datetime"
+  , "debug"
   , "effect"
   , "either"
   , "enums"
