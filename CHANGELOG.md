@@ -1,5 +1,9 @@
 # Changelog
 
+### 0.15.3
+
+- Added `--version` CLI argument
+
 ### 0.15.2
 
 - The code action with kind `source.organizeImports` is now the action which applies all compiler suggestions
