@@ -230,7 +230,7 @@ mkStartPscIdeServer config conn state documents logError = do
 
         Left msg -> liftEffect
           $ logError Info $ "Non-fatal error loading modules: " <> msg
-        _ -> pure unit 
+        _ -> pure unit
 
       liftEffect
         $ Ref.modify_
@@ -316,7 +316,7 @@ cleanProject conn _ _ _ config _ _ = do
       Right msg ->
         liftEffect do
           log conn $ msg
-  liftEffect $ info conn "Finished cleaning compiled output"          
+  liftEffect $ info conn "Finished cleaning compiled output"
   liftEffect $ sendCleanEnd conn
 
 launchAffLog' :: forall a. Notify -> Aff a -> Effect Unit
@@ -406,6 +406,12 @@ rebuildAndSendDiagnostics config conn state _logError document = do
         }
       sendDiagnosticsEnd conn
 
+-- | Checks if file uri path belongs to installed libraries
+isLibSourceFile :: String -> Boolean
+isLibSourceFile path =
+  or $ [".spago", "bower_components"]
+    <#> (flip contains) path <<< Pattern
+
 -- | Puts event handlers
 handleEvents ::
   Ref Foreign ->
@@ -466,16 +472,19 @@ handleEvents config conn state documents logError = do
 
   -- On document opened rebuild it,
   -- or place it in a queue if no IDE server started
-  onDidOpenDocument documents \{ document } -> launchAffLog do
-    mbPort <- liftEffect $ getPort state
-    case mbPort of
-      Just _ -> rebuildAndSendDiagnostics config conn state logError document
-      _ -> do
-        let uri = (un DocumentUri $ getUri document)
-        liftEffect $
-          Ref.modify_ (over ServerState (\st -> st
-          { buildQueue = Object.insert uri document (st.buildQueue)
-          })) state
+  onDidOpenDocument documents \{ document } ->
+    let uri = un DocumentUri $ getUri document
+    in
+      unless (uri # isLibSourceFile)
+        $ launchAffLog do
+          mbPort <- liftEffect $ getPort state
+          case mbPort of
+            Just _ -> rebuildAndSendDiagnostics config conn state logError document
+            _ -> do
+              liftEffect $
+                Ref.modify_ (over ServerState (\st -> st
+                { buildQueue = Object.insert uri document (st.buildQueue)
+                })) state
 
   onDidSaveDocument documents \{ document } -> launchAffLog do
     rebuildAndSendDiagnostics config conn state logError document
