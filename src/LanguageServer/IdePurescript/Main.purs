@@ -81,6 +81,7 @@ defaultServerState = ServerState
 type CmdLineArguments =
   { config :: Maybe String
   , filename :: Maybe String
+  , version :: Boolean
   }
 
 -- | Parses command line arguments  passed to process.argv
@@ -89,7 +90,7 @@ parseArgs allArgs = go 0 defaultArgs
   where
   args = Array.drop 2 allArgs
 
-  defaultArgs = { config: Nothing, filename: Nothing }
+  defaultArgs = { config: Nothing, filename: Nothing, version: false }
 
   go i c =
     case args !! i of
@@ -99,6 +100,7 @@ parseArgs allArgs = go 0 defaultArgs
       Just "--log" -> case args !! (i+1) of
         Just filename -> go (i+2) (c { filename = Just filename })
         Nothing -> Nothing
+      Just "--version" -> go (i+1) (c { version = true })
       -- stdio etc
       Just _ -> go (i+1) c
       Nothing -> Just c
@@ -596,22 +598,26 @@ handleCommands config conn state documents logError = do
         liftEffect $ error conn $ "Unknown command: " <> command
         pure noResult
 
+foreign import version :: Effect String
+
 -- | main function parses the CLI arguments
 -- | and calls main' with parsed args to launch effects
 main :: Effect Unit
 main = do
   maybeArgs <- parseArgs <$> Process.argv
-  args' <- case maybeArgs of
+  case maybeArgs of
     Nothing -> do
       Console.error "Error parsing args"
       Process.exit 1
+    Just { version: true } -> do
+      v <- version
+      Console.log v
     Just args -> do
       maybe (pure unit) (flip (FSSync.writeTextFile Encoding.UTF8) "Starting logging...\n") args.filename
       let config' = case args.config of
                       Just c -> either (const Nothing) Just $ runExcept $ parseJSON c
                       Nothing -> Nothing
-      pure (args { config = config' } )
-  main' args'
+      main' { config: config', filename: args.filename }
 
 main' ::
   { config :: Maybe Foreign
