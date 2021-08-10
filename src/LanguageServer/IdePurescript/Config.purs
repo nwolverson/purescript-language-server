@@ -91,9 +91,6 @@ outputDirectory = getConfigMaybe readString "outputDirectory"
 effectiveOutputDirectory :: ConfigFn String
 effectiveOutputDirectory = fromMaybe "output" <<< ignoreEmpty <<< outputDirectory
 
-polling :: ConfigFn Boolean
-polling = getBoolean "polling" false
-
 addPscPackageSources :: ConfigFn Boolean
 addPscPackageSources = getBoolean "addPscPackageSources" false
 
