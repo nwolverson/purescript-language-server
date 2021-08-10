@@ -5,9 +5,6 @@ import Prelude
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise)
 import Control.Promise as Promise
-
-
-
 import Data.Array (length, (!!), (\\))
 import Data.Array as Array
 import Data.Either (Either(..), either)
@@ -21,7 +18,7 @@ import Data.String as String
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, launchAff_, runAff_, try)
+import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, runAff_, try)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Class (liftEffect)
@@ -192,12 +189,12 @@ getPort state = do
 -- | Builds documents in queue (which where opened on server startup)
 buildDocumentsInQueue :: Ref Foreign ->
   Connection -> Ref ServerState ->
-  (ErrorLevel -> String -> Effect Unit) ->
+  Notify ->
   Effect Unit
 buildDocumentsInQueue config conn state logError = do
   queue <- (_.buildQueue <<< unwrap) <$> Ref.read state
   let docs = Object.values $ queue
-  launchAff_
+  launchAffLog' logError
     $ sequence_
     $ map (rebuildAndSendDiagnostics config conn state logError) docs
 
@@ -378,7 +375,6 @@ rebuildAndSendDiagnostics config conn state _logError document = do
   let uri = getUri document
   c <- liftEffect $ Ref.read config
   s <- liftEffect $ Ref.read state
-  --organizeDiagnostics <- organiseImportsDiagnostic s logError document
   when (Config.fastRebuild c) do
     liftEffect $ sendDiagnosticsBegin conn
     { pscErrors, diagnostics } <- getDiagnostics uri c s
@@ -404,7 +400,7 @@ rebuildAndSendDiagnostics config conn state _logError document = do
       }) s) state
       publishDiagnostics conn
         { uri
-        , diagnostics: fileDiagnostics -- <> organizeDiagnostics
+        , diagnostics: fileDiagnostics
         }
       sendDiagnosticsEnd conn
 
@@ -636,6 +632,6 @@ main' { filename: logFile, config: cmdLineConfig } = do
   handleEvents config conn state documents logError
   handleCommands config conn state documents logError
 
-  launchAff_ $ handleConfig config conn state documents cmdLineConfig logError
+  launchAffLog' logError $ handleConfig config conn state documents cmdLineConfig logError
 
   log conn "PureScript Language Server started"
