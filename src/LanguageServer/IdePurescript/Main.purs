@@ -470,17 +470,16 @@ handleEvents config conn state documents logError = do
 
   -- On document opened rebuild it,
   -- or place it in a queue if no IDE server started
-  onDidOpenDocument documents \{ document } ->
+  onDidOpenDocument documents \{ document } -> do
     let uri = un DocumentUri $ getUri document
-    in
-      unless (uri # isLibSourceFile)
-        $ launchAffLog do
-          mbPort <- liftEffect $ getPort state
-          case mbPort of
-            Just _ -> rebuildAndSendDiagnostics config conn state logError document
-            _ -> do
-              liftEffect $
-                Ref.modify_ (over ServerState (\st -> st
+    c <- liftEffect $ Ref.read config
+    when (Config.buildOpenedFiles c && not (isLibSourceFile uri)) $
+      launchAffLog do
+        (liftEffect $ getPort state) >>= case _ of
+          Just _ -> rebuildAndSendDiagnostics config conn state logError document
+          _ -> do
+            liftEffect $
+              Ref.modify_ (over ServerState (\st -> st
                 { buildQueue = Object.insert uri document (st.buildQueue)
                 })) state
 

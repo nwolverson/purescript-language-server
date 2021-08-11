@@ -83,6 +83,9 @@ preludeModule = getString "preludeModule" "Prelude"
 fastRebuild :: ConfigFn Boolean
 fastRebuild = getBoolean "fastRebuild" true
 
+buildOpenedFiles :: ConfigFn Boolean
+buildOpenedFiles = getBoolean "buildOpenedFiles" false
+
 -- | Output directory - if specified, passed to purs, otherwise no argument is passed (purs default to 'output')
 outputDirectory :: ConfigFn (Maybe String)
 outputDirectory = getConfigMaybe readString "outputDirectory"
