@@ -108,6 +108,20 @@ logLevel = getString "pscIdelogLevel" "" >>> case _ of
     "perf" -> Just Perf
     _ -> Nothing
 
+data Formatter
+    = NoFormatter
+    | Purty
+    | PursTidy
+    | Pose
+
+formatter :: ConfigFn Formatter
+formatter = getString "formatter" "" >>> case _ of
+    "none" -> NoFormatter
+    "purty" -> Purty
+    "purs-tidy" -> PursTidy
+    "pose" -> Pose
+    _ -> Purty
+
 codegenTargets :: ConfigFn (Maybe (Array CodegenTarget))
 codegenTargets =  getConfigMaybe (readArray >=> traverse readString) "codegenTargets" >>>
     map (map Other)
