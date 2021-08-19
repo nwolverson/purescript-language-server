@@ -483,9 +483,14 @@ handleEvents config conn state documents logError = do
                 { buildQueue = Object.insert uri document (st.buildQueue)
                 })) state
 
-  onDidSaveDocument documents \{ document } -> launchAffLog do
-    rebuildAndSendDiagnostics config conn state logError document
-
+  onDidSaveDocument documents \{ document } -> do
+    c <- liftEffect $ Ref.read config
+    launchAffLog
+      if Config.buildOnSave c then do
+        s <- liftEffect $ Ref.read state
+        buildProject conn state logError documents c s []
+      else
+        rebuildAndSendDiagnostics config conn state logError document
 
 handleConfig ::
   Ref Foreign ->
