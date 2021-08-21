@@ -486,7 +486,7 @@ handleEvents config conn state documents logError = do
   onDidSaveDocument documents \{ document } -> do
     c <- liftEffect $ Ref.read config
     launchAffLog
-      if Config.buildOnSave c then do
+      if Config.fullBuildOnSave c then do
         s <- liftEffect $ Ref.read state
         buildProject conn state logError documents c s []
       else
