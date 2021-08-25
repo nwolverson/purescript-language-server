@@ -20,6 +20,8 @@ import IdePurescript.Tokens (containsArrow, identPart, modulePart, moduleRegex, 
 import PscIde.Command (CompletionOptions(..), DeclarationType(..), Namespace, TypeInfo(..))
 import PscIde.Command as C
 
+
+
 type ModuleInfo =
   { modules :: Array String
   , getQualifiedModule :: String -> Array String
@@ -106,7 +108,7 @@ getSuggestions port
     getModuleName "" token  = token
     getModuleName mod token = mod <> "." <> token
 
-    isImport = indexOf (Pattern "import") line == Just 0
+    isImport = indexOf (Pattern "import ") line == Just 0
     hasBracket = indexOf (Pattern "(") line /= Nothing
     moduleCompletion = isImport && not hasBracket
     moduleExplicit = isImport && hasBracket
