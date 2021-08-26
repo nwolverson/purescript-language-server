@@ -45,6 +45,14 @@ And then use the resulting executable, e.g. `purescript-language-server --stdio`
 
 This language server is based on vscode-languageserver-node which means it should support `--stdio`, `--socket=[number]`, `--node-ipc` or `--pipe` methods of communication, see [vscode-languageserver-node](https://github.com/Microsoft/vscode-languageserver-node) for details.
 
+#### Version support policy
+
+PureScript compiler version support is as follows:
+
+* The current minor version of the compiler is supported at all patch versions (e.g. 0.14.xx)
+* The previous minor version of the compiler is supported at the latest patch version (e.g. 0.13.8) for new functionality, and where possible all patch versions for existing functionality
+* Any older compiler versions are not officially supported - they may continue to work and will not be intentionally broken, but no particular effort will be made for continued support in the face of API changes
+
 ### Formatting provider
 
 The `purescript-language-server` comes with built-in support for [purty](https://gitlab.com/joneshf/purty) for formatting PureScript code. `purty` itself is not bundled with `purescript-language-server`, so you must either install it globally (e.g. `npm install -g purty`), or locally in your project (e.g. `npm install --save-dev purty`). When a formatting operation is requested via a language server command, `purescript-language-server` will attempt to find `purty` in your `$PATH`. If you're using a local `purty` install, you can configure the language server to include your local `npm` install path (i.e. `./node_modules/.bin`) using the `purescript.addNpmPath` setting. See below for information on configuring the language server for different editors.
