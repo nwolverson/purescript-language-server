@@ -121,6 +121,29 @@ let upstream =
 
 let overrides = { psc-ide = upstream.psc-ide // { version = "b9b1d0320204927cafefcf24b105ec03d0ae256b" } }
 
-let additions = {=}
+let additions = { language-cst-parser =
+    { dependencies =
+      [ "arrays"
+      , "console"
+      , "const"
+      , "debug"
+      , "effect"
+      , "either"
+      , "filterable"
+      , "foldable-traversable"
+      , "free"
+      , "functors"
+      , "maybe"
+      , "numbers"
+      , "psci-support"
+      , "strings"
+      , "transformers"
+      , "tuples"
+      , "typelevel-prelude"
+      ]
+    , repo = "https://github.com/natefaubion/purescript-language-cst-parser.git"
+    , version = "v0.7.1"
+    }
+}
 
 in  upstream // overrides // additions

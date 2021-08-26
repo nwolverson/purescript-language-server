@@ -27,6 +27,7 @@ You can edit this file as you like.
   , "foreign-generic"
   , "foreign-object"
   , "integers"
+  , "language-cst-parser"
   , "lists"
   , "maybe"
   , "newtype"
