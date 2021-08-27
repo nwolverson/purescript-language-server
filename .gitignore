@@ -5,3 +5,4 @@ server.js
 .psc*
 yarn.lock
 .spago/
+src/**/*.js
