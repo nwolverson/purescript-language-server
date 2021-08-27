@@ -142,7 +142,7 @@ let additions = { language-cst-parser =
       , "typelevel-prelude"
       ]
     , repo = "https://github.com/natefaubion/purescript-language-cst-parser.git"
-    , version = "v0.7.1"
+    , version = "v0.9.2"
     }
 }
 
