@@ -100,6 +100,9 @@ addPscPackageSources = getBoolean "addPscPackageSources" false
 addSpagoSources :: ConfigFn Boolean
 addSpagoSources = getBoolean "addSpagoSources" false
 
+fullBuildOnSave :: ConfigFn Boolean
+fullBuildOnSave = getBoolean "fullBuildOnSave" false
+
 logLevel :: ConfigFn (Maybe LogLevel)
 logLevel = getString "pscIdelogLevel" "" >>> case _ of
     "all" -> Just All
