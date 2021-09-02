@@ -1,5 +1,15 @@
 # Changelog
 
+### 0.15.5 
+
+- Add `purescript.fullBuildOnSave` setting which performs a full build via the configured build command instead of a IDE-server fast rebuild
+  when files are saved. Disabled by default, may have bad interaction with "save all" type functionality, configuration may be subject to change
+  in future.
+
+- Introduced CST-parser for some identifier lexing, fixing issues with identifiers (specifically operators) starting with `.` in particular (#146, https://github.com/nwolverson/vscode-ide-purescript/issues/184)
+
+- Fix #149 - autocomplete doesn't work when lines start with an "import" substring
+
 ### 0.15.4
 
 - Auto build of opened files is now behind a setting `purescript.buildOpenedFiles` and defaulted to `false`, this should be 
