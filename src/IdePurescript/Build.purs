@@ -9,6 +9,7 @@ import Data.Bifunctor (bimap)
 import Data.Either (either, Either(..))
 import Data.Maybe (maybe, Maybe(..))
 import Data.String (Pattern(Pattern), indexOf, joinWith, split)
+import Data.String as String
 import Data.Traversable (traverse_)
 import Effect (Effect)
 import Effect.Aff (Aff, error, makeAff)
@@ -93,7 +94,7 @@ build logCb buildOptions@{ command: Command cmd args } = do
         catchException err $ S.onDataString (CP.stderr cp) Encoding.UTF8 (res errOutput)
         catchException err $ S.onDataString (CP.stdout cp) Encoding.UTF8 (res outOutput)
 
-        CP.onClose cp (\exit -> case exit of
+        CP.onClose cp (\exit -> case exit of 
           CP.Normally n | n == 0 || n == 1 -> do
             pursError <- Ref.read (errOutput)
             pursOutput <- Ref.read (outOutput)
@@ -103,7 +104,10 @@ build logCb buildOptions@{ command: Command cmd args } = do
             case parsePscOutput <$> json of
               [ Left e ] -> succ $ Left $ "Couldn't parse build output: " <> e
               [ Right r ] -> succ $ Right { errors: r, success: n == 0 }
-              [] -> succ $ Left "Problem running build: didn't find JSON output"
+              [] -> succ $ Left $ "Problem running build: " <> 
+                    if String.length pursError > 0
+                    then String.take 500 pursError
+                    else "didn't find JSON output"
               _ -> succ $ Left "Found multiple lines of JSON output, don't know what to do"
           _ -> succ $ Left "Build process exited abnormally")
     pure mempty
