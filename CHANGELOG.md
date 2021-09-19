@@ -1,5 +1,21 @@
 # Changelog
 
+### 0.15.6
+
+- Filter completion suggestions based on already imported identifiers.
+
+  If a given identifier is imported, whether by an explicit or open import, only that same import should be suggested for that identifier.
+
+  For example, if `length` is imported from `Data.Array`, a completion of `le` will suggest `length` from `Data.Array` but not `Data.String`; it will
+   still however suggest `left` or `lengthOf`.
+
+  Known issues:
+    - Due to technical limitations data constructors are not filtered in this way
+    - Depending on the `purescript.autocompleteLimit` setting, if the already imported identifier would not be in a longer list of suggestions,
+    then no filtering of the other options will occur.
+
+- Add bundled asset to published releases. This is a bundled JS file including all `npm` dependencies, requiring only `node` to run.
+
 ### 0.15.5 
 
 - Add `purescript.fullBuildOnSave` setting which performs a full build via the configured build command instead of a IDE-server fast rebuild
