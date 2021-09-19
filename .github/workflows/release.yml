@@ -7,23 +7,34 @@ on:
 
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
 
-      - uses: purescript-contrib/setup-purescript@main
-
-      - uses: actions/setup-node@v1
+      - uses: nwolverson/setup-purescript@30d9b862f160b3a09a21a6457d6bc0d1ac9e92f3
         with:
-          node-version: "12"
+          purescript: "0.14.4"
+          spago: "latest"
+
+      # - uses: actions/setup-node@v1
+      #   with:
+      #     node-version: "12"
 
       - name: Install dependencies
         run: |
-          npm ci
+          npm ci --no-optional
 
       - name: Build source
         run: npm run-script build
+
+      - name: Prepare Bundled JS
+        run: |
+          npm install -g parcel
+          mv server.js server.unbundled.js
+          parcel build server.unbundled.js
+          echo "#!/usr/bin/env node" > bundle.js
+          cat server.js >> bundle.js
 
       - name: Create Release
         id: create_release
@@ -35,14 +46,6 @@ jobs:
           release_name: ${{ github.ref }}
           draft: false
           prerelease: false
-
-      - name: Prepare Bundled JS
-        run: |
-          # npm install -g parcel
-          # parcel build server.js
-          echo "#!/usr/bin/env node" > bundle.js
-          # cat dist/server.js >> bundle.js
-          cat server.js >> bundle.js
 
       - name: Upload Release Asset
         id: upload-release-asset
