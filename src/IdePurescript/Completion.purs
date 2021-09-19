@@ -6,7 +6,9 @@ import Control.Alt ((<|>))
 import Data.Array (concatMap, filter, head, intersect, sortBy, (:))
 import Data.Array as Array
 import Data.Either (Either)
+import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Set as Set
 import Data.String (Pattern(..), indexOf, length)
 import Data.String.Regex (Regex, regex)
 import Data.String.Regex.Flags (noFlags)
@@ -15,11 +17,11 @@ import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff)
 import IdePurescript.PscIde (getAvailableModules, getCompletion')
+import IdePurescript.PscIdeServer (Notify)
 import IdePurescript.Regex (match')
 import IdePurescript.Tokens (containsArrow, identPart, modulePart, moduleRegex, startsWithCapitalLetter)
 import PscIde.Command (CompletionOptions(..), DeclarationType(..), Namespace, TypeInfo(..))
 import PscIde.Command as C
-
 
 
 type ModuleInfo =
@@ -27,6 +29,8 @@ type ModuleInfo =
   , getQualifiedModule :: String -> Array String
   , mainModule :: Maybe String
   , importedModules :: Array String
+  , openModules :: Array String
+  , candidateModules :: String -> Array String
   }
 
 data SuggestionType = Module | Type | DCtor | Function | Value | Kind
@@ -61,7 +65,7 @@ data SuggestionResult =
   | IdentSuggestion { origMod :: String, exportMod :: String, exportedFrom :: Array String, identifier :: String, qualifier :: Maybe String, valueType :: String, suggestType :: SuggestionType, namespace :: Maybe C.Namespace, prefix :: String, documentation :: Maybe String }
   | QualifierSuggestion { text :: String }
 
-getSuggestions :: Int -> {
+getSuggestions :: Notify -> Int -> {
     line :: String,
     moduleInfo :: ModuleInfo,
     qualifiers :: Array String,
@@ -69,9 +73,9 @@ getSuggestions :: Int -> {
     maxResults :: Maybe Int,
     preferredModules :: Array String
   } -> Aff (Array SuggestionResult)
-getSuggestions port
+getSuggestions notify port
     { line
-    , moduleInfo: { modules, getQualifiedModule, mainModule, importedModules }
+    , moduleInfo: { modules, getQualifiedModule, mainModule, importedModules, openModules, candidateModules }
     , qualifiers
     , maxResults
     , groupCompletions
@@ -90,13 +94,13 @@ getSuggestions port
         if moduleCompletion then do
           let prefix = getModuleName (fromMaybe "" mod) token
           completions <- getModuleSuggestions port prefix
-          pure $ map (modResult prefix) completions
+          pure $ map (modResult prefix) completions 
         else do
-          let cc ns = Tuple ns <$> getCompletion' Nothing [C.PrefixFilter token, C.NamespaceFilter [ ns ] ] port mainModule mod ("Prim":modules) getQualifiedModule opts
-          completions <- traverse cc [ C.NSValue, C.NSType ]
+          let cc ns = (map (Tuple ns)) <$> getCompletion' Nothing [C.PrefixFilter token, C.NamespaceFilter [ ns ] ] port mainModule mod ("Prim":modules) getQualifiedModule opts
+          completions :: Array (Tuple Namespace _) <- Array.concat <$> traverse cc [ C.NSValue, C.NSType ]
           pure $ 
             matchingQualifiers token <> 
-            concatMap (\(Tuple n cs) -> result mod token (Just n) <$> cs) completions
+            ((\(Tuple n c) -> result mod token (Just n) c) <$> (takeExisting mod token completions))
       Nothing -> pure []
     where
     opts = CompletionOptions { maxResults, groupReexports: groupCompletions }
@@ -117,6 +121,43 @@ getSuggestions port
         Just [ Just _, mod, tok ] | mod /= Nothing || tok /= Nothing ->
           Just { mod, token: fromMaybe "" tok}
         _ -> Nothing
+
+    takeExisting (Just _) token completions = completions
+    takeExisting Nothing token completions = 
+      Array.filter filterCompletion completions
+      where
+      ident (Tuple _ (TypeInfo { identifier })) = identifier
+      candidateModules' = Map.fromFoldable $ (\x -> Tuple x (Set.fromFoldable $ candidateModules x)) <$> Array.nub (ident <$> completions)
+
+      -- for each ident, the modules it may be imported from for some completion
+      existingIdents = Map.filter (not <<< Set.isEmpty) $
+         Map.fromFoldableWith Set.union $ map
+          (\(Tuple _ (TypeInfo { identifier, module', exportedFrom })) -> 
+              let exportedModules = Set.fromFoldable $ module' : exportedFrom
+                  candidates = fromMaybe Set.empty (Map.lookup identifier candidateModules')
+                  matches = candidates `Set.intersection` exportedModules
+              in Tuple identifier matches
+          ) completions
+          -- Tuple x $ Set.fromFoldable $ candidateModules x) completions
+
+      -- filter each completion according to the modules it came from compared to the modules we might have already imported from, in this or some other completion
+      filterCompletion (Tuple ns (TypeInfo { identifier, module', exportedFrom, declarationType })) =
+        let resolvedNS = (declarationType >>= declarationTypeToNamespace)  <|> Just ns
+            isDctor = case resolvedNS of 
+              Just C.NSValue -> startsWithCapitalLetter identifier
+              _ -> false
+        in
+          case Map.lookup identifier existingIdents of
+            -- This ident isn't imported, or we cut off completions before the imported result came back, show all completions
+            Nothing -> true
+            -- Don't have explicit import information on dctors
+            _ | isDctor -> true
+            -- This ident is imported already, only show completions from the module it could have come from
+            Just candidateMods -> 
+              let exportedModules = Set.fromFoldable $ module' : exportedFrom
+              in
+              not $ Set.isEmpty $ candidateMods `Set.intersection` exportedModules
+
 
     modResult prefix moduleName = ModuleSuggestion { text: moduleName, suggestType: Module, prefix }
     result qualifier prefix ns (TypeInfo {type', identifier, module': origMod, exportedFrom, documentation, declarationType }) =

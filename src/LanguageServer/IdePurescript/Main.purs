@@ -421,8 +421,9 @@ handleEvents config conn state documents logError = do
       stopPscIdeServer = mkStopPscIdeServer state logError
       launchAffLog  = launchAffLog' logError
 
+  log conn "hello hello 1"
   onCompletion conn $ runHandler
-    "onCompletion" getTextDocUri (getCompletions documents)
+    "onCompletion" getTextDocUri (getCompletions logError documents)
 
   -- Handles go to definition
   onDefinition conn $ runHandler

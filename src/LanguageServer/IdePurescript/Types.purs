@@ -7,7 +7,7 @@ import Data.Newtype (class Newtype)
 import Effect.Aff (Aff)
 import Foreign (Foreign)
 import Foreign.Object (Object)
-import IdePurescript.Modules (State)
+import IdePurescript.Modules (State) as Modules
 import LanguageServer.TextDocument (TextDocument)
 import LanguageServer.Types (Connection, DocumentStore, DocumentUri, Settings, ClientCapabilities)
 import PscIde.Command (RebuildError)
@@ -17,7 +17,7 @@ newtype ServerState = ServerState
   , deactivate :: Aff Unit
   , root :: Maybe String
   , conn :: Maybe Connection
-  , modules :: State
+  , modules :: Modules.State
   , modulesFile :: Maybe DocumentUri
   , buildQueue :: Object TextDocument
   , diagnostics :: Object (Array RebuildError)

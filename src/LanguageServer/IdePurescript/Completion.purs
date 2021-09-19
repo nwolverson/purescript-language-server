@@ -16,6 +16,7 @@ import IdePurescript.Completion (SuggestionResult(..), SuggestionType(..), getSu
 import IdePurescript.Modules (State, getAllActiveModules, getModuleFromUnknownQualifier, getModuleName, getQualModule, getUnqualActiveModules)
 import IdePurescript.Modules as Modules
 import IdePurescript.PscIde (getLoadedModules)
+import IdePurescript.PscIdeServer (Notify)
 import LanguageServer.DocumentStore (getDocument)
 import LanguageServer.Handlers (TextDocumentPositionParams)
 import LanguageServer.IdePurescript.Commands (addCompletionImport)
@@ -28,8 +29,8 @@ import LanguageServer.TextDocument (getTextAtRange)
 import LanguageServer.Types (CompletionItem(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, CompletionItemList(..), markupContent)
 import LanguageServer.Types as LS
 
-getCompletions :: DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams -> Aff CompletionItemList
-getCompletions docs settings state ({ textDocument, position }) = do
+getCompletions :: Notify -> DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams -> Aff CompletionItemList
+getCompletions notify docs settings state ({ textDocument, position }) = do
     let uri = _.uri $ un TextDocumentIdentifier textDocument
     doc <- liftEffect $ getDocument docs uri
     line <- liftEffect $ getTextAtRange doc (mkRange position)
@@ -43,9 +44,16 @@ getCompletions docs settings state ({ textDocument, position }) = do
                 then getLoadedModules port'
                 else pure $ getUnqualActiveModules modules Nothing
             let qualifiers = mapMaybe (\(Modules.Module { qualifier }) -> qualifier) modules.modules
-            suggestions <- getSuggestions port'
+            suggestions <- getSuggestions notify port'
                 { line
-                , moduleInfo: { modules: usedModules, getQualifiedModule, mainModule: modules.main, importedModules: getAllActiveModules modules }
+                , moduleInfo:
+                    { modules: usedModules
+                    , openModules: getUnqualActiveModules modules Nothing
+                    , candidateModules: getUnqualActiveModules modules <<< Just
+                    , getQualifiedModule
+                    , mainModule: modules.main
+                    , importedModules: getAllActiveModules modules
+                    }
                 , qualifiers
                 , maxResults: Config.autocompleteLimit settings
                 , groupCompletions: Config.autocompleteGrouped settings

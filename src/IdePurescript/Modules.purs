@@ -122,6 +122,8 @@ getUnqualActiveModules state ident = getModules include state
 getAllActiveModules :: State -> Array String
 getAllActiveModules = getModules (const true)
 
+
+
 getModules :: (Module -> Boolean) -> State -> Array String
 getModules include { modules, main } =
   ([ "Prim" ] <> _ ) $ map getModuleName $ maybe [] (singleton <<< mkImplicit) main <> filter include modules
