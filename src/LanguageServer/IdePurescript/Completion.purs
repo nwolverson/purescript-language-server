@@ -44,7 +44,7 @@ getCompletions notify docs settings state ({ textDocument, position }) = do
                 then getLoadedModules port'
                 else pure $ getUnqualActiveModules modules Nothing
             let qualifiers = mapMaybe (\(Modules.Module { qualifier }) -> qualifier) modules.modules
-            suggestions <- getSuggestions notify port'
+            { results, isIncomplete } <- getSuggestions notify port'
                 { line
                 , moduleInfo:
                     { modules: usedModules
@@ -59,13 +59,13 @@ getCompletions notify docs settings state ({ textDocument, position }) = do
                 , groupCompletions: Config.autocompleteGrouped settings
                 , preferredModules: Config.importsPreferredModules settings
                 }
-            pure $ result $ convert uri <$> suggestions
+            pure $ CompletionItemList { items: convert uri <$> results, isIncomplete }
         _ -> pure $ result []
 
     where
     result arr = CompletionItemList
         { items: arr
-        , isIncomplete: Config.autocompleteLimit settings == Just (Arr.length arr)
+        , isIncomplete: true
         }
     mkRange pos = Range
         { start: pos # over Position (_ { character = 0 })

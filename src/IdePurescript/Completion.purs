@@ -13,16 +13,16 @@ import Data.String (Pattern(..), indexOf, length)
 import Data.String.Regex (Regex, regex)
 import Data.String.Regex.Flags (noFlags)
 import Data.String.Utils (startsWith)
-import Data.Traversable (traverse)
+import Data.Traversable (any, traverse)
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff)
+import Effect.Class (liftEffect)
 import IdePurescript.PscIde (getAvailableModules, getCompletion')
-import IdePurescript.PscIdeServer (Notify)
+import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import IdePurescript.Regex (match')
 import IdePurescript.Tokens (containsArrow, identPart, modulePart, moduleRegex, startsWithCapitalLetter)
 import PscIde.Command (CompletionOptions(..), DeclarationType(..), Namespace, TypeInfo(..))
 import PscIde.Command as C
-
 
 type ModuleInfo =
   { modules :: Array String
@@ -65,6 +65,7 @@ data SuggestionResult =
   | IdentSuggestion { origMod :: String, exportMod :: String, exportedFrom :: Array String, identifier :: String, qualifier :: Maybe String, valueType :: String, suggestType :: SuggestionType, namespace :: Maybe C.Namespace, prefix :: String, documentation :: Maybe String }
   | QualifierSuggestion { text :: String }
 
+
 getSuggestions :: Notify -> Int -> {
     line :: String,
     moduleInfo :: ModuleInfo,
@@ -72,7 +73,7 @@ getSuggestions :: Notify -> Int -> {
     groupCompletions :: Boolean,
     maxResults :: Maybe Int,
     preferredModules :: Array String
-  } -> Aff (Array SuggestionResult)
+  } -> Aff { results :: Array SuggestionResult, isIncomplete :: Boolean }
 getSuggestions notify port
     { line
     , moduleInfo: { modules, getQualifiedModule, mainModule, importedModules, openModules, candidateModules }
@@ -86,26 +87,32 @@ getSuggestions notify port
       Just [ Just _, Just mod, Just token ] -> do
         let cc ns = Tuple ns <$> getCompletion' Nothing [C.PrefixFilter token, C.NamespaceFilter [ ns ] ] port mainModule Nothing [ mod ] getQualifiedModule opts
         completions <- traverse cc [ C.NSValue, C.NSType ]
-        pure $ concatMap (\(Tuple n cs) -> result Nothing token (Just n) <$> cs) completions
-      _ -> pure []
+        pure $ complete $ concatMap (\(Tuple n cs) -> result Nothing token (Just n) <$> cs) completions
+      _ -> pure $ complete []
   else
     case parsed of
       Just { mod, token } ->
         if moduleCompletion then do
           let prefix = getModuleName (fromMaybe "" mod) token
           completions <- getModuleSuggestions port prefix
-          pure $ map (modResult prefix) completions 
+          pure $ complete $ map (modResult prefix) completions 
         else do
+
+          liftEffect $ notify Info $ "Completion mod=" <> show mod <> " token=" <> show token
           let cc ns = (map (Tuple ns)) <$> getCompletion' Nothing [C.PrefixFilter token, C.NamespaceFilter [ ns ] ] port mainModule mod ("Prim":modules) getQualifiedModule opts
-          completions :: Array (Tuple Namespace _) <- Array.concat <$> traverse cc [ C.NSValue, C.NSType ]
-          pure $ 
-            matchingQualifiers token <> 
-            ((\(Tuple n c) -> result mod token (Just n) c) <$> (takeExisting mod token completions))
-      Nothing -> pure []
+          completions :: Array (Array (Tuple Namespace TypeInfo)) <- traverse cc [ C.NSValue, C.NSType ]
+          let isIncomplete = any (\list -> Just (Array.length list) == maxResults) completions
+          let results = 
+                matchingQualifiers mod token <> 
+                ((\(Tuple n c) -> result mod token (Just n) c) <$> (takeExisting mod token $ Array.concat completions))
+          pure { results, isIncomplete }
+      Nothing -> pure $ complete []
     where
+    complete results = { results, isIncomplete: false }
     opts = CompletionOptions { maxResults, groupReexports: groupCompletions }
 
-    matchingQualifiers token = convQ <$> Array.filter (\q -> indexOf (Pattern token) q == Just 0) qualifiers
+    matchingQualifiers (Just _) _ = []
+    matchingQualifiers Nothing token = convQ <$> Array.filter (\q -> indexOf (Pattern token) q == Just 0) qualifiers
       where
       convQ text = QualifierSuggestion { text }
 
