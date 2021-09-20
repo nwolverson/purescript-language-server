@@ -60,16 +60,16 @@ getModuleSuggestions port prefix = do
   list <- getAvailableModules port
   pure $ filter (\m -> indexOf (Pattern prefix) m == Just 0) list
 
-data SuggestionResult =
-  ModuleSuggestion { text :: String, suggestType :: SuggestionType, prefix :: String }
+data SuggestionResult
+  = ModuleSuggestion { text :: String, suggestType :: SuggestionType, prefix :: String }
   | IdentSuggestion { origMod :: String, exportMod :: String, exportedFrom :: Array String, identifier :: String, qualifier :: Maybe String, valueType :: String, suggestType :: SuggestionType, namespace :: Maybe C.Namespace, prefix :: String, documentation :: Maybe String }
-  | QualifierSuggestion { text :: String }
+  | QualifierSuggestion { text :: String, mod :: String }
 
 
 getSuggestions :: Notify -> Int -> {
     line :: String,
     moduleInfo :: ModuleInfo,
-    qualifiers :: Array String,
+    qualifiers :: Array { qualifier :: String, moduleName :: String },
     groupCompletions :: Boolean,
     maxResults :: Maybe Int,
     preferredModules :: Array String
@@ -112,9 +112,9 @@ getSuggestions notify port
     opts = CompletionOptions { maxResults, groupReexports: groupCompletions }
 
     matchingQualifiers (Just _) _ = []
-    matchingQualifiers Nothing token = convQ <$> Array.filter (\q -> indexOf (Pattern token) q == Just 0) qualifiers
+    matchingQualifiers Nothing token = convQ <$> Array.filter (\{qualifier} -> indexOf (Pattern token) qualifier == Just 0) qualifiers
       where
-      convQ text = QualifierSuggestion { text }
+      convQ { qualifier, moduleName } = QualifierSuggestion { text: qualifier, mod: moduleName }
 
     getModuleName "" token  = token
     getModuleName mod token = mod <> "." <> token

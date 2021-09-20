@@ -43,7 +43,7 @@ getCompletions notify docs settings state ({ textDocument, position }) = do
             usedModules <- if autoCompleteAllModules
                 then getLoadedModules port'
                 else pure $ getUnqualActiveModules modules Nothing
-            let qualifiers = mapMaybe (\(Modules.Module { qualifier }) -> qualifier) modules.modules
+            let qualifiers = mapMaybe (\(Modules.Module { moduleName, qualifier }) -> { moduleName, qualifier: _ } <$> qualifier) modules.modules
             { results, isIncomplete } <- getSuggestions notify port'
                 { line
                 , moduleInfo:
@@ -88,8 +88,11 @@ getCompletions notify docs settings state ({ textDocument, position }) = do
         , newText
         }
 
-    convert _ (QualifierSuggestion { text }) =
+    convert _ (QualifierSuggestion { text, mod }) =
         completionItem text LS.Module
+        # over CompletionItem (_ 
+          { detail = toNullable $ Just mod
+          }) 
     convert _ (ModuleSuggestion { text, suggestType, prefix }) =
         completionItem text (convertSuggest suggestType)
         # over CompletionItem (_
