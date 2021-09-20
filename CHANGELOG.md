@@ -1,5 +1,9 @@
 # Changelog
 
+### 0.15.7
+
+- Show build error output when no JSON found. Fix #150
+
 ### 0.15.6
 
 - Filter completion suggestions based on already imported identifiers.
