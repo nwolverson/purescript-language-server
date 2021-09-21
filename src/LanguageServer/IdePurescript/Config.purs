@@ -98,7 +98,7 @@ addPscPackageSources :: ConfigFn Boolean
 addPscPackageSources = getBoolean "addPscPackageSources" false
 
 addSpagoSources :: ConfigFn Boolean
-addSpagoSources = getBoolean "addSpagoSources" false
+addSpagoSources = getBoolean "addSpagoSources" true
 
 fullBuildOnSave :: ConfigFn Boolean
 fullBuildOnSave = getBoolean "fullBuildOnSave" false

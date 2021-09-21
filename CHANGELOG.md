@@ -1,5 +1,9 @@
 # Changelog
 
+### Unreleased
+
+- Default `purescript.addSpagoSources` true (already true in vscode default for some time).
+
 ### 0.15.7
 
 - Show build error output when no JSON found. Fix #150
