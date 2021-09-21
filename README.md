@@ -126,7 +126,12 @@ As of `0.5.0`, Neovim has a built-in [language server client](https://neovim.io/
 nvim_lsp.purescripttls.setup {
   " Your personal on_attach function referenced before to include
   " keymaps & other ls options
-  on_attach = on_attach
+  on_attach = on_attach,
+  settings = {
+    purescript = {
+      addSpagoSources = true -- e.g. any purescript language-server config here
+    }
+  },
   flags = {
     debounce_text_changes = 150,
   }
