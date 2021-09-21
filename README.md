@@ -65,9 +65,25 @@ Use [vscode-ide-purescript](https://github.com/nwolverson/vscode-ide-purescript)
 
 Use [atom-ide-purescript](https://github.com/nwolverson/atom-ide-purescript).
 
-### Vim/LanguageClient_neovim
+## Neovim’s built-in language server + nvim-lspconfig
 
-Use [vimmer-ps](https://github.com/sriharshachilakapati/vimmer-ps).
+As of `0.5.0`, Neovim has a built-in [language server client](https://neovim.io/doc/user/lsp.html). A popular plugin to help with configuring this server is [`nvim-lspconfig`](https://github.com/neovim/nvim-lspconfig/blob/master/README.md). This plugin includes `purescriptls` which will automatically find and root the language server as well as connect PSCIDE, etc. (for more info, read the [config](https://github.com/neovim/nvim-lspconfig/blob/master/CONFIG.md#purescriptls)). To use, add this to your `init.lua` or inside a `EOF << lua … EOF` block in your `init.vim`.
+
+```lua
+nvim_lsp.purescripttls.setup {
+  " Your personal on_attach function referenced before to include
+  " keymaps & other ls options
+  on_attach = on_attach,
+  settings = {
+    purescript = {
+      addSpagoSources = true -- e.g. any purescript language-server config here
+    }
+  },
+  flags = {
+    debounce_text_changes = 150,
+  }
+}
+```
 
 ### Vim/CoC
 
@@ -118,25 +134,10 @@ command! -nargs=0  OrganizeImports :call CocAction('runCommand', 'editor.action.
 nmap               <leader>o       :OrganizeImports<cr>
 ```
 
-## Neovim’s built-in language server + nvim-lspconfig
+### Vim/LanguageClient_neovim
 
-As of `0.5.0`, Neovim has a built-in [language server client](https://neovim.io/doc/user/lsp.html). A popular plugin to help with configuring this server is [`nvim-lspconfig`](https://github.com/neovim/nvim-lspconfig/blob/master/README.md). This plugin includes `purescriptls` which will automatically find and root the language server as well as connect PSCIDE, etc. (for more info, read the [config](https://github.com/neovim/nvim-lspconfig/blob/master/CONFIG.md#purescriptls)). To use, add this to your `init.lua` or inside a `EOF << lua … EOF` block in your `init.vim`.
+Use [vimmer-ps](https://github.com/sriharshachilakapati/vimmer-ps).
 
-```lua
-nvim_lsp.purescripttls.setup {
-  " Your personal on_attach function referenced before to include
-  " keymaps & other ls options
-  on_attach = on_attach,
-  settings = {
-    purescript = {
-      addSpagoSources = true -- e.g. any purescript language-server config here
-    }
-  },
-  flags = {
-    debounce_text_changes = 150,
-  }
-}
-```
 
 ### Other clients
 
