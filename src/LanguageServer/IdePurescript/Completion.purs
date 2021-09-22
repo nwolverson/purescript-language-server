@@ -26,7 +26,7 @@ import LanguageServer.IdePurescript.SuggestionRank (Ranking(..), cmapRanking)
 import LanguageServer.IdePurescript.SuggestionRank as SuggestionRank
 import LanguageServer.IdePurescript.Types (ServerState)
 import LanguageServer.TextDocument (getTextAtRange)
-import LanguageServer.Types (CompletionItem(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, CompletionItemList(..), markupContent)
+import LanguageServer.Types (CompletionItem(..), CompletionItemLabelDetails(..), CompletionItemList(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, markupContent)
 import LanguageServer.Types as LS
 
 getCompletions :: Notify -> DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams -> Aff CompletionItemList
@@ -102,6 +102,8 @@ getCompletions notify docs settings state ({ textDocument, position }) = do
         completionItem identifier (convertSuggest suggestType)
         # over CompletionItem (_
           { detail = toNullable $ Just valueType
+          -- Should probably only fill this in based on support but this should be backwards compatible
+          , labelDetails = toNullable $ Just $ CompletionItemLabelDetails { detail: toNullable $ Just $ " " <> valueType, description: toNullable $ Just exportMod } 
           , documentation = toNullable $ Just $ markupContent $ (fromMaybe "" documentation) <> exportText
           , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri (maybe "" showNS namespace)
           , textEdit = toNullable $ Just $ edit identifier prefix

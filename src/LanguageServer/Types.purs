@@ -102,10 +102,16 @@ newtype Diagnostic = Diagnostic
 derive instance newtypeDiagnostic :: Newtype Diagnostic _
 derive newtype instance showDiagnostic :: Show Diagnostic
 
+newtype CompletionItemLabelDetails = CompletionItemLabelDetails
+    { detail :: Nullable String
+    , description :: Nullable String
+    }
+
 newtype CompletionItem = CompletionItem
     { label :: String
     , kind :: Nullable Int
     , detail :: Nullable String
+    , labelDetails :: Nullable CompletionItemLabelDetails
     , documentation :: Nullable MarkupContent
     , sortText :: Nullable String
     , filterText :: Nullable String
@@ -143,6 +149,7 @@ defaultCompletionItem label = CompletionItem
     { label
     , kind: toNullable Nothing
     , detail: toNullable Nothing
+    , labelDetails: toNullable Nothing
     , documentation: toNullable Nothing
     , sortText: toNullable Nothing
     , filterText: toNullable Nothing

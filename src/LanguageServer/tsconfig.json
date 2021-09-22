@@ -4,6 +4,7 @@
     "target": "ES5",
     "sourceMap": false,
     "noImplicitAny": true,
-    "newLine": "LF"
+    "newLine": "LF",
+    "lib": ["es2015"]
   }
 }

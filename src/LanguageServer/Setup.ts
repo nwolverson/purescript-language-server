@@ -1,6 +1,6 @@
-import { IConnection, createConnection,InitializeParams, IPCMessageReader, IPCMessageWriter, TextDocuments, Location, Hover, TextDocumentSyncKind, CodeActionKind } from 'vscode-languageserver';
+import { Connection, createConnection,InitializeParams, TextDocuments, TextDocumentSyncKind, CodeActionKind } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeParams, conn: IConnection}) => () => void) => (): IConnection => {
+export const initConnection = (commands: string[]) => (cb: (arg: {params: InitializeParams, conn: Connection}) => () => void) => (): Connection => {
     const conn = createConnection();
     conn.listen();
     
@@ -38,13 +38,13 @@ exports.initConnection = (commands: string[]) => (cb: (arg: {params: InitializeP
     return conn;
 }
 
-exports.initDocumentStore = (conn : IConnection) => () => {
+export const initDocumentStore = (conn : Connection) => () => {
     const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
     documents.listen(conn);
     return documents;
 }
 
-exports.getConfigurationImpl = (conn : IConnection) => () =>
+export const getConfigurationImpl = (conn : Connection) => () =>
     conn.workspace.getConfiguration("purescript").then(config => {
         return { purescript: config };
     });
