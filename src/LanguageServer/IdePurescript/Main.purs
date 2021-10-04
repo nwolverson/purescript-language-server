@@ -435,7 +435,7 @@ handleEvents config conn state documents logError = do
     "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
 
   onFoldingRanges conn $ runHandler
-    "onFoldingRanges" getTextDocUri (getFoldingRanges documents)
+    "onFoldingRanges" getTextDocUri (getFoldingRanges logError documents)
 
   onDocumentFormatting conn $ runHandler
     "onDocumentFormatting" getTextDocUri (getFormattedDocument logError documents)
@@ -639,3 +639,5 @@ main' { filename: logFile, config: cmdLineConfig } = do
   launchAffLog' logError $ handleConfig config conn state documents cmdLineConfig logError
 
   log conn "PureScript Language Server started"
+  log conn "DEV 123"
+
