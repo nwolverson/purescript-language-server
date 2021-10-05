@@ -3,8 +3,9 @@ module LanguageServer.IdePurescript.Assist where
 import Prelude
 
 import Control.Monad.Except (runExcept)
-import Data.Array (fold, intercalate, take, (!!))
+import Data.Array (fold, intercalate, snoc, take, (!!))
 import Data.Either (Either(..), either)
+import Data.Foldable (any, foldl)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (over)
 import Data.String (trim)
@@ -118,18 +119,19 @@ fixTypoActions docs _ (ServerState { port, conn, modules }) docUri line char =
           pure $ case res of 
             Left _ -> []
             Right infos ->
-              take 10 $
-              map (\(TypeInfo { type', identifier, module', declarationType }) ->
-                Commands.fixTypo' 
-                  do
-                    let decTypeString = renderDeclarationType type' identifier declarationType
-                    if identifier == word then
-                      "Import" <> decTypeString <> identifier <> " (" <> module' <> ")"
-                    else
-                      "Replace with " <> identifier <> " (" <> module' <> ")"  
-                  docUri line char
-                  (encodeTypoResult $ TypoResult { identifier, mod: module', declarationType: maybe "" declarationTypeToString declarationType }))
-                infos
+              infos
+                # simplifyImportChoice
+                <#> (\(TypeInfo { type', identifier, module', declarationType }) ->
+                    Commands.fixTypo' 
+                      do
+                        let decTypeString = renderDeclarationType type' identifier declarationType
+                        if identifier == word then
+                          "Import" <> decTypeString <> identifier <> " (" <> module' <> ")"
+                        else
+                          "Replace with " <> identifier <> " (" <> module' <> ")"  
+                      docUri line char
+                      (encodeTypoResult $ TypoResult { identifier, mod: module', declarationType: maybe "" declarationTypeToString declarationType }))
+                # take 10
         Nothing -> pure []
     _, _ -> pure []
     where
@@ -148,6 +150,37 @@ fixTypoActions docs _ (ServerState { port, conn, modules }) docUri line char =
           if containsArrow type' then
           " function: " else
           " value: "
+
+-- | Removes choices that are not worth the brain-cycles to make.
+-- | 
+-- | If there are two suggestions to 
+-- |   1. import Something(..) and
+-- |   2. import Something 
+-- | We only import Something(..) because it can be automatically simplified
+-- | with an optimise import action
+simplifyImportChoice :: Array TypeInfo -> Array TypeInfo
+simplifyImportChoice before = foldl go [] before
+  where
+  go acc info = 
+    if isType info && any (isTheSameButDataConstructor info) before then
+      acc
+    else
+      snoc acc info 
+
+  isType = case _ of 
+    TypeInfo {declarationType: Just DeclType} -> true
+    _ -> false
+
+  isDataConstructor = case _ of 
+    TypeInfo {declarationType: Just DeclDataConstructor} -> true
+    TypeInfo {declarationType: Just DeclValue, identifier } | startsWithCapitalLetter identifier -> true
+    _ -> false
+
+  isTheSameButDataConstructor (TypeInfo ti1) info2@(TypeInfo ti2) =
+    ti1.identifier == ti2.identifier &&
+    ti1.module' == ti2.module' &&
+    isDataConstructor info2
+
 
 fixTypo :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 fixTypo log docs settings state@(ServerState { port, conn, clientCapabilities }) args = do
