@@ -3,7 +3,7 @@ module IdePurescript.Completion where
 import Prelude
 
 import Control.Alt ((<|>))
-import Data.Array (concatMap, filter, head, intersect, sortBy, (:))
+import Data.Array (concatMap, filter, foldl, head, intersect, snoc, sortBy, (:))
 import Data.Array as Array
 import Data.Either (Either)
 import Data.Map as Map
@@ -15,10 +15,10 @@ import Data.String.Regex.Flags (noFlags)
 import Data.String.Utils (startsWith)
 import Data.Traversable (any, traverse)
 import Data.Tuple (Tuple(..))
+import Data.Tuple as Tuple
 import Effect.Aff (Aff)
-import Effect.Class (liftEffect)
 import IdePurescript.PscIde (getAvailableModules, getCompletion')
-import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
+import IdePurescript.PscIdeServer (Notify)
 import IdePurescript.Regex (match')
 import IdePurescript.Tokens (containsArrow, identPart, modulePart, moduleRegex, startsWithCapitalLetter)
 import PscIde.Command (CompletionOptions(..), DeclarationType(..), Namespace, TypeInfo(..))
@@ -74,9 +74,9 @@ getSuggestions :: Notify -> Int -> {
     maxResults :: Maybe Int,
     preferredModules :: Array String
   } -> Aff { results :: Array SuggestionResult, isIncomplete :: Boolean }
-getSuggestions notify port
+getSuggestions _notify port
     { line
-    , moduleInfo: { modules, getQualifiedModule, mainModule, importedModules, openModules, candidateModules }
+    , moduleInfo: { modules, getQualifiedModule, mainModule, importedModules, openModules: _, candidateModules }
     , qualifiers
     , maxResults
     , groupCompletions
@@ -97,14 +97,13 @@ getSuggestions notify port
           completions <- getModuleSuggestions port prefix
           pure $ complete $ map (modResult prefix) completions 
         else do
-
-          liftEffect $ notify Info $ "Completion mod=" <> show mod <> " token=" <> show token
           let cc ns = (map (Tuple ns)) <$> getCompletion' Nothing [C.PrefixFilter token, C.NamespaceFilter [ ns ] ] port mainModule mod ("Prim":modules) getQualifiedModule opts
           completions :: Array (Array (Tuple Namespace TypeInfo)) <- traverse cc [ C.NSValue, C.NSType ]
           let isIncomplete = any (\list -> Just (Array.length list) == maxResults) completions
-          let results = 
+              completions' = simplifyImportChoice Tuple.snd $ Array.concat completions
+              results = 
                 matchingQualifiers mod token <> 
-                ((\(Tuple n c) -> result mod token (Just n) c) <$> (takeExisting mod token $ Array.concat completions))
+                ((\(Tuple n c) -> result mod token (Just n) c) <$> (takeExisting mod token $ completions'))
           pure { results, isIncomplete }
       Nothing -> pure $ complete []
     where
@@ -129,8 +128,8 @@ getSuggestions notify port
           Just { mod, token: fromMaybe "" tok}
         _ -> Nothing
 
-    takeExisting (Just _) token completions = completions
-    takeExisting Nothing token completions = 
+    takeExisting (Just _) _token completions = completions
+    takeExisting Nothing _token completions = 
       Array.filter filterCompletion completions
       where
       ident (Tuple _ (TypeInfo { identifier })) = identifier
@@ -204,3 +203,33 @@ declarationTypeToNamespace = case _ of -- Should this live somewhere else?
   DeclValueOperator -> Just C.NSValue
   DeclTypeOperator -> Just C.NSType
   DeclModule -> Nothing
+
+-- | Removes choices that are not worth the brain-cycles to make.
+-- | 
+-- | If there are two suggestions to 
+-- |   1. import Something(..) and
+-- |   2. import Something 
+-- | We only import Something(..) because it can be automatically simplified
+-- | with an optimise import action
+simplifyImportChoice :: forall a. (a -> TypeInfo) -> Array a -> Array a
+simplifyImportChoice f before = foldl go [] before
+  where
+  go acc info = 
+    if isType (f info) && any (f >>> isTheSameButDataConstructor (f info)) before then
+      acc
+    else
+      snoc acc info 
+
+  isType = case _ of 
+    TypeInfo {declarationType: Just DeclType} -> true
+    _ -> false
+
+  isDataConstructor = case _ of 
+    TypeInfo {declarationType: Just DeclDataConstructor} -> true
+    TypeInfo {declarationType: Just DeclValue, identifier } | startsWithCapitalLetter identifier -> true
+    _ -> false
+
+  isTheSameButDataConstructor (TypeInfo ti1) info2@(TypeInfo ti2) =
+    ti1.identifier == ti2.identifier &&
+    ti1.module' == ti2.module' &&
+    isDataConstructor info2

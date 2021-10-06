@@ -3,9 +3,8 @@ module LanguageServer.IdePurescript.Assist where
 import Prelude
 
 import Control.Monad.Except (runExcept)
-import Data.Array (fold, intercalate, snoc, take, (!!))
+import Data.Array (fold, intercalate, take, (!!))
 import Data.Either (Either(..), either)
-import Data.Foldable (any, foldl)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (over)
 import Data.String (trim)
@@ -14,7 +13,7 @@ import Effect.Class (liftEffect)
 import Foreign (F, Foreign, readInt, readString, unsafeFromForeign, unsafeToForeign)
 import Foreign.Index ((!))
 import Foreign.NullOrUndefined (readNullOrUndefined)
-import IdePurescript.Completion (declarationTypeToNamespace)
+import IdePurescript.Completion (declarationTypeToNamespace, simplifyImportChoice)
 import IdePurescript.PscIde (eitherToErr)
 import IdePurescript.PscIdeServer (Notify)
 import IdePurescript.Tokens (containsArrow, identifierAtPoint, startsWithCapitalLetter)
@@ -120,7 +119,7 @@ fixTypoActions docs _ (ServerState { port, conn, modules }) docUri line char =
             Left _ -> []
             Right infos ->
               infos
-                # simplifyImportChoice
+                # simplifyImportChoice identity
                 <#> (\(TypeInfo { type', identifier, module', declarationType }) ->
                     Commands.fixTypo' 
                       do
@@ -150,37 +149,6 @@ fixTypoActions docs _ (ServerState { port, conn, modules }) docUri line char =
           if containsArrow type' then
           " function: " else
           " value: "
-
--- | Removes choices that are not worth the brain-cycles to make.
--- | 
--- | If there are two suggestions to 
--- |   1. import Something(..) and
--- |   2. import Something 
--- | We only import Something(..) because it can be automatically simplified
--- | with an optimise import action
-simplifyImportChoice :: Array TypeInfo -> Array TypeInfo
-simplifyImportChoice before = foldl go [] before
-  where
-  go acc info = 
-    if isType info && any (isTheSameButDataConstructor info) before then
-      acc
-    else
-      snoc acc info 
-
-  isType = case _ of 
-    TypeInfo {declarationType: Just DeclType} -> true
-    _ -> false
-
-  isDataConstructor = case _ of 
-    TypeInfo {declarationType: Just DeclDataConstructor} -> true
-    TypeInfo {declarationType: Just DeclValue, identifier } | startsWithCapitalLetter identifier -> true
-    _ -> false
-
-  isTheSameButDataConstructor (TypeInfo ti1) info2@(TypeInfo ti2) =
-    ti1.identifier == ti2.identifier &&
-    ti1.module' == ti2.module' &&
-    isDataConstructor info2
-
 
 fixTypo :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 fixTypo log docs settings state@(ServerState { port, conn, clientCapabilities }) args = do
