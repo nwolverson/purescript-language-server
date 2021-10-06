@@ -71,7 +71,6 @@ showNS C.NSValue = "NSValue"
 showNS C.NSKind = "NSKind"
 showNS C.NSType = "NSType"
 
-
 addCompletionImportEdit :: Notify -> DocumentStore -> Settings -> ServerState
  -> CompletionImportArgs -> TextDocument -> Number -> String -> Maybe C.Namespace
  -> Aff (Either Foreign (Array WorkspaceEdit))
@@ -81,12 +80,11 @@ addCompletionImportEdit log _ config (ServerState { port, modules, conn, clientC
     Just port' -> do
       { result } <-
         case mod, qual of
-          Just mod', Just qual' | noModule (isSameQualified mod' qual') ->
+          Just mod', Just qual' | noModule (isSameQualified mod' qual') -> do
             addQualifiedImport modules port' (un DocumentUri uri) text mod' qual'
-          Just mod', Nothing | mod' == prelude && noModule (isSameUnqualified prelude) ->
+          Just mod', Nothing | mod' == prelude && noModule (isSameUnqualified prelude) -> do
             addModuleImport modules port' (un DocumentUri uri) text mod'
-          mod', qual' -> do
-            liftEffect $ log Info $ "Adding import of " <> identifier <> " from " <> show mod' <> " with type filter " <> show (showNS <$>  ns)
+          mod', qual' ->
             addExplicitImport modules port' (un DocumentUri uri) text mod' qual' identifier ns
       case result of
         UpdatedImports newText -> do

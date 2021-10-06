@@ -7,6 +7,7 @@ import Data.Array (fold, intercalate, take, (!!))
 import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (over)
+import Data.Nullable as Nullable
 import Data.String (trim)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
@@ -92,11 +93,12 @@ newtype TypoResult
   = TypoResult 
       { identifier :: String
       , mod :: String
-      , declarationType :: String 
+      , declarationType :: String
+      , qualifier :: Maybe String
       }
 
 encodeTypoResult :: TypoResult -> Foreign
-encodeTypoResult = unsafeToForeign
+encodeTypoResult (TypoResult res) = unsafeToForeign (res { qualifier = Nullable.toNullable $ res.qualifier})
 
 decodeTypoResult :: Foreign -> F TypoResult
 decodeTypoResult obj = do
@@ -104,7 +106,8 @@ decodeTypoResult obj = do
   mod <- obj ! "mod" >>= readString
   declarationType <- fromMaybe "" <$> 
     (obj ! "declarationType" >>= readNullOrUndefined readString)
-  pure $ TypoResult { identifier, mod , declarationType }
+  qualifier <- obj ! "qualifier" >>= readNullOrUndefined readString
+  pure $ TypoResult { identifier, qualifier, mod , declarationType }
 
 fixTypoActions :: DocumentStore -> Settings -> ServerState -> DocumentUri -> Int -> Int -> Aff (Array Command)
 fixTypoActions docs _ (ServerState { port, conn, modules }) docUri line char =
@@ -113,7 +116,7 @@ fixTypoActions docs _ (ServerState { port, conn, modules }) docUri line char =
       doc <- liftEffect $ getDocument docs docUri
       lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
       case identifierAtPoint lineText char of
-        Just { word } -> do
+        Just { word, qualifier } -> do
           res <- suggestTypos port' word 2 modules.main defaultCompletionOptions
           pure $ case res of 
             Left _ -> []
@@ -129,7 +132,7 @@ fixTypoActions docs _ (ServerState { port, conn, modules }) docUri line char =
                         else
                           "Replace with " <> identifier <> " (" <> module' <> ")"  
                       docUri line char
-                      (encodeTypoResult $ TypoResult { identifier, mod: module', declarationType: maybe "" declarationTypeToString declarationType }))
+                      (encodeTypoResult $ TypoResult { identifier, qualifier, mod: module', declarationType: maybe "" declarationTypeToString declarationType }))
                 # take 10
         Nothing -> pure []
     _, _ -> pure []
@@ -161,20 +164,20 @@ fixTypo log docs settings state@(ServerState { port, conn, clientCapabilities })
         lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
         version <- liftEffect $ getVersion doc
         case identifierAtPoint lineText char, (runExcept <<< decodeTypoResult) <$> args !! 3 of
-            Just { range }, Just (Right (TypoResult { identifier, mod, declarationType })) -> 
-              void $ replace uri version line range identifier mod declarationType
+            Just { range }, Just (Right (TypoResult { identifier, qualifier, mod, declarationType })) -> do
+              void $ replace uri version line range identifier qualifier mod declarationType
             _, _ -> pure unit
     _, _, _, _, _ -> pure unit
 
   where
-    replace uri version line {left, right} word mod declarationType = do 
+    replace uri version line {left, right} word qualifier mod declarationType = do 
       let range = Range { start: Position { line, character: left }
                         , end: Position { line, character: right }
                         }
-          edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range word
+          edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range $ maybe "" (_ <> ".") qualifier  <> word
       -- TODO suggestion type
           namespace = declarationTypeToNamespace =<< declarationTypeFromString declarationType
-      addCompletionImport' edit log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign Nothing, unsafeToForeign uri, unsafeToForeign (maybe "" showNS namespace) ]
+      addCompletionImport' edit log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign $ Nullable.toNullable qualifier, unsafeToForeign uri, unsafeToForeign (maybe "" showNS namespace) ]
 
 fillTypedHole :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 fillTypedHole logFn docs settings state args = do
