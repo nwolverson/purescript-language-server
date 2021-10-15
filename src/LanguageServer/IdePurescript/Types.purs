@@ -4,7 +4,7 @@ import Prelude
 
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
-import Effect.Aff (Aff)
+import Effect.Aff (Aff, Fiber)
 import Foreign (Foreign)
 import Foreign.Object (Object)
 import IdePurescript.Modules (State) as Modules
@@ -18,6 +18,7 @@ newtype ServerState
   , deactivate :: Aff Unit
   , root :: Maybe String
   , conn :: Maybe Connection
+  , runningRebuild :: Maybe (Fiber Unit)
   , modules :: Modules.State
   , modulesFile :: Maybe DocumentUri
   , buildQueue :: Object TextDocument

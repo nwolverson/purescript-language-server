@@ -52,6 +52,7 @@ You can edit this file as you like.
   , "transformers"
   , "tuples"
   , "unsafe-coerce"
+  , "untagged-union"
   , "uuid"
   ]
 , packages = ./packages.dhall

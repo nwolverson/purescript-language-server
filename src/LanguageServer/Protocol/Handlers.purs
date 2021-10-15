@@ -1,13 +1,14 @@
 module LanguageServer.Protocol.Handlers where
 
 import Prelude
+
 import Control.Promise (Promise)
 import Control.Promise as Promise
 import Data.Nullable (Nullable)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Foreign (Foreign)
-import LanguageServer.Protocol.Types (CodeActionResult, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, FoldingRange, GotoDefinitionResult, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, TextEdit, WorkspaceEdit)
+import LanguageServer.Protocol.Types (CodeActionResult, Command, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, FoldingRange, GotoDefinitionResult, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, TextEdit, WorkspaceEdit)
 
 type TextDocumentPositionParams
   = { textDocument :: TextDocumentIdentifier, position :: Position }
@@ -24,8 +25,15 @@ type CodeActionParams
 type CodeActionContext
   = { diagnostics :: Array Diagnostic }
 
-type FoldingRangesParams
-  = { textDocument :: TextDocumentIdentifier }
+type CodeLensParams = { textDocument ∷ TextDocumentIdentifier }
+
+type CodeLensResult =
+  { range ∷ Range 
+  , command :: Nullable Command
+  , data :: Foreign
+  }
+
+type FoldingRangesParams = { textDocument :: TextDocumentIdentifier }
 
 type DocumentFormattingParams
   = { textDocument :: TextDocumentIdentifier }
@@ -57,6 +65,8 @@ foreign import onWorkspaceSymbol :: Connection -> (WorkspaceSymbolParams -> Res 
 foreign import onReferences :: Connection -> (ReferenceParams -> Res (Array Location)) -> Effect Unit
 
 foreign import onCodeAction :: Connection -> (CodeActionParams -> Res (Array CodeActionResult)) -> Effect Unit
+
+foreign import onCodeLens ∷ Connection -> (CodeLensParams -> Res (Array CodeLensResult)) -> Effect Unit
 
 foreign import onFoldingRanges :: Connection -> (FoldingRangesParams -> Res (Array FoldingRange)) -> Effect Unit
 

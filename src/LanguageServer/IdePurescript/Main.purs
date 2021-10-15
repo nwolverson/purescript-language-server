@@ -31,10 +31,14 @@ import Foreign.Object (Object)
 import Foreign.Object as Object
 import IdePurescript.Modules (getModulesForFileTemp, initialModulesState)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
+import LanguageServer.Protocol.Console (error, info, log, warn)
+import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidOpenDocument, onDidSaveDocument)
+import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendCleanBegin, sendCleanEnd, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fillTypedHole, fixTypo)
 import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnostics)
 import LanguageServer.IdePurescript.Clean (clean)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
+import LanguageServer.IdePurescript.CodeLenses (getCodeLenses)
 import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cleanCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, sortImportsCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
 import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config as Config
@@ -63,24 +67,24 @@ import Node.Process as Process
 import PscIde.Command (RebuildError(..))
 
 defaultServerState :: ServerState
-defaultServerState =
-  ServerState
-    { port: Nothing
-    , deactivate: pure unit
-    , root: Nothing
-    , conn: Nothing
-    , modules: initialModulesState
-    , modulesFile: Nothing
-    , buildQueue: Object.empty
-    , diagnostics: Object.empty
-    , clientCapabilities: Nothing
-    }
+defaultServerState = ServerState
+  { port: Nothing
+  , deactivate: pure unit
+  , root: Nothing
+  , conn: Nothing
+  , runningRebuild: Nothing
+  , modules: initialModulesState
+  , modulesFile: Nothing
+  , buildQueue: Object.empty
+  , diagnostics: Object.empty
+  , clientCapabilities: Nothing
+  }
 
-type CmdLineArguments
-  = { config :: Maybe String
-    , filename :: Maybe String
-    , version :: Boolean
-    }
+type CmdLineArguments =
+  { config :: Maybe String
+  , filename :: Maybe String
+  , version :: Boolean
+  }
 
 -- | Parses command line arguments  passed to process.argv
 parseArgs :: Array String -> Maybe CmdLineArguments
@@ -454,38 +458,41 @@ handleEvents ::
   Ref ServerState ->
   DocumentStore -> Notify -> Effect Unit
 handleEvents config conn state documents logError = do
-  let
-    runHandler = mkRunHandler config state documents
-    stopPscIdeServer = mkStopPscIdeServer state logError
-    launchAffLog = launchAffLog' logError
-  onCompletion conn
-    $ runHandler
-        "onCompletion" getTextDocUri (getCompletions logError documents)
+  let runHandler = mkRunHandler config state documents
+      stopPscIdeServer = mkStopPscIdeServer state logError
+      launchAffLog = launchAffLog' logError
+
+  onCompletion conn $ runHandler
+    "onCompletion" getTextDocUri (getCompletions logError documents)
+
   -- Handles go to definition
-  onDefinition conn
-    $ runHandler
-        "onDefinition" getTextDocUri (getDefinition documents)
-  onDocumentSymbol conn
-    $ runHandler
-        "onDocumentSymbol" getTextDocUri getDocumentSymbols
-  onWorkspaceSymbol conn
-    $ runHandler
-        "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
-  onFoldingRanges conn
-    $ runHandler
-        "onFoldingRanges" getTextDocUri (getFoldingRanges logError documents)
-  onDocumentFormatting conn
-    $ runHandler
-        "onDocumentFormatting" getTextDocUri (getFormattedDocument logError documents)
-  onReferences conn
-    $ runHandler
-        "onReferences" getTextDocUri (getReferences documents)
-  onHover conn
-    $ runHandler
-        "onHover" getTextDocUri (getTooltips documents)
-  onCodeAction conn
-    $ runHandler
-        "onCodeAction" getTextDocUri (getActions documents)
+  onDefinition conn $ runHandler
+    "onDefinition" getTextDocUri (getDefinition documents)
+
+  onDocumentSymbol conn $ runHandler
+    "onDocumentSymbol" getTextDocUri getDocumentSymbols
+
+  onWorkspaceSymbol conn $ runHandler
+    "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
+
+  onFoldingRanges conn $ runHandler
+    "onFoldingRanges" getTextDocUri (getFoldingRanges logError documents)
+
+  onDocumentFormatting conn $ runHandler
+    "onDocumentFormatting" getTextDocUri (getFormattedDocument logError documents)
+
+  onReferences conn $ runHandler
+    "onReferences" getTextDocUri (getReferences documents)
+
+  onHover conn $ runHandler
+    "onHover" getTextDocUri (getTooltips documents)
+
+  onCodeAction conn $ runHandler
+    "onCodeAction" getTextDocUri (getActions documents)
+
+  onCodeLens conn $ runHandler
+    "onCodeLens" getTextDocUri (getCodeLenses state documents)
+
   onShutdown conn $ Promise.fromAff stopPscIdeServer
   onDidChangeWatchedFiles conn
     $ \{ changes } -> do
@@ -683,4 +690,3 @@ main' { filename: logFile, config: cmdLineConfig } = do
   handleCommands config conn state documents logError
   launchAffLog' logError $ handleConfig config conn state documents cmdLineConfig logError
   log conn "PureScript Language Server started"
-  log conn "DEV 123"

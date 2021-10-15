@@ -1,6 +1,7 @@
 module LanguageServer.Protocol.Types where
 
 import Prelude
+
 import Data.Array (concat, groupBy, sortWith, (:))
 import Data.Array.NonEmpty (toNonEmpty)
 import Data.Either (Either, either)
@@ -395,12 +396,16 @@ type WorkspaceClientCapabilities
   = { applyEdit :: Nullable Boolean, workspaceEdit :: Nullable WorkspaceEditClientCapabilities }
 
 type TextDocumentClientCapabilities
-  = { codeAction :: Nullable CodeActionClientCapabilities, definition :: Nullable DefinitionClientCapabilities }
+  = { codeAction :: Nullable CodeActionClientCapabilities
+    , definition :: Nullable DefinitionClientCapabilities
+    , codeLens :: Nullable CodeLensClientCapabilities
+    }
 type DefinitionClientCapabilities
   = { linkSupport :: Nullable Boolean }
-
 type CodeActionClientCapabilities
   = { codeActionLiteralSupport :: Nullable { codeActionKind :: { valueSet :: Array CodeActionKind } }, isPreferredSupport :: Nullable Boolean }
+type CodeLensClientCapabilities
+  = { dynamicRegistration :: Nullable Boolean }
 
 newtype CodeActionKind
   = CodeActionKind String
