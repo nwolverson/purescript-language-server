@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Config where
 
 import Prelude
-
 import Control.Monad.Except (runExcept)
 import Data.Either (either)
 import Foreign (F, Foreign, readArray, readBoolean, readInt, readString)
@@ -13,16 +12,16 @@ import PscIde.Command (CodegenTarget(..))
 
 getConfigMaybe :: forall a. (Foreign -> F a) -> String -> Foreign -> Maybe a
 getConfigMaybe readValue key settings = do
-    either (const Nothing) Just $ runExcept val
-    where
-        val = do
-            ps <- settings ! "purescript"
-            res <- ps ! key
-            readValue res
+  either (const Nothing) Just $ runExcept val
+  where
+  val = do
+    ps <- settings ! "purescript"
+    res <- ps ! key
+    readValue res
 
 getConfig :: forall a. (Foreign -> F a) -> String -> a -> Foreign -> a
 getConfig readValue key default settings =
-    fromMaybe default $ getConfigMaybe readValue key settings
+  fromMaybe default $ getConfigMaybe readValue key settings
 
 getBoolean :: String -> Boolean -> Foreign -> Boolean
 getBoolean = getConfig readBoolean
@@ -33,7 +32,8 @@ getString = getConfig readString
 getInt :: String -> Int -> Foreign -> Int
 getInt = getConfig readInt
 
-type ConfigFn a = Foreign -> a
+type ConfigFn a
+  = Foreign -> a
 
 pursExe :: ConfigFn String
 pursExe = getString "pursExe" "purs"
@@ -104,30 +104,35 @@ fullBuildOnSave :: ConfigFn Boolean
 fullBuildOnSave = getBoolean "fullBuildOnSave" false
 
 logLevel :: ConfigFn (Maybe LogLevel)
-logLevel = getString "pscIdelogLevel" "" >>> case _ of
-    "all" -> Just All
-    "none" -> Just None
-    "debug" -> Just Debug
-    "perf" -> Just Perf
-    _ -> Nothing
+logLevel =
+  getString "pscIdelogLevel" ""
+    >>> case _ of
+        "all" -> Just All
+        "none" -> Just None
+        "debug" -> Just Debug
+        "perf" -> Just Perf
+        _ -> Nothing
 
 data Formatter
-    = NoFormatter
-    | Purty
-    | PursTidy
-    | Pose
+  = NoFormatter
+  | Purty
+  | PursTidy
+  | Pose
 
 formatter :: ConfigFn Formatter
-formatter = getString "formatter" "" >>> case _ of
-    "none" -> NoFormatter
-    "purty" -> Purty
-    "purs-tidy" -> PursTidy
-    "pose" -> Pose
-    _ -> Purty
+formatter =
+  getString "formatter" ""
+    >>> case _ of
+        "none" -> NoFormatter
+        "purty" -> Purty
+        "purs-tidy" -> PursTidy
+        "pose" -> Pose
+        _ -> Purty
 
 codegenTargets :: ConfigFn (Maybe (Array CodegenTarget))
-codegenTargets =  getConfigMaybe (readArray >=> traverse readString) "codegenTargets" >>>
-    map (map Other)
+codegenTargets =
+  getConfigMaybe (readArray >=> traverse readString) "codegenTargets"
+    >>> map (map Other)
 
 ignoreEmpty :: Maybe String -> Maybe String
 ignoreEmpty (Just "") = Nothing

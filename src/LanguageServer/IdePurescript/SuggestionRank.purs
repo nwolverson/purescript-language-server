@@ -7,7 +7,6 @@ module LanguageServer.IdePurescript.SuggestionRank
   ) where
 
 import Prelude
-
 import Data.Char as Char
 import Data.Enum (class Enum)
 import Data.Functor.Contravariant (class Contravariant)
@@ -16,7 +15,8 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.Ordering (invert)
 import Data.String as CodePoint
 
-newtype SuggestionRank = SuggestionRank Int
+newtype SuggestionRank
+  = SuggestionRank Int
 
 derive instance eqSuggestionRank :: Eq SuggestionRank
 
@@ -29,10 +29,10 @@ instance boundedSuggestionRank :: Bounded SuggestionRank where
 
 instance enumSuggestionRank :: Enum SuggestionRank where
   succ (SuggestionRank n)
-    | n == 0    = Nothing
+    | n == 0 = Nothing
     | otherwise = Just (SuggestionRank (n - 1))
   pred (SuggestionRank n)
-    | n == 25  = Nothing
+    | n == 25 = Nothing
     | otherwise = Just (SuggestionRank (n + 1))
 
 instance semigroupSuggestionRank :: Semigroup SuggestionRank where
@@ -47,13 +47,15 @@ fromInt = SuggestionRank <<< clamp 0 25
 toString :: SuggestionRank -> String
 toString (SuggestionRank n) = CodePoint.singleton $ CodePoint.codePointFromChar $ fromMaybe ' ' (Char.fromCharCode (65 + n))
 
-newtype Ranking a = Ranking (a -> SuggestionRank)
+newtype Ranking a
+  = Ranking (a -> SuggestionRank)
 
 derive instance newtypeRanking :: Newtype (Ranking a) _
 
 instance semigroupRanking :: Semigroup (Ranking a) where
-  append (Ranking f) (Ranking g) = Ranking \a ->
-    let rank = f a in if rank == top then rank else rank <> g a
+  append (Ranking f) (Ranking g) =
+    Ranking \a ->
+      let rank = f a in if rank == top then rank else rank <> g a
 
 instance monoidRanking :: Monoid (Ranking a) where
   mempty = Ranking (const bottom)

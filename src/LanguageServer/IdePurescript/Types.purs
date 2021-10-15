@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Types where
 
 import Prelude
-
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 import Effect.Aff (Aff)
@@ -12,7 +11,8 @@ import LanguageServer.TextDocument (TextDocument)
 import LanguageServer.Types (Connection, DocumentStore, DocumentUri, Settings, ClientCapabilities)
 import PscIde.Command (RebuildError)
 
-newtype ServerState = ServerState
+newtype ServerState
+  = ServerState
   { port :: Maybe Int
   , deactivate :: Aff Unit
   , root :: Maybe String
@@ -26,4 +26,5 @@ newtype ServerState = ServerState
 
 derive instance newtypeServerState :: Newtype ServerState _
 
-type CommandHandler a = DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff a
+type CommandHandler a
+  = DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff a

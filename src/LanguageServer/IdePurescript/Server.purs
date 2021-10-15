@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Server where
 
 import Prelude
-
 import Data.Array (filter, head)
 import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..))
@@ -30,15 +29,16 @@ import PscIde.Server (Executable(..))
 loadAll :: Int -> Aff (Either String Unit)
 loadAll port = (either Left (const $ Right unit)) <$> load port [] []
 
-retry :: Notify-> Int -> Aff Unit -> Aff Unit
-retry logError n a | n > 0 = do
+retry :: Notify -> Int -> Aff Unit -> Aff Unit
+retry logError n a
+  | n > 0 = do
     res <- attempt a
     case res of
-        Right r -> pure r
-        Left err -> do
-            liftEffect $ logError Info $ "Retrying starting server after 500ms: " <> show err
-            delay (Milliseconds 500.0)
-            retry logError (n - 1) a
+      Right r -> pure r
+      Left err -> do
+        liftEffect $ logError Info $ "Retrying starting server after 500ms: " <> show err
+        delay (Milliseconds 500.0)
+        retry logError (n - 1) a
 retry _ _ a = a
 
 getEnvPursIdeSources :: forall m. MonadEffect m => m (Maybe String)
@@ -63,22 +63,32 @@ startServer' settings root cb logCb = do
     , logLevel: Config.logLevel settings
     , outputDirectory: Just $ Config.effectiveOutputDirectory settings
     , port: Config.pscIdePort settings
-    } root (Config.addNpmPath settings) cb logCb
+    }
+    root (Config.addNpmPath settings) cb logCb
   where
-    globs = getGlob Config.srcPath <> getGlob Config.packagePath <> Config.sourceGlobs settings
-    getGlob fn = fn settings # case _ of
-      glob | not (null glob) -> [ glob <> "/**/*.purs" ]
-      _ -> []
-    exe = Config.pursExe settings
+  globs = getGlob Config.srcPath <> getGlob Config.packagePath <> Config.sourceGlobs settings
+  getGlob fn =
+    fn settings
+      # case _ of
+          glob | not (null glob) -> [ glob <> "/**/*.purs" ]
+          _ -> []
+  exe = Config.pursExe settings
 
 getPackagerPaths :: ConfigFn Boolean -> String -> Foreign -> String -> Aff (Array String)
-getPackagerPaths enabled binName settings root = if not $ enabled settings then pure [] else do
-  pathVar <- liftEffect $ getPathVar (Config.addNpmPath settings) root
-  serverBins <- findBins pathVar binName
-  case head serverBins of
-    Just (Executable bin _) -> makeAff \cb -> do
-      void $ execFile bin [ "sources" ] (defaultExecOptions { cwd = Just root }) (\{stdout} -> do
-        text <- toString UTF8 stdout
-        cb $ pure $ lines text)
-      pure mempty
-    _ -> pure []
+getPackagerPaths enabled binName settings root =
+  if not $ enabled settings then
+    pure []
+  else do
+    pathVar <- liftEffect $ getPathVar (Config.addNpmPath settings) root
+    serverBins <- findBins pathVar binName
+    case head serverBins of
+      Just (Executable bin _) ->
+        makeAff \cb -> do
+          void
+            $ execFile bin [ "sources" ] (defaultExecOptions { cwd = Just root })
+                ( \{ stdout } -> do
+                    text <- toString UTF8 stdout
+                    cb $ pure $ lines text
+                )
+          pure mempty
+      _ -> pure []

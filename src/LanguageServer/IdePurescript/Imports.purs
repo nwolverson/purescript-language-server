@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Imports where
 
 import Prelude
-
 import Control.Error.Util (hush)
 import Control.Monad.Except (runExcept)
 import Data.Array (fold, fromFoldable, singleton, (:))
@@ -47,18 +46,17 @@ addCompletionImport' existingEdit log docs config state@(ServerState { conn }) a
         Left res -> do
           void $ applyEdit conn' existingEdit
           pure res
-    Just conn', _, _ ->  do
+    Just conn', _, _ -> do
       void $ applyEdit conn' existingEdit
       pure $ unsafeToForeign $ toNullable Nothing
     _, _, _ -> pure $ unsafeToForeign $ toNullable Nothing
 
-type CompletionImportArgs =
-  {
-    identifier:: String
-  , mod :: Maybe String
-  , qual :: Maybe String
-  , uri :: DocumentUri
-  }
+type CompletionImportArgs
+  = { identifier :: String
+    , mod :: Maybe String
+    , qual :: Maybe String
+    , uri :: DocumentUri
+    }
 
 parseNS :: String -> Maybe C.Namespace
 parseNS "NSValue" = Just C.NSValue
@@ -71,51 +69,66 @@ showNS C.NSValue = "NSValue"
 showNS C.NSKind = "NSKind"
 showNS C.NSType = "NSType"
 
-addCompletionImportEdit :: Notify -> DocumentStore -> Settings -> ServerState
- -> CompletionImportArgs -> TextDocument -> Number -> String -> Maybe C.Namespace
- -> Aff (Either Foreign (Array WorkspaceEdit))
+addCompletionImportEdit ::
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  CompletionImportArgs ->
+  TextDocument ->
+  Number ->
+  String ->
+  Maybe C.Namespace ->
+  Aff (Either Foreign (Array WorkspaceEdit))
 addCompletionImportEdit log _ config (ServerState { port, modules, conn, clientCapabilities }) { identifier, mod, qual, uri } _ version text ns = do
   let prelude = preludeModule config
   case port of
     Just port' -> do
       { result } <-
         case mod, qual of
-          Just mod', Just qual' | noModule (isSameQualified mod' qual') -> do
-            addQualifiedImport modules port' (un DocumentUri uri) text mod' qual'
-          Just mod', Nothing | mod' == prelude && noModule (isSameUnqualified prelude) -> do
-            addModuleImport modules port' (un DocumentUri uri) text mod'
+          Just mod', Just qual'
+            | noModule (isSameQualified mod' qual') -> do
+              addQualifiedImport modules port' (un DocumentUri uri) text mod' qual'
+          Just mod', Nothing
+            | mod' == prelude && noModule (isSameUnqualified prelude) -> do
+              addModuleImport modules port' (un DocumentUri uri) text mod'
           mod', qual' ->
             addExplicitImport modules port' (un DocumentUri uri) text mod' qual' identifier ns
       case result of
         UpdatedImports newText -> do
           let edit = makeMinimalWorkspaceEdit clientCapabilities uri version text newText
           pure $ Right $ maybe [] singleton edit
-        AmbiguousImport imps -> liftEffect do
-          liftEffect $ for_ conn (_ `Window.showError`
-            ("Could not import " <> text <> " because there is more than one option"))
-          log Warning "Found ambiguous imports"
-          pure $ Left $ unsafeToForeign $ (\(C.TypeInfo { module' }) -> module') <$> imps
+        AmbiguousImport imps ->
+          liftEffect do
+            liftEffect
+              $ for_ conn
+                  ( _
+                      `Window.showError`
+                        ("Could not import " <> text <> " because there is more than one option")
+                  )
+            log Warning "Found ambiguous imports"
+            pure $ Left $ unsafeToForeign $ (\(C.TypeInfo { module' }) -> module') <$> imps
         -- UnnecessaryImport is not unusual - e.g. already existing import will hit this case
         -- And so will things that are implicitly imported because they live under Prim
         -- - e.g. Array or String
         UnnecessaryImport -> do
           pure $ Right []
         -- Failed imports are now rare and will display an error
-        FailedImport msg -> do 
+        FailedImport msg -> do
           liftEffect $ for_ conn (_ `Window.showError` ("Failed to import: `" <> identifier <> "`. Error: " <> msg))
           pure $ Right []
-    _ -> pure $ Right [] 
+    _ -> pure $ Right []
 
-    where
+  where
 
-    noModule f = all (not f <<< unwrap) modules.modules
-    isSameQualified mod' qual' = case _ of
-      { moduleName: mod'', qualifier: Just qual''} -> mod' == mod'' && qual' == qual''
-      _ -> false
+  noModule f = all (not f <<< unwrap) modules.modules
+  isSameQualified mod' qual' = case _ of
+    { moduleName: mod'', qualifier: Just qual'' } -> mod' == mod'' && qual' == qual''
+    _ -> false
 
-    isSameUnqualified mod' = case _ of
-      { moduleName, qualifier: Nothing } -> mod' == moduleName
-      _ -> false
+  isSameUnqualified mod' = case _ of
+    { moduleName, qualifier: Nothing } -> mod' == moduleName
+    _ -> false
 
 addModuleImport' :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 addModuleImport' log docs config state args = do
@@ -128,35 +141,34 @@ addModuleImport' log docs config state args = do
       fileName <- liftEffect $ uriToFilename $ DocumentUri uri
       edit <- case qual' of
         Right _ ->
-          addCompletionImportEdit log docs config state 
+          addCompletionImportEdit log docs config state
             { identifier: ""
             , qual: hush qual'
             , mod: Just mod'
             , uri: DocumentUri uri
             }
-            doc 
-            version 
-            text 
+            doc
+            version
+            text
             Nothing
         Left _ -> do
           { result: res } <- addModuleImport modules port' fileName text mod'
           case res of
-            UpdatedImports result  -> do
+            UpdatedImports result -> do
               pure $ Right $ fromFoldable $ makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
             _ -> pure $ Right []
-
       case conn, edit of
         Just conn', Right edits -> do
           void $ applyEdit conn' (fold edits)
         _, _ -> pure unit
       pure successResult
 
-    _, args'-> do
+    _, args' -> do
       liftEffect $ log Info $ show args'
       pure successResult
 
-    where
-    successResult = unsafeToForeign $ toNullable Nothing
+  where
+  successResult = unsafeToForeign $ toNullable Nothing
 
 getAllModules :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 getAllModules log _ _ state _ =
@@ -186,9 +198,9 @@ reformatImports log docs _ state args = do
         _ -> pure unit
       pure successResult
 
-    _, args'-> do
+    _, args' -> do
       liftEffect $ log Info $ show args'
       pure successResult
 
-    where
-    successResult = unsafeToForeign $ toNullable Nothing
+  where
+  successResult = unsafeToForeign $ toNullable Nothing

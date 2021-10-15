@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.FoldingRanges where
 
 import Prelude
-
 import Control.Alt ((<|>))
 import Data.Array ((:))
 import Data.Array as Array
@@ -29,50 +28,54 @@ getFoldingRanges _log docs _ _ { textDocument: TextDocumentIdentifier textDocId 
   liftEffect do
     doc <- getDocument docs textDocId.uri
     text <- getText doc
-
     let res = CST.parseModule text
-    let ranges = case res of
-          ParseSucceeded x -> getRanges x
-          ParseSucceededWithErrors x _errs -> getRanges x
-          ParseFailed _err -> []
+    let
+      ranges = case res of
+        ParseSucceeded x -> getRanges x
+        ParseSucceededWithErrors x _errs -> getRanges x
+        ParseFailed _err -> []
     pure ranges
 
 getRanges :: forall a. Module a -> Array FoldingRange
-getRanges (Module { header, body: ModuleBody { decls } }) = 
-  let ModuleHeader { imports } = header
-      importRanges = case Array.head imports, Array.last imports of
-        Just (ImportDecl { keyword: { range: { start }} }), Just lastImport ->
-            let last = Array.last $ Array.sortWith _.line ( _.range.start <$> lastToks lastImport )
-            in
-              maybe [] (\end -> [ makeRange (Nullable.notNull "imports") start end ]) last
-        _, _ -> []
-      bodyRanges = Array.mapMaybe declRange decls
+getRanges (Module { header, body: ModuleBody { decls } }) =
+  let
+    ModuleHeader { imports } = header
+    importRanges = case Array.head imports, Array.last imports of
+      Just (ImportDecl { keyword: { range: { start } } }), Just lastImport ->
+        let
+          last = Array.last $ Array.sortWith _.line (_.range.start <$> lastToks lastImport)
+        in
+          maybe [] (\end -> [ makeRange (Nullable.notNull "imports") start end ]) last
+      _, _ -> []
+    bodyRanges = Array.mapMaybe declRange decls
   in
     importRanges <> bodyRanges
   where
-  lastToks (ImportDecl { keyword, names, qualified }) = 
-    keyword 
+  lastToks (ImportDecl { keyword, names, qualified }) =
+    keyword
       : (Array.fromFoldable $ Tuple.fst <$> qualified)
       <> (Array.fromFoldable $ unwrap <$> Tuple.snd <$> names)
   unwrap (Wrapped { close }) = close
 
 declRange :: forall a. Declaration a -> Maybe FoldingRange
-declRange = case _ of 
+declRange = case _ of
   DeclData { keyword } dctors -> r keyword.range $ fromMaybe keyword.range $ dctorsEndRange <$> dctors
   DeclType { keyword } _ ty -> r keyword.range (fromMaybe keyword.range $ tyEndRange ty)
   DeclNewtype { keyword } _ _ ty -> r keyword.range (fromMaybe keyword.range $ tyEndRange ty)
   DeclClass { keyword } cls -> r keyword.range $ fromMaybe keyword.range $ classEndRange =<< cls
   DeclInstanceChain (Separated { head, tail }) ->
-    let ranges = Array.concatMap instanceRanges (head : (Tuple.snd <$> tail))
-    in case Array.head ranges, Array.last ranges of
-      Just r1, Just r2 -> r r1 r2
-      _, _ -> Nothing
-  DeclDerive token  _ { types } -> r token.range $ fromMaybe token.range $ tyEndRange =<< Array.last types
+    let
+      ranges = Array.concatMap instanceRanges (head : (Tuple.snd <$> tail))
+    in
+      case Array.head ranges, Array.last ranges of
+        Just r1, Just r2 -> r r1 r2
+        _, _ -> Nothing
+  DeclDerive token _ { types } -> r token.range $ fromMaybe token.range $ tyEndRange =<< Array.last types
   DeclKindSignature token (Labeled { value }) -> r token.range $ fromMaybe token.range $ tyEndRange value
   DeclSignature (Labeled { label: Name { token }, value }) -> r token.range $ fromMaybe token.range $ tyEndRange value
   DeclValue { name: Name { token }, guarded } -> r token.range $ fromMaybe token.range $ guardedRange guarded
   DeclFixity _ -> Nothing
-  DeclForeign token _ forn -> r token.range $ fromMaybe token.range $ foreignEndRange forn 
+  DeclForeign token _ forn -> r token.range $ fromMaybe token.range $ foreignEndRange forn
   DeclRole token _tok _name roles -> r token.range $ (_.range <<< Tuple.fst) $ NEA.last roles
   DeclError _ -> Nothing
 
@@ -86,14 +89,15 @@ guardedRange = case _ of
     case NEA.last exprs of
       (GuardedExpr { where: where' }) -> where_ where'
 
-
 where_ :: forall a. Where a -> Maybe SourceRange
-where_ (Where { expr, bindings }) = 
-  let r1 :: Maybe SourceRange
-      r1 = Array.last $ exprRanges expr 
-      rb :: Maybe SourceRange
-      rb = b =<< bindings
-  in rb <|> r1
+where_ (Where { expr, bindings }) =
+  let
+    r1 :: Maybe SourceRange
+    r1 = Array.last $ exprRanges expr
+    rb :: Maybe SourceRange
+    rb = b =<< bindings
+  in
+    rb <|> r1
   where
   -- b :: _ -> Maybe SourceRange
   b (Tuple _ bindings) = letBindRange $ NEA.last $ bindings
@@ -124,8 +128,9 @@ exprRanges = case _ of
   ExprOp expr rest -> exprRanges expr <> (exprRanges $ Tuple.snd $ NEA.last rest)
   ExprOpName (QualifiedName { token }) -> [ token.range ]
   ExprNegate token expr -> token.range : exprRanges expr
-  ExprRecordAccessor { expr, dot, path: Separated { head, tail } } -> exprRanges expr <>
-      [ fromMaybe (n head) $ ( (n <<< Tuple.snd ) <$>  Array.last tail ) ]
+  ExprRecordAccessor { expr, dot, path: Separated { head, tail } } ->
+    exprRanges expr
+      <> [ fromMaybe (n head) $ ((n <<< Tuple.snd) <$> Array.last tail) ]
   ExprRecordUpdate e (Wrapped { close }) -> exprRanges e <> [ close.range ]
   ExprApp e es -> exprRanges e <> exprRanges (NEA.last es)
   ExprLambda { symbol, body } -> symbol.range : exprRanges body
@@ -160,7 +165,7 @@ classEndRange (Tuple _ xs) = go $ NEA.last xs
   go (Labeled { value }) = tyEndRange value
 
 dctorsEndRange :: forall a. (Tuple SourceToken (Separated (DataCtor a))) -> SourceRange
-dctorsEndRange (Tuple head (Separated { tail } )) = 
+dctorsEndRange (Tuple head (Separated { tail })) =
   fromMaybe (head.range) $ (dctorRange <<< Tuple.snd) <$> Array.head tail
   where
   dctorRange (DataCtor { name: Name { token }, fields }) = fromMaybe token.range (Array.last fields >>= tyEndRange)
@@ -182,7 +187,7 @@ tyEndRange = case _ of
   CSTTypes.TypeRecord (Wrapped { close }) -> Just close.range
   CSTTypes.TypeForall _ _ _ ty -> tyEndRange ty
   CSTTypes.TypeKinded _ty _tok ty -> tyEndRange ty
-  CSTTypes.TypeApp _ tys -> tyEndRange $ NEA.last tys 
+  CSTTypes.TypeApp _ tys -> tyEndRange $ NEA.last tys
   CSTTypes.TypeOp _ tys -> tyEndRange $ Tuple.snd $ NEA.last tys
   CSTTypes.TypeOpName (QualifiedName { token }) -> Just token.range
   CSTTypes.TypeArrow _ty _tok ty -> tyEndRange ty
@@ -190,13 +195,14 @@ tyEndRange = case _ of
   CSTTypes.TypeConstrained _ty _tok ty -> tyEndRange ty
   CSTTypes.TypeParens (Wrapped { close }) -> Just close.range
   CSTTypes.TypeUnaryRow _tok ty -> tyEndRange ty
-  CSTTypes.TypeError _ ->  Nothing
+  CSTTypes.TypeError _ -> Nothing
 
 makeRange :: _
-makeRange kind startPos endPos = FoldingRange
-  { startLine: startPos.line
-  , startCharacter: Nullable.notNull startPos.column
-  , endLine: endPos.line
-  , endCharacter: Nullable.notNull endPos.column
-  , kind
-  }
+makeRange kind startPos endPos =
+  FoldingRange
+    { startLine: startPos.line
+    , startCharacter: Nullable.notNull startPos.column
+    , endLine: endPos.line
+    , endCharacter: Nullable.notNull endPos.column
+    , kind
+    }

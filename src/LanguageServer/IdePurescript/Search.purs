@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Search where
-  
-import Prelude
 
+import Prelude
 import Control.Monad.Except (Except, runExcept)
 import Data.Either (Either(..))
 import Data.List.Types (NonEmptyList)
@@ -18,7 +17,8 @@ import PscIde as P
 import PscIde.Command (TypeInfo(..))
 import PscIde.Command as C
 
-newtype SearchResult = SearchResult { identifier :: String, typ :: String, mod :: String }
+newtype SearchResult
+  = SearchResult { identifier :: String, typ :: String, mod :: String }
 
 encodeSearchResult :: SearchResult -> Foreign
 encodeSearchResult = unsafeToForeign
@@ -26,12 +26,12 @@ encodeSearchResult = unsafeToForeign
 decodeSearchResult :: Foreign -> Except (NonEmptyList ForeignError) SearchResult
 decodeSearchResult obj = do
   identifier <- obj ! "identifier" >>= readString
-  typ <- obj ! "typ"  >>= readString
+  typ <- obj ! "typ" >>= readString
   mod <- obj ! "mod" >>= readString
   pure $ SearchResult { identifier, typ, mod }
 
 search :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
-search _ _ state args = case state, runExcept $ traverse readString args of 
+search _ _ state args = case state, runExcept $ traverse readString args of
   ServerState { port: Just port, modules }, Right [ text ] -> do
     loadedModules <- getLoadedModules port
     let getQualifiedModule = (flip getQualModule) modules

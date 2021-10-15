@@ -1,7 +1,6 @@
 module IdePurescript.Exec where
 
 import Prelude
-
 import Control.Alt ((<|>))
 import Data.Either (either, Either(..))
 import Data.Maybe (fromMaybe, maybe, Maybe(..))
@@ -32,9 +31,11 @@ findBinsNoVersion { path, pathExt } executable = do
 getPathVar :: Boolean -> String -> Effect (Either String String)
 getPathVar addNpmBin rootDir = do
   processPath <- lookupEnv "PATH"
-  pure $ if addNpmBin
-    then Right $ addNpmBinPath rootDir processPath
-    else Left $ fromMaybe "" processPath
+  pure
+    $ if addNpmBin then
+        Right $ addNpmBinPath rootDir processPath
+      else
+        Left $ fromMaybe "" processPath
 
 addNpmBinPath :: String -> Maybe String -> String
 addNpmBinPath rootDir path =

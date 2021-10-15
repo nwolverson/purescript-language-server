@@ -1,7 +1,6 @@
 module LanguageServer.Handlers where
-  
-import Prelude
 
+import Prelude
 import Control.Promise (Promise)
 import Control.Promise as Promise
 import Data.Nullable (Nullable)
@@ -10,27 +9,40 @@ import Effect.Aff (Aff)
 import Foreign (Foreign)
 import LanguageServer.Types (CodeActionResult, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, FoldingRange, GotoDefinitionResult, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, TextEdit, WorkspaceEdit)
 
-type TextDocumentPositionParams = { textDocument :: TextDocumentIdentifier, position :: Position }
+type TextDocumentPositionParams
+  = { textDocument :: TextDocumentIdentifier, position :: Position }
 
-type DocumentSymbolParams = { textDocument :: TextDocumentIdentifier }
-type ReferenceParams = TextDocumentPositionParams
-type WorkspaceSymbolParams = { query :: String }
+type DocumentSymbolParams
+  = { textDocument :: TextDocumentIdentifier }
+type ReferenceParams
+  = TextDocumentPositionParams
+type WorkspaceSymbolParams
+  = { query :: String }
 
-type CodeActionParams = { textDocument :: TextDocumentIdentifier, range :: Range, context :: CodeActionContext }
-type CodeActionContext = { diagnostics :: Array Diagnostic }
+type CodeActionParams
+  = { textDocument :: TextDocumentIdentifier, range :: Range, context :: CodeActionContext }
+type CodeActionContext
+  = { diagnostics :: Array Diagnostic }
 
-type FoldingRangesParams = { textDocument :: TextDocumentIdentifier }
+type FoldingRangesParams
+  = { textDocument :: TextDocumentIdentifier }
 
-type DocumentFormattingParams = { textDocument :: TextDocumentIdentifier }
+type DocumentFormattingParams
+  = { textDocument :: TextDocumentIdentifier }
 
-type DidChangeConfigurationParams = { settings :: Foreign }
+type DidChangeConfigurationParams
+  = { settings :: Foreign }
 
-type PublishDiagnosticParams = { uri :: DocumentUri, diagnostics :: Array Diagnostic }
-type ExecuteCommandParams = { command :: String, arguments :: Array Foreign }
+type PublishDiagnosticParams
+  = { uri :: DocumentUri, diagnostics :: Array Diagnostic }
+type ExecuteCommandParams
+  = { command :: String, arguments :: Array Foreign }
 
-type DidChangeWatchedFilesParams = { changes :: Array FileEvent }
+type DidChangeWatchedFilesParams
+  = { changes :: Array FileEvent }
 
-type Res a = Effect (Promise a)
+type Res a
+  = Effect (Promise a)
 
 foreign import onDefinition :: Connection -> (TextDocumentPositionParams -> Res (Nullable GotoDefinitionResult)) -> Effect Unit
 
@@ -52,7 +64,7 @@ foreign import onDocumentFormatting :: Connection -> (DocumentFormattingParams -
 
 foreign import onDidChangeConfiguration :: Connection -> (DidChangeConfigurationParams -> Effect Unit) -> Effect Unit
 
-foreign import onDidChangeWatchedFiles ::  Connection -> (DidChangeWatchedFilesParams -> Effect Unit) -> Effect Unit
+foreign import onDidChangeWatchedFiles :: Connection -> (DidChangeWatchedFilesParams -> Effect Unit) -> Effect Unit
 
 foreign import onExecuteCommand :: Connection -> (ExecuteCommandParams -> Effect (Promise Foreign)) -> Effect Unit
 

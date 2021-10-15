@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Formatting where
 
 import Prelude
-
 import Data.Either (Either(..))
 import Data.Foldable (length)
 import Data.Maybe (Maybe(..))
@@ -34,7 +33,6 @@ getFormattedDocument logCb docs settings serverState { textDocument: TextDocumen
     formatter -> do
       text <- liftEffect $ getText =<< getDocument docs textDocId.uri
       newTextEither <- attempt $ format logCb settings serverState formatter text
-
       case newTextEither of
         Left err -> liftEffect (logCb Error $ show err) $> []
         Right "" -> pure []
@@ -50,39 +48,39 @@ poseCommand = Command "prettier" [ "--parser", "purescript" ]
 -- TODO for NoFormatter don't provide formatting provider 
 format :: Notify -> Settings -> ServerState -> Formatter -> String -> Aff String
 format logCb settings state formatter text = do
-  let command = case formatter of
-        Purty -> purtyCommand
-        PursTidy -> pursTidyCommand
-        Pose -> poseCommand
-        NoFormatter -> Command "echo" [] -- Not possible
-      Command cmd _ = command
-  case state of 
+  let
+    command = case formatter of
+      Purty -> purtyCommand
+      PursTidy -> pursTidyCommand
+      Pose -> poseCommand
+      NoFormatter -> Command "echo" [] -- Not possible
+    Command cmd _ = command
+  case state of
     ServerState { root: Just directory } -> do
-      makeAff $ \cb -> do
-        let succ = cb <<< Right
-            err = cb <<< Left
-        cp <- spawn { command, directory, useNpmDir: Config.addNpmPath settings }
-        CP.onError cp (err <<< CP.toStandardError)
-        result <- Ref.new ""
-        let res :: String -> Effect Unit
-            res s = Ref.modify_ (_ <> s) result
-
-        catchException err $ S.onDataString (CP.stderr cp) Encoding.UTF8 $ err <<< error
-        catchException err $ S.onDataString (CP.stdout cp) Encoding.UTF8 res
-
-        CP.onClose cp \exit -> case exit of
-          CP.Normally n | n == 0 || n == 1 ->
-            Ref.read result >>= succ
-          _ -> do
-            let Command cmd _ = command
-            err $ error $ cmd <> " process exited abnormally"
-        
-        when (not $ Foreign.isUndefined $ unsafeToForeign $ CP.pid cp) do
-          catchException err $ void $ S.writeString (CP.stdin cp) UTF8 text (pure unit)
-          catchException err$ S.end (CP.stdin cp) (pure unit)
-
-
-        pure mempty
+      makeAff
+        $ \cb -> do
+            let
+              succ = cb <<< Right
+              err = cb <<< Left
+            cp <- spawn { command, directory, useNpmDir: Config.addNpmPath settings }
+            CP.onError cp (err <<< CP.toStandardError)
+            result <- Ref.new ""
+            let
+              res :: String -> Effect Unit
+              res s = Ref.modify_ (_ <> s) result
+            catchException err $ S.onDataString (CP.stderr cp) Encoding.UTF8 $ err <<< error
+            catchException err $ S.onDataString (CP.stdout cp) Encoding.UTF8 res
+            CP.onClose cp \exit -> case exit of
+              CP.Normally n
+                | n == 0 || n == 1 ->
+                  Ref.read result >>= succ
+              _ -> do
+                let Command cmd _ = command
+                err $ error $ cmd <> " process exited abnormally"
+            when (not $ Foreign.isUndefined $ unsafeToForeign $ CP.pid cp) do
+              catchException err $ void $ S.writeString (CP.stdin cp) UTF8 text (pure unit)
+              catchException err $ S.end (CP.stdin cp) (pure unit)
+            pure mempty
     _ -> pure ""
 
 mkTextEdit :: String -> String -> TextEdit

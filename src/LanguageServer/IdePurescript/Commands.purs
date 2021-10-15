@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Commands where
 
 import Prelude
-
 import Data.Array ((:))
 import Data.Maybe (Maybe(..))
 import Data.Nullable (toNullable)
@@ -15,7 +14,8 @@ cmdName (CommandInfo _ command) = "purescript." <> command
 c :: CommandInfo -> Maybe (Array Foreign) -> Command
 c cmd@(CommandInfo title _) args = Command { title, command: cmdName cmd, arguments: toNullable args }
 
-data CommandInfo = CommandInfo String String
+data CommandInfo
+  = CommandInfo String String
 
 caseSplitCmd :: CommandInfo
 caseSplitCmd = CommandInfo "Case split (explicit position)" "caseSplit-explicit"
@@ -27,8 +27,9 @@ addCompletionImportCmd :: CommandInfo
 addCompletionImportCmd = CommandInfo "Add completion import" "addCompletionImport"
 
 addCompletionImport :: String -> Maybe String -> Maybe String -> DocumentUri -> String -> Command
-addCompletionImport ident mod qual uri ns = c addCompletionImportCmd $
-  Just [ unsafeToForeign ident, unsafeToForeign $ toNullable mod, unsafeToForeign $ toNullable qual, unsafeToForeign uri, unsafeToForeign ns ]
+addCompletionImport ident mod qual uri ns =
+  c addCompletionImportCmd
+    $ Just [ unsafeToForeign ident, unsafeToForeign $ toNullable mod, unsafeToForeign $ toNullable qual, unsafeToForeign uri, unsafeToForeign ns ]
 
 addModuleImportCmd :: CommandInfo
 addModuleImportCmd = CommandInfo "Add module import" "addModuleImport"
@@ -40,17 +41,22 @@ replaceSuggestionCmd :: CommandInfo
 replaceSuggestionCmd = CommandInfo "Apply Suggestion" "replaceSuggestion"
 
 replaceSuggestion :: String -> DocumentUri -> String -> Range -> Command
-replaceSuggestion title uri replacement fixRange = c (CommandInfo title "replaceSuggestion") $ 
-  Just $ [ unsafeToForeign uri, unsafeToForeign replacement, unsafeToForeign fixRange ]
+replaceSuggestion title uri replacement fixRange =
+  c (CommandInfo title "replaceSuggestion")
+    $ Just
+    $ [ unsafeToForeign uri, unsafeToForeign replacement, unsafeToForeign fixRange ]
 
 replaceAllSuggestionsCmd :: CommandInfo
 replaceAllSuggestionsCmd = CommandInfo "Replace all suggestions" "replaceAllSuggestions"
 
-type Replacement = { replacement:: String, range :: Range }
+type Replacement
+  = { replacement :: String, range :: Range }
 
 replaceAllSuggestions :: String -> DocumentUri -> Array Replacement -> Command
-replaceAllSuggestions text uri replacements = c (CommandInfo text "replaceAllSuggestions") $ 
-  Just $ [ unsafeToForeign uri, unsafeToForeign replacements ]
+replaceAllSuggestions text uri replacements =
+  c (CommandInfo text "replaceAllSuggestions")
+    $ Just
+    $ [ unsafeToForeign uri, unsafeToForeign replacements ]
 
 buildCmd :: CommandInfo
 buildCmd = CommandInfo "Build" "build"
@@ -68,7 +74,7 @@ typedHoleCmd :: CommandInfo
 typedHoleCmd = CommandInfo "Insert typed hole suggestion" "typedHole"
 
 typedHole :: String -> DocumentUri -> Range -> Array TypeInfo -> Command
-typedHole name url range options = c typedHoleCmd (Just $ unsafeToForeign name : unsafeToForeign url : unsafeToForeign range : (unsafeToForeign <$> options) )
+typedHole name url range options = c typedHoleCmd (Just $ unsafeToForeign name : unsafeToForeign url : unsafeToForeign range : (unsafeToForeign <$> options))
 
 typedHoleExplicitCmd :: CommandInfo
 typedHoleExplicitCmd = CommandInfo "Insert typed hole suggestion" "typedHole-explicit"
@@ -92,27 +98,28 @@ fixTypoCmd :: CommandInfo
 fixTypoCmd = CommandInfo "Fix typo/add import" "fixTypo"
 
 fixTypo :: DocumentUri -> Int -> Int -> Command
-fixTypo uri row char = c fixTypoCmd $ Just $ [ unsafeToForeign uri, unsafeToForeign row, unsafeToForeign char ] 
+fixTypo uri row char = c fixTypoCmd $ Just $ [ unsafeToForeign uri, unsafeToForeign row, unsafeToForeign char ]
 
 fixTypo' :: String -> DocumentUri -> Int -> Int -> Foreign -> Command
-fixTypo' x uri row char tinfo = c (CommandInfo x "fixTypo") $ Just $ [ unsafeToForeign uri, unsafeToForeign row, unsafeToForeign char, tinfo ] 
+fixTypo' x uri row char tinfo = c (CommandInfo x "fixTypo") $ Just $ [ unsafeToForeign uri, unsafeToForeign row, unsafeToForeign char, tinfo ]
 
 sortImports :: DocumentUri -> Command
 sortImports uri = c sortImportsCmd $ Just $ [ unsafeToForeign uri ]
 
 commands :: Array String
-commands = cmdName <$> 
-  [ addCompletionImportCmd 
-  , caseSplitCmd
-  , addClauseCmd
-  , replaceSuggestionCmd
-  , buildCmd
-  , cleanCmd
-  , startPscIdeCmd
-  , stopPscIdeCmd
-  , restartPscIdeCmd
-  , typedHoleExplicitCmd
-  , replaceAllSuggestionsCmd
-  , fixTypoCmd
-  ]
-
+commands =
+  cmdName
+    <$>
+      [ addCompletionImportCmd
+      , caseSplitCmd
+      , addClauseCmd
+      , replaceSuggestionCmd
+      , buildCmd
+      , cleanCmd
+      , startPscIdeCmd
+      , stopPscIdeCmd
+      , restartPscIdeCmd
+      , typedHoleExplicitCmd
+      , replaceAllSuggestionsCmd
+      , fixTypoCmd
+      ]
