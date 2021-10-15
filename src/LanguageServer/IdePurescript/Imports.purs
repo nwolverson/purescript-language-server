@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.Imports where
 
 import Prelude
+
 import Control.Error.Util (hush)
 import Control.Monad.Except (runExcept)
 import Data.Array (fold, fromFoldable, singleton, (:))
@@ -15,15 +16,15 @@ import Foreign (Foreign, readString, unsafeToForeign)
 import IdePurescript.Modules (ImportResult(..), addExplicitImport, addModuleImport, addQualifiedImport, reformatModuleImports)
 import IdePurescript.PscIde (getAvailableModules)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
-import LanguageServer.DocumentStore (getDocument)
-import LanguageServer.Handlers (applyEdit)
 import LanguageServer.IdePurescript.Config (autocompleteAddImport, preludeModule)
 import LanguageServer.IdePurescript.Types (ServerState(..))
-import LanguageServer.Text (makeMinimalWorkspaceEdit)
-import LanguageServer.TextDocument (TextDocument, getText, getVersion)
-import LanguageServer.Types (DocumentStore, DocumentUri(DocumentUri), Settings, WorkspaceEdit)
-import LanguageServer.Uri (uriToFilename)
-import LanguageServer.Window as Window
+import LanguageServer.Protocol.DocumentStore (getDocument)
+import LanguageServer.Protocol.Handlers (applyEdit)
+import LanguageServer.Protocol.Text (makeMinimalWorkspaceEdit)
+import LanguageServer.Protocol.TextDocument (TextDocument, getText, getVersion)
+import LanguageServer.Protocol.Types (DocumentStore, DocumentUri(DocumentUri), Settings, WorkspaceEdit)
+import LanguageServer.Protocol.Uri (uriToFilename)
+import LanguageServer.Protocol.Window as Window
 import PscIde.Command as C
 
 addCompletionImport :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign

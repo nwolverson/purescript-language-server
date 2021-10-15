@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.FoldingRanges where
 
 import Prelude
+
 import Control.Alt ((<|>))
 import Data.Array ((:))
 import Data.Array as Array
@@ -13,11 +14,11 @@ import Data.Tuple as Tuple
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import IdePurescript.PscIdeServer (Notify)
-import LanguageServer.DocumentStore (getDocument)
-import LanguageServer.Handlers (FoldingRangesParams)
 import LanguageServer.IdePurescript.Types (ServerState)
-import LanguageServer.TextDocument (getText)
-import LanguageServer.Types (DocumentStore, FoldingRange(..), Settings, TextDocumentIdentifier(..))
+import LanguageServer.Protocol.DocumentStore (getDocument)
+import LanguageServer.Protocol.Handlers (FoldingRangesParams)
+import LanguageServer.Protocol.TextDocument (getText)
+import LanguageServer.Protocol.Types (DocumentStore, FoldingRange(..), Settings, TextDocumentIdentifier(..))
 import PureScript.CST (RecoveredParserResult(..))
 import PureScript.CST as CST
 import PureScript.CST.Types (DataCtor(..), Declaration(..), DoStatement(..), Expr(..), Foreign(..), Guarded(..), GuardedExpr(..), Ident, ImportDecl(..), Instance(..), InstanceBinding(..), Labeled(..), LetBinding(..), Module(..), ModuleBody(..), ModuleHeader(..), Name(..), QualifiedName(..), Separated(..), SourceToken, Where(..), Wrapped(..), SourceRange)

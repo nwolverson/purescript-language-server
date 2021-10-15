@@ -1,4 +1,4 @@
-module LanguageServer.Text where
+module LanguageServer.Protocol.Text where
 
 import Prelude
 import Data.Array (findIndex, last, length, null, reverse, slice, zip)
@@ -9,7 +9,7 @@ import Data.String.Regex (regex)
 import Data.String.Regex as Regex
 import Data.String.Regex.Flags (noFlags)
 import Data.Tuple (uncurry)
-import LanguageServer.Types (DocumentUri, Position(..), Range(..), TextDocumentEdit(..), TextDocumentIdentifier(..), TextEdit(..), WorkspaceEdit, ClientCapabilities, workspaceEdit)
+import LanguageServer.Protocol.Types (DocumentUri, Position(..), Range(..), TextDocumentEdit(..), TextDocumentIdentifier(..), TextEdit(..), WorkspaceEdit, ClientCapabilities, workspaceEdit)
 
 makeWorkspaceEdit :: Maybe ClientCapabilities -> DocumentUri -> Number -> Range -> String -> WorkspaceEdit
 makeWorkspaceEdit capabilities uri version range newText = workspaceEdit capabilities [ edit ]

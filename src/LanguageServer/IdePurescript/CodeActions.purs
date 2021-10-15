@@ -20,16 +20,16 @@ import Foreign.Index ((!))
 import Foreign.Object as Object
 import IdePurescript.QuickFix (getReplacement, getTitle, isImport, isUnknownToken)
 import IdePurescript.Regex (replace')
-import LanguageServer.DocumentStore (getDocument)
-import LanguageServer.Handlers (CodeActionParams, applyEdit)
+import LanguageServer.Protocol.DocumentStore (getDocument)
+import LanguageServer.Protocol.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.IdePurescript.Assist (fixTypoActions)
 import LanguageServer.IdePurescript.Build (positionToRange)
 import LanguageServer.IdePurescript.Commands (Replacement, build, replaceAllSuggestions, replaceSuggestion, typedHole)
 import LanguageServer.IdePurescript.Commands as Commands
 import LanguageServer.IdePurescript.Types (ServerState(..))
-import LanguageServer.Text (makeWorkspaceEdit)
-import LanguageServer.TextDocument (TextDocument, getTextAtRange, getVersion)
-import LanguageServer.Types (ClientCapabilities, CodeAction(..), CodeActionKind, CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
+import LanguageServer.Protocol.Text (makeWorkspaceEdit)
+import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVersion)
+import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind, CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 m :: forall a. Nullable a -> Maybe a

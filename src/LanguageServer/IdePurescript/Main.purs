@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.Main (main) where
 
 import Prelude
+
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise)
 import Control.Promise as Promise
@@ -30,9 +31,6 @@ import Foreign.Object (Object)
 import Foreign.Object as Object
 import IdePurescript.Modules (getModulesForFileTemp, initialModulesState)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
-import LanguageServer.Console (error, info, log, warn)
-import LanguageServer.DocumentStore (getDocument, onDidChangeContent, onDidOpenDocument, onDidSaveDocument)
-import LanguageServer.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendCleanBegin, sendCleanEnd, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fillTypedHole, fixTypo)
 import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnostics)
 import LanguageServer.IdePurescript.Clean (clean)
@@ -49,11 +47,14 @@ import LanguageServer.IdePurescript.Server as Server
 import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, getWorkspaceSymbols)
 import LanguageServer.IdePurescript.Tooltips (getTooltips)
 import LanguageServer.IdePurescript.Types (ServerState(..), CommandHandler)
-import LanguageServer.Setup (InitParams(..), getConfiguration, initConnection, initDocumentStore)
-import LanguageServer.TextDocument (TextDocument, getText, getUri)
-import LanguageServer.Types (Connection, Diagnostic, DocumentStore, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
-import LanguageServer.Uri (filenameToUri, uriToFilename)
-import LanguageServer.Window (showError, showWarningWithActions)
+import LanguageServer.Protocol.Console (error, info, log, warn)
+import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidOpenDocument, onDidSaveDocument)
+import LanguageServer.Protocol.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendCleanBegin, sendCleanEnd, sendDiagnosticsBegin, sendDiagnosticsEnd)
+import LanguageServer.Protocol.Setup (InitParams(..), getConfiguration, initConnection, initDocumentStore)
+import LanguageServer.Protocol.TextDocument (TextDocument, getText, getUri)
+import LanguageServer.Protocol.Types (Connection, Diagnostic, DocumentStore, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
+import LanguageServer.Protocol.Uri (filenameToUri, uriToFilename)
+import LanguageServer.Protocol.Window (showError, showWarningWithActions)
 import Node.Encoding as Encoding
 import Node.FS.Aff as FS
 import Node.FS.Sync as FSSync

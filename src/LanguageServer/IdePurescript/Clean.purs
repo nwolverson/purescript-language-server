@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.Clean where
 
 import Prelude
+
 import Data.Array (find, fold)
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
@@ -8,7 +9,7 @@ import Data.String (length)
 import Data.Traversable (traverse)
 import Effect.Aff (Aff, attempt, message)
 import LanguageServer.IdePurescript.Config (effectiveOutputDirectory)
-import LanguageServer.Types (Settings)
+import LanguageServer.Protocol.Types (Settings)
 import Node.FS.Aff as FS
 import Node.FS.Stats (isDirectory)
 import Node.Path as Path

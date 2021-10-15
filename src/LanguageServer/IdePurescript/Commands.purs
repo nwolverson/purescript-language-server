@@ -5,7 +5,7 @@ import Data.Array ((:))
 import Data.Maybe (Maybe(..))
 import Data.Nullable (toNullable)
 import Foreign (Foreign, unsafeToForeign)
-import LanguageServer.Types (Command(..), DocumentUri, Range)
+import LanguageServer.Protocol.Types (Command(..), DocumentUri, Range)
 import PscIde.Command (TypeInfo)
 
 cmdName :: CommandInfo -> String

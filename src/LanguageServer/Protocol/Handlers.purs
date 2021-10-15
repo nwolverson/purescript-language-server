@@ -1,4 +1,4 @@
-module LanguageServer.Handlers where
+module LanguageServer.Protocol.Handlers where
 
 import Prelude
 import Control.Promise (Promise)
@@ -7,7 +7,7 @@ import Data.Nullable (Nullable)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Foreign (Foreign)
-import LanguageServer.Types (CodeActionResult, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, FoldingRange, GotoDefinitionResult, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, TextEdit, WorkspaceEdit)
+import LanguageServer.Protocol.Types (CodeActionResult, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, FoldingRange, GotoDefinitionResult, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, TextEdit, WorkspaceEdit)
 
 type TextDocumentPositionParams
   = { textDocument :: TextDocumentIdentifier, position :: Position }

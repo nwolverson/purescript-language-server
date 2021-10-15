@@ -1,8 +1,8 @@
-module LanguageServer.TextDocument where
+module LanguageServer.Protocol.TextDocument where
 
 import Prelude
 import Effect (Effect)
-import LanguageServer.Types (DocumentUri, Position, Range)
+import LanguageServer.Protocol.Types (DocumentUri, Position, Range)
 
 foreign import data TextDocument :: Type
 

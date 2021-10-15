@@ -1,4 +1,4 @@
-module LanguageServer.Types where
+module LanguageServer.Protocol.Types where
 
 import Prelude
 import Data.Array (concat, groupBy, sortWith, (:))

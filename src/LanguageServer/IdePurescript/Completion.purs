@@ -16,17 +16,17 @@ import IdePurescript.Modules (State, getAllActiveModules, getModuleFromUnknownQu
 import IdePurescript.Modules as Modules
 import IdePurescript.PscIde (getLoadedModules)
 import IdePurescript.PscIdeServer (Notify)
-import LanguageServer.DocumentStore (getDocument)
-import LanguageServer.Handlers (TextDocumentPositionParams)
+import LanguageServer.Protocol.DocumentStore (getDocument)
+import LanguageServer.Protocol.Handlers (TextDocumentPositionParams)
 import LanguageServer.IdePurescript.Commands (addCompletionImport)
 import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.IdePurescript.Imports (showNS)
 import LanguageServer.IdePurescript.SuggestionRank (Ranking(..), cmapRanking)
 import LanguageServer.IdePurescript.SuggestionRank as SuggestionRank
 import LanguageServer.IdePurescript.Types (ServerState)
-import LanguageServer.TextDocument (getTextAtRange)
-import LanguageServer.Types (CompletionItem(..), CompletionItemLabelDetails(..), CompletionItemList(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, markupContent)
-import LanguageServer.Types as LS
+import LanguageServer.Protocol.TextDocument (getTextAtRange)
+import LanguageServer.Protocol.Types (CompletionItem(..), CompletionItemLabelDetails(..), CompletionItemList(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, markupContent)
+import LanguageServer.Protocol.Types as LS
 
 getCompletions :: Notify -> DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams -> Aff CompletionItemList
 getCompletions notify docs settings state ({ textDocument, position }) = do

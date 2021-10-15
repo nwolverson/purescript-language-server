@@ -1,9 +1,9 @@
-module LanguageServer.DocumentStore where
+module LanguageServer.Protocol.DocumentStore where
 
 import Prelude
 import Effect (Effect)
-import LanguageServer.TextDocument (TextDocument)
-import LanguageServer.Types (DocumentStore, DocumentUri)
+import LanguageServer.Protocol.TextDocument (TextDocument)
+import LanguageServer.Protocol.Types (DocumentStore, DocumentUri)
 
 foreign import getDocuments :: DocumentStore -> Effect (Array TextDocument)
 

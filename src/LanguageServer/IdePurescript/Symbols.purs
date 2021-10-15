@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.Symbols where
 
 import Prelude
+
 import Control.Alt ((<|>))
 import Control.Apply (lift2)
 import Data.Array (catMaybes, singleton)
@@ -18,12 +19,12 @@ import Effect.Class (liftEffect)
 import IdePurescript.Modules (getQualModule, getUnqualActiveModules)
 import IdePurescript.PscIde (getCompletion, getLoadedModules, getModuleInfo, getTypeInfo)
 import IdePurescript.Tokens (identifierAtPoint)
-import LanguageServer.DocumentStore (getDocument)
-import LanguageServer.Handlers (TextDocumentPositionParams, WorkspaceSymbolParams, DocumentSymbolParams)
 import LanguageServer.IdePurescript.Types (ServerState(..))
-import LanguageServer.TextDocument (getTextAtRange)
-import LanguageServer.Types (ClientCapabilities, DocumentStore, GotoDefinitionResult, Location(..), LocationLink(..), Position(..), Range(..), Settings, SymbolInformation(..), SymbolKind(..), TextDocumentIdentifier(..), gotoDefinitionResult, symbolKindToInt)
-import LanguageServer.Uri (filenameToUri)
+import LanguageServer.Protocol.DocumentStore (getDocument)
+import LanguageServer.Protocol.Handlers (TextDocumentPositionParams, WorkspaceSymbolParams, DocumentSymbolParams)
+import LanguageServer.Protocol.TextDocument (getTextAtRange)
+import LanguageServer.Protocol.Types (ClientCapabilities, DocumentStore, GotoDefinitionResult, Location(..), LocationLink(..), Position(..), Range(..), Settings, SymbolInformation(..), SymbolKind(..), TextDocumentIdentifier(..), gotoDefinitionResult, symbolKindToInt)
+import LanguageServer.Protocol.Uri (filenameToUri)
 import Node.Path (resolve)
 import PscIde.Command (CompletionOptions(..))
 import PscIde.Command as Command

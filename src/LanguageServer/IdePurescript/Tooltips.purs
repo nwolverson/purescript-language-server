@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.Tooltips where
 
 import Prelude
+
 import Data.Array (uncons)
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Newtype (un)
@@ -11,11 +12,11 @@ import Effect.Class (liftEffect)
 import IdePurescript.Modules (getQualModule, getUnqualActiveModules)
 import IdePurescript.PscIde (getTypeInfo)
 import IdePurescript.Tokens (identifierAtPoint)
-import LanguageServer.DocumentStore (getDocument)
-import LanguageServer.Handlers (TextDocumentPositionParams)
 import LanguageServer.IdePurescript.Types (ServerState(..))
-import LanguageServer.TextDocument (getTextAtRange)
-import LanguageServer.Types (DocumentStore, Hover(Hover), Position(Position), Range(Range), Settings, TextDocumentIdentifier(TextDocumentIdentifier), markupContent)
+import LanguageServer.Protocol.DocumentStore (getDocument)
+import LanguageServer.Protocol.Handlers (TextDocumentPositionParams)
+import LanguageServer.Protocol.TextDocument (getTextAtRange)
+import LanguageServer.Protocol.Types (DocumentStore, Hover(Hover), Position(Position), Range(Range), Settings, TextDocumentIdentifier(TextDocumentIdentifier), markupContent)
 import PscIde.Command as C
 
 getTooltips :: DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams -> Aff (Nullable Hover)

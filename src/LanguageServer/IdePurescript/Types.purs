@@ -1,14 +1,15 @@
 module LanguageServer.IdePurescript.Types where
 
 import Prelude
+
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 import Effect.Aff (Aff)
 import Foreign (Foreign)
 import Foreign.Object (Object)
 import IdePurescript.Modules (State) as Modules
-import LanguageServer.TextDocument (TextDocument)
-import LanguageServer.Types (Connection, DocumentStore, DocumentUri, Settings, ClientCapabilities)
+import LanguageServer.Protocol.TextDocument (TextDocument)
+import LanguageServer.Protocol.Types (Connection, DocumentStore, DocumentUri, Settings, ClientCapabilities)
 import PscIde.Command (RebuildError)
 
 newtype ServerState

@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.Build where
 
 import Prelude
+
 import Data.Array (filter, mapMaybe, notElem, uncons)
 import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), maybe)
@@ -19,8 +20,8 @@ import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.IdePurescript.Config (addNpmPath, buildCommand, censorCodes, codegenTargets)
 import LanguageServer.IdePurescript.Server (loadAll)
 import LanguageServer.IdePurescript.Types (ServerState(..))
-import LanguageServer.Types (Diagnostic(Diagnostic), DocumentStore, DocumentUri, Position(Position), Range(Range), Settings)
-import LanguageServer.Uri (uriToFilename)
+import LanguageServer.Protocol.Types (Diagnostic(Diagnostic), DocumentStore, DocumentUri, Position(Position), Range(Range), Settings)
+import LanguageServer.Protocol.Uri (uriToFilename)
 import Node.Path (resolve)
 import PscIde.Command (RebuildError(RebuildError))
 import PscIde.Command as PC

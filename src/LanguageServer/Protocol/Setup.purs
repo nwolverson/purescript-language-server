@@ -1,4 +1,4 @@
-module LanguageServer.Setup where
+module LanguageServer.Protocol.Setup where
 
 import Prelude
 import Control.Promise (Promise)
@@ -7,7 +7,7 @@ import Data.Nullable (Nullable)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Foreign (Foreign)
-import LanguageServer.Types (ClientCapabilities, Connection, DocumentStore, DocumentUri)
+import LanguageServer.Protocol.Types (ClientCapabilities, Connection, DocumentStore, DocumentUri)
 
 newtype InitParams
   = InitParams { rootUri :: Nullable DocumentUri, rootPath :: Nullable String, trace :: Nullable String, capabilities :: ClientCapabilities }

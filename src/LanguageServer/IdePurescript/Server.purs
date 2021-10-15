@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.Server where
 
 import Prelude
+
 import Data.Array (filter, head)
 import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..))
@@ -18,7 +19,7 @@ import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import IdePurescript.PscIdeServer as P
 import LanguageServer.IdePurescript.Config (ConfigFn)
 import LanguageServer.IdePurescript.Config as Config
-import LanguageServer.Types (Settings)
+import LanguageServer.Protocol.Types (Settings)
 import Node.Buffer (toString)
 import Node.ChildProcess (defaultExecOptions, execFile)
 import Node.Encoding (Encoding(..))

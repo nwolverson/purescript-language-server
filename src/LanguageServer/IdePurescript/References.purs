@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.References where
 
 import Prelude
+
 import Data.Either (either)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (over, un)
@@ -12,13 +13,13 @@ import Effect.Class (liftEffect)
 import IdePurescript.Modules (getQualModule, getUnqualActiveModules)
 import IdePurescript.PscIde (getTypeInfo)
 import IdePurescript.Tokens (identifierAtPoint)
-import LanguageServer.DocumentStore (getDocument)
-import LanguageServer.Handlers (ReferenceParams)
 import LanguageServer.IdePurescript.Symbols (convPosition)
 import LanguageServer.IdePurescript.Types (ServerState(..))
-import LanguageServer.TextDocument (getTextAtRange)
-import LanguageServer.Types (DocumentStore, Location(..), Position(..), Range(..), Settings, TextDocumentIdentifier(..))
-import LanguageServer.Uri (filenameToUri)
+import LanguageServer.Protocol.DocumentStore (getDocument)
+import LanguageServer.Protocol.Handlers (ReferenceParams)
+import LanguageServer.Protocol.TextDocument (getTextAtRange)
+import LanguageServer.Protocol.Types (DocumentStore, Location(..), Position(..), Range(..), Settings, TextDocumentIdentifier(..))
+import LanguageServer.Protocol.Uri (filenameToUri)
 import Node.Path (resolve)
 import PscIde (usages)
 import PscIde.Command (Namespace(..))

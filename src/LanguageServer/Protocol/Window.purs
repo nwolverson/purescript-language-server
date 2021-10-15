@@ -1,4 +1,4 @@
-module LanguageServer.Window (showError, showErrorWithActions, showWarning, showWarningWithActions, showInformation, showInformationWithActions) where
+module LanguageServer.Protocol.Window (showError, showErrorWithActions, showWarning, showWarningWithActions, showInformation, showInformationWithActions) where
 
 import Prelude
 import Control.Promise (Promise)
@@ -7,7 +7,7 @@ import Data.Maybe (Maybe)
 import Data.Nullable (Nullable, toMaybe)
 import Effect (Effect)
 import Effect.Aff (Aff)
-import LanguageServer.Types (Connection)
+import LanguageServer.Protocol.Types (Connection)
 
 type MessageAction
   = { title :: String }

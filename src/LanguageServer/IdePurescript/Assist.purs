@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.Assist where
 
 import Prelude
+
 import Control.Monad.Except (runExcept)
 import Data.Array (fold, intercalate, take, (!!))
 import Data.Either (Either(..), either)
@@ -17,15 +18,15 @@ import IdePurescript.Completion (declarationTypeToNamespace, simplifyImportChoic
 import IdePurescript.PscIde (eitherToErr)
 import IdePurescript.PscIdeServer (Notify)
 import IdePurescript.Tokens (containsArrow, identifierAtPoint, startsWithCapitalLetter)
-import LanguageServer.Console (log)
-import LanguageServer.DocumentStore (getDocument)
-import LanguageServer.Handlers (applyEdit)
 import LanguageServer.IdePurescript.Commands as Commands
 import LanguageServer.IdePurescript.Imports (addCompletionImport, addCompletionImport', addCompletionImportEdit, showNS)
 import LanguageServer.IdePurescript.Types (ServerState(..))
-import LanguageServer.Text (makeWorkspaceEdit)
-import LanguageServer.TextDocument (getText, getTextAtRange, getVersion)
-import LanguageServer.Types (Command, DocumentStore, DocumentUri(..), Position(..), Range(..), Settings, readRange)
+import LanguageServer.Protocol.Console (log)
+import LanguageServer.Protocol.DocumentStore (getDocument)
+import LanguageServer.Protocol.Handlers (applyEdit)
+import LanguageServer.Protocol.Text (makeWorkspaceEdit)
+import LanguageServer.Protocol.TextDocument (getText, getTextAtRange, getVersion)
+import LanguageServer.Protocol.Types (Command, DocumentStore, DocumentUri(..), Position(..), Range(..), Settings, readRange)
 import PscIde (defaultCompletionOptions, suggestTypos)
 import PscIde as P
 import PscIde.Command (DeclarationType(..), TypeInfo(..), declarationTypeFromString, declarationTypeToString)

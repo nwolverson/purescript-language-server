@@ -12,7 +12,7 @@ import Foreign.Index ((!))
 import IdePurescript.Modules (getQualModule)
 import IdePurescript.PscIde (getCompletion', getLoadedModules)
 import LanguageServer.IdePurescript.Types (ServerState(..))
-import LanguageServer.Types (DocumentStore, Settings)
+import LanguageServer.Protocol.Types (DocumentStore, Settings)
 import PscIde as P
 import PscIde.Command (TypeInfo(..))
 import PscIde.Command as C
