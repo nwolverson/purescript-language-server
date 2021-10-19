@@ -1,12 +1,29 @@
 # Changelog
 
-### Unreleased
+### 0.15.8
 
 - Default `purescript.addSpagoSources` true (already true in vscode default for some time).
+
+- Report incomplete results properly (fixes #144)
+
+- Indicate imported module on qualifier suggestions
+
+- Use new proposed suggestion API to give module/type info
+
+  (at least in vscode for now)
+
+- Additional folding range provision
+
+- Only suggest to import constructor when type has same name (@i-am-the-slime)
+
+- Support qualifiers in import/typo codeactions as per suggestions. Fix #143
 
 ### 0.15.7
 
 - Show build error output when no JSON found. Fix #150
+
+- Resolve some dependency issues affecting distribution
+
 
 ### 0.15.6
 
