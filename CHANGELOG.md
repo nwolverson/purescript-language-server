@@ -12,7 +12,7 @@
 
   (at least in vscode for now)
 
-- Additional folding range provision
+- Provide folding ranges for declarations
 
 - Only suggest to import constructor when type has same name (@i-am-the-slime)
 
