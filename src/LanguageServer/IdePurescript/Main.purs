@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Main (main) where
 
 import Prelude
-
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise)
 import Control.Promise as Promise
@@ -67,24 +66,25 @@ import Node.Process as Process
 import PscIde.Command (RebuildError(..))
 
 defaultServerState :: ServerState
-defaultServerState = ServerState
-  { port: Nothing
-  , deactivate: pure unit
-  , root: Nothing
-  , conn: Nothing
-  , runningRebuild: Nothing
-  , modules: initialModulesState
-  , modulesFile: Nothing
-  , buildQueue: Object.empty
-  , diagnostics: Object.empty
-  , clientCapabilities: Nothing
-  }
+defaultServerState =
+  ServerState
+    { port: Nothing
+    , deactivate: pure unit
+    , root: Nothing
+    , conn: Nothing
+    , runningRebuild: Nothing
+    , modules: initialModulesState
+    , modulesFile: Nothing
+    , buildQueue: Object.empty
+    , diagnostics: Object.empty
+    , clientCapabilities: Nothing
+    }
 
-type CmdLineArguments =
-  { config :: Maybe String
-  , filename :: Maybe String
-  , version :: Boolean
-  }
+type CmdLineArguments
+  = { config :: Maybe String
+    , filename :: Maybe String
+    , version :: Boolean
+    }
 
 -- | Parses command line arguments  passed to process.argv
 parseArgs :: Array String -> Maybe CmdLineArguments
@@ -260,29 +260,28 @@ mkStartPscIdeServer config conn state documents logError = do
 
 connect :: Ref ServerState -> Effect Connection
 connect state =
-  initConnection commands
-    $ \({ params: InitParams { rootPath, rootUri, capabilities }, conn }) -> do
-        Process.argv >>= \args -> log conn $ "Starting with args: " <> show args
-        root <- case toMaybe rootUri, toMaybe rootPath of
-          Just uri, _ -> Just <$> uriToFilename uri
-          _, Just path -> pure $ Just path
-          Nothing, Nothing -> pure Nothing
-        workingRoot <- maybe Process.cwd pure root
-        Ref.modify_
-          ( over ServerState
-              $ _
-                  { root = Just workingRoot
-                  , clientCapabilities = Just capabilities
-                  }
-          )
-          state
-        ( \(Tuple dir root') ->
-            log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root')
-        )
-          =<< Tuple
-          <$> Process.cwd
-          <*> pure workingRoot
-        Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
+  initConnection commands \({ params: InitParams { rootPath, rootUri, capabilities }, conn }) -> do
+    Process.argv >>= \args -> log conn $ "Starting with args: " <> show args
+    root <- case toMaybe rootUri, toMaybe rootPath of
+      Just uri, _ -> Just <$> uriToFilename uri
+      _, Just path -> pure $ Just path
+      Nothing, Nothing -> pure Nothing
+    workingRoot <- maybe Process.cwd pure root
+    Ref.modify_
+      ( over ServerState
+          $ _
+              { root = Just workingRoot
+              , clientCapabilities = Just capabilities
+              }
+      )
+      state
+    ( \(Tuple dir root') ->
+        log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root')
+    )
+      =<< Tuple
+      <$> Process.cwd
+      <*> pure workingRoot
+    Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
 
 -- | Starts full build
 buildProject ::
@@ -458,41 +457,41 @@ handleEvents ::
   Ref ServerState ->
   DocumentStore -> Notify -> Effect Unit
 handleEvents config conn state documents logError = do
-  let runHandler = mkRunHandler config state documents
-      stopPscIdeServer = mkStopPscIdeServer state logError
-      launchAffLog = launchAffLog' logError
-
-  onCompletion conn $ runHandler
-    "onCompletion" getTextDocUri (getCompletions logError documents)
-
+  let
+    runHandler = mkRunHandler config state documents
+    stopPscIdeServer = mkStopPscIdeServer state logError
+    launchAffLog = launchAffLog' logError
+  onCompletion conn
+    $ runHandler
+        "onCompletion" getTextDocUri (getCompletions logError documents)
   -- Handles go to definition
-  onDefinition conn $ runHandler
-    "onDefinition" getTextDocUri (getDefinition documents)
-
-  onDocumentSymbol conn $ runHandler
-    "onDocumentSymbol" getTextDocUri getDocumentSymbols
-
-  onWorkspaceSymbol conn $ runHandler
-    "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
-
-  onFoldingRanges conn $ runHandler
-    "onFoldingRanges" getTextDocUri (getFoldingRanges logError documents)
-
-  onDocumentFormatting conn $ runHandler
-    "onDocumentFormatting" getTextDocUri (getFormattedDocument logError documents)
-
-  onReferences conn $ runHandler
-    "onReferences" getTextDocUri (getReferences documents)
-
-  onHover conn $ runHandler
-    "onHover" getTextDocUri (getTooltips documents)
-
-  onCodeAction conn $ runHandler
-    "onCodeAction" getTextDocUri (getActions documents)
-
-  onCodeLens conn $ runHandler
-    "onCodeLens" getTextDocUri (getCodeLenses state documents)
-
+  onDefinition conn
+    $ runHandler
+        "onDefinition" getTextDocUri (getDefinition documents)
+  onDocumentSymbol conn
+    $ runHandler
+        "onDocumentSymbol" getTextDocUri getDocumentSymbols
+  onWorkspaceSymbol conn
+    $ runHandler
+        "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
+  onFoldingRanges conn
+    $ runHandler
+        "onFoldingRanges" getTextDocUri (getFoldingRanges logError documents)
+  onDocumentFormatting conn
+    $ runHandler
+        "onDocumentFormatting" getTextDocUri (getFormattedDocument logError documents)
+  onReferences conn
+    $ runHandler
+        "onReferences" getTextDocUri (getReferences documents)
+  onHover conn
+    $ runHandler
+        "onHover" getTextDocUri (getTooltips documents)
+  onCodeAction conn
+    $ runHandler
+        "onCodeAction" getTextDocUri (getActions documents)
+  onCodeLens conn
+    $ runHandler
+        "onCodeLens" getTextDocUri (getCodeLenses state documents)
   onShutdown conn $ Promise.fromAff stopPscIdeServer
   onDidChangeWatchedFiles conn
     $ \{ changes } -> do

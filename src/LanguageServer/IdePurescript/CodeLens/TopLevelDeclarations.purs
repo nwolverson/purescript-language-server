@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.CodeLens.TopLevelDeclarations where
 
 import Prelude
-
 import Data.Array (mapMaybe, mapWithIndex)
 import Data.Foldable (fold)
 import Data.Maybe (Maybe(..))
@@ -31,12 +30,12 @@ addTypeDefinitionCodeLenses docUri =
   mapMaybe case _ of
     RebuildError
       { errorCode: "MissingTypeDeclaration"
-    , suggestion:
-      Just
-      ( PscSuggestion
-        { replacement: signature, replaceRange: Just range }
-    )
-    } -> Just (mkCodeLensResult range signature)
+      , suggestion:
+          Just
+            ( PscSuggestion
+                { replacement: signature, replaceRange: Just range }
+            )
+      } -> Just (mkCodeLensResult range signature)
     _ -> Nothing
   where
   mkCodeLensResult rangePosition signature = do
@@ -51,11 +50,11 @@ addTypeDefinitionCodeLenses docUri =
       { command: cmdName replaceSuggestionCmd
       , title: signature
       , arguments:
-        Nullable.notNull
-          [ unsafeToForeign docUri
-          , unsafeToForeign (ensureSpaceAfterFirstLine signature)
-          , unsafeToForeign range
-          ]
+          Nullable.notNull
+            [ unsafeToForeign docUri
+            , unsafeToForeign (ensureSpaceAfterFirstLine signature)
+            , unsafeToForeign range
+            ]
       }
 
 ensureSpaceAfterFirstLine ∷ String -> String

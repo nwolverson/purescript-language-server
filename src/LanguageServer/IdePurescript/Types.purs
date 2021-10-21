@@ -15,15 +15,15 @@ import PscIde.Command (RebuildError)
 newtype ServerState
   = ServerState
   { port :: Maybe Int
-  , deactivate :: Aff Unit
   , root :: Maybe String
   , conn :: Maybe Connection
+  , clientCapabilities :: Maybe ClientCapabilities
+  , deactivate :: Aff Unit
   , runningRebuild :: Maybe (Fiber Unit)
   , modules :: Modules.State
   , modulesFile :: Maybe DocumentUri
   , buildQueue :: Object TextDocument
   , diagnostics :: Object (Array RebuildError)
-  , clientCapabilities :: Maybe ClientCapabilities
   }
 
 derive instance newtypeServerState :: Newtype ServerState _
