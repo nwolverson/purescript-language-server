@@ -57,6 +57,7 @@ import LanguageServer.Protocol.TextDocument (getText, getUri)
 import LanguageServer.Protocol.Types (Connection, Diagnostic, DocumentStore, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
 import LanguageServer.Protocol.Uri (filenameToUri, uriToFilename)
 import LanguageServer.Protocol.Window (showError, showWarningWithActions)
+import LanguageServer.Protocol.Workspace (codeLensRefresh)
 import Node.Encoding as Encoding
 import Node.FS.Aff as FS
 import Node.FS.Sync as FSSync
@@ -251,10 +252,11 @@ mkStartPscIdeServer config conn state documents logError = do
                 $ "Non-fatal error loading modules: "
                 <> msg
             _ -> pure unit
-      liftEffect
-        $ Ref.modify_
+      liftEffect do
+        Ref.modify_
             (over ServerState $ _ { port = Just port, deactivate = quit })
             state
+        codeLensRefresh conn
     _ -> pure unit
   liftEffect $ buildDocumentsInQueue config conn state logError
 

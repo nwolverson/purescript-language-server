@@ -19,8 +19,4 @@ getCodeLenses _stateRef documentStore settings state { textDocument: TextDocumen
     Nothing -> do
       pure unit
 
-  topLevelDeclarations <- topLevelDeclarationLenses documentStore settings state uri
-  pure topLevelDeclarations
-
-
-
+  topLevelDeclarationLenses documentStore settings state uri
