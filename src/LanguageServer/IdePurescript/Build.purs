@@ -5,7 +5,7 @@ import Prelude
 import Data.Array (filter, mapMaybe, notElem, uncons)
 import Data.Array as Array
 import Data.Either (Either(..), either)
-import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (over, un)
 import Data.Nullable (toNullable)
 import Data.Traversable (traverse)
@@ -30,6 +30,7 @@ import LanguageServer.Protocol.Handlers (publishDiagnostics, sendDiagnosticsBegi
 import LanguageServer.Protocol.TextDocument (TextDocument, getUri, getVersion)
 import LanguageServer.Protocol.Types (Connection, Diagnostic(Diagnostic), DocumentStore, DocumentUri(..), Position(Position), Range(Range), Settings)
 import LanguageServer.Protocol.Uri (uriToFilename)
+import LanguageServer.Protocol.Window (createWorkDoneProgress, workBegin, workDone)
 import Node.Path (resolve)
 import PscIde.Command (RebuildError(RebuildError))
 import PscIde.Command as PC

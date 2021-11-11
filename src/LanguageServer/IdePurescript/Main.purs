@@ -56,7 +56,7 @@ import LanguageServer.Protocol.Setup (InitParams(..), getConfiguration, initConn
 import LanguageServer.Protocol.TextDocument (getText, getUri)
 import LanguageServer.Protocol.Types (Connection, Diagnostic, DocumentStore, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
 import LanguageServer.Protocol.Uri (filenameToUri, uriToFilename)
-import LanguageServer.Protocol.Window (showError, showWarningWithActions)
+import LanguageServer.Protocol.Window (createWorkDoneProgress, reportMsg, showError, showWarningWithActions, workBegin, workDone)
 import LanguageServer.Protocol.Workspace (codeLensRefresh)
 import Node.Encoding as Encoding
 import Node.FS.Aff as FS
@@ -232,6 +232,10 @@ mkStartPscIdeServer :: Ref Foreign -> Connection -> Ref ServerState -> DocumentS
 mkStartPscIdeServer config conn state documents logError = do
   let workspaceRoot = getWorkspaceRoot state
   liftEffect $ logError Info "Starting IDE server"
+  
+  progressReporter <- createWorkDoneProgress conn
+  liftEffect $ workBegin progressReporter { title: "Starting PureScript IDE server" }
+
   rootPath <- liftEffect workspaceRoot
   settings <- liftEffect $ Ref.read config
   startRes <- Server.startServer' settings rootPath logError logError
@@ -258,6 +262,7 @@ mkStartPscIdeServer config conn state documents logError = do
             state
         codeLensRefresh conn
     _ -> pure unit
+  liftEffect $ workDone progressReporter
   liftEffect $ buildDocumentsInQueue config conn state logError
 
 connect :: Ref ServerState -> Effect Connection
@@ -291,11 +296,12 @@ buildProject ::
   Ref ServerState ->
   Notify ->
   DocumentStore -> Foreign -> ServerState -> Array Foreign -> Aff Unit
-buildProject
-  conn state logError
-  docs c s arguments = do
+buildProject conn state logError docs c s arguments = do
   let workspaceRoot = getWorkspaceRoot state
-  liftEffect $ sendDiagnosticsBegin conn
+  progressReporter <- createWorkDoneProgress conn
+  liftEffect do
+    workBegin progressReporter { title: "Building PureScript" }
+    sendDiagnosticsBegin conn
   fullBuild logError docs c s arguments
     >>= case _ of
         Right { pscErrors, diagnostics } ->
@@ -326,7 +332,9 @@ buildProject
           liftEffect do
             error conn err
             showError conn err
-  liftEffect $ sendDiagnosticsEnd conn
+  liftEffect do
+    sendDiagnosticsEnd conn
+    workDone progressReporter
 
 -- | Deletes output from previous build
 cleanProject ::

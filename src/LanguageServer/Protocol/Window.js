@@ -7,7 +7,7 @@ var __spreadArrays = (this && this.__spreadArrays) || function () {
     return r;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showInformationWithActionsImpl = exports.showInformation = exports.showWarningWithActionsImpl = exports.showWarning = exports.showErrorWithActionsImpl = exports.showError = void 0;
+exports.report2 = exports.reportMsg = exports.report = exports.workBegin = exports.workDone = exports.createWorkDoneProgressImpl = exports.showInformationWithActionsImpl = exports.showInformation = exports.showWarningWithActionsImpl = exports.showWarning = exports.showErrorWithActionsImpl = exports.showError = void 0;
 exports.showError = function (conn) { return function (s) { return function () { return conn.window.showErrorMessage(s); }; }; };
 exports.showErrorWithActionsImpl = function (conn) { return function (s) { return function (actions) { return function () {
     var _a;
@@ -23,3 +23,12 @@ exports.showInformationWithActionsImpl = function (conn) { return function (s) {
     var _a;
     return (_a = conn.window).showInformationMessage.apply(_a, __spreadArrays([s], actions));
 }; }; }; };
+exports.createWorkDoneProgressImpl = function (conn) { return function () { return conn.window.createWorkDoneProgress(); }; };
+exports.workDone = function (reporter) { return function () { return reporter.done(); }; };
+exports.workBegin = function (reporter) { return function (_a) {
+    var title = _a.title;
+    return function () { return reporter.begin(title, undefined, undefined, true); };
+}; };
+exports.report = function (reporter) { return function (percentage) { return function () { return reporter.report(percentage); }; }; };
+exports.reportMsg = function (reporter) { return function (msg) { return function () { return reporter.report(msg); }; }; };
+exports.report2 = function (reporter) { return function (percentage) { return function (msg) { return function () { return reporter.report(percentage, msg); }; }; }; };

@@ -1,4 +1,18 @@
-module LanguageServer.Protocol.Window (showError, showErrorWithActions, showWarning, showWarningWithActions, showInformation, showInformationWithActions) where
+module LanguageServer.Protocol.Window
+  ( showError
+  , showErrorWithActions
+  , showWarning
+  , showWarningWithActions
+  , showInformation
+  , showInformationWithActions
+  , workDone
+  , workBegin
+  , report
+  , report2
+  , reportMsg
+  , WorkDoneProgressReporter
+  , createWorkDoneProgress
+  ) where
 
 import Prelude
 import Control.Promise (Promise)
@@ -35,3 +49,16 @@ foreign import showInformationWithActionsImpl :: Connection -> String -> Array M
 showInformationWithActions :: Connection -> String -> Array String -> Aff (Maybe String)
 showInformationWithActions conn msg acts =
   convertMessageAction <$> (Promise.toAffE $ showInformationWithActionsImpl conn msg (map (\title -> { title }) acts))
+
+foreign import data WorkDoneProgressReporter :: Type
+
+foreign import workDone :: WorkDoneProgressReporter -> Effect Unit
+foreign import workBegin :: WorkDoneProgressReporter -> { title :: String } -> Effect Unit
+foreign import report :: WorkDoneProgressReporter -> Number -> Effect Unit
+foreign import reportMsg :: WorkDoneProgressReporter -> String -> Effect Unit
+foreign import report2 :: WorkDoneProgressReporter -> Number -> String -> Effect Unit
+
+foreign import createWorkDoneProgressImpl :: Connection -> Effect (Promise WorkDoneProgressReporter)
+
+createWorkDoneProgress :: Connection -> Aff WorkDoneProgressReporter
+createWorkDoneProgress conn = Promise.toAffE $ createWorkDoneProgressImpl conn
