@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.Main (main) where
 
 import Prelude
+
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise)
 import Control.Promise as Promise
@@ -8,7 +9,7 @@ import Data.Array (length, (!!), (\\))
 import Data.Array as Array
 import Data.Either (Either(..), either)
 import Data.Foldable (for_, or, sequence_)
-import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe, maybe')
+import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toMaybe, toNullable)
 import Data.Profunctor.Strong (first)
@@ -17,7 +18,7 @@ import Data.String as String
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, runAff_, try)
+import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, try)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Class (liftEffect)
@@ -30,11 +31,8 @@ import Foreign.Object (Object)
 import Foreign.Object as Object
 import IdePurescript.Modules (getModulesForFileTemp, initialModulesState)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
-import LanguageServer.Protocol.Console (error, info, log, warn)
-import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidOpenDocument, onDidSaveDocument)
-import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendCleanBegin, sendCleanEnd, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fillTypedHole, fixTypo)
-import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, getDiagnostics)
+import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, launchRebuildAndSendDiagnostics, rebuildAndSendDiagnostics)
 import LanguageServer.IdePurescript.Clean (clean)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
 import LanguageServer.IdePurescript.CodeLenses (getCodeLenses)
@@ -50,11 +48,12 @@ import LanguageServer.IdePurescript.Server as Server
 import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, getWorkspaceSymbols)
 import LanguageServer.IdePurescript.Tooltips (getTooltips)
 import LanguageServer.IdePurescript.Types (ServerState(..), CommandHandler)
+import LanguageServer.IdePurescript.Util (launchAffLog)
 import LanguageServer.Protocol.Console (error, info, log, warn)
 import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidOpenDocument, onDidSaveDocument)
-import LanguageServer.Protocol.Handlers (onCodeAction, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendCleanBegin, sendCleanEnd, sendDiagnosticsBegin, sendDiagnosticsEnd)
+import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendCleanBegin, sendCleanEnd, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.Protocol.Setup (InitParams(..), getConfiguration, initConnection, initDocumentStore)
-import LanguageServer.Protocol.TextDocument (TextDocument, getText, getUri)
+import LanguageServer.Protocol.TextDocument (getText, getUri)
 import LanguageServer.Protocol.Types (Connection, Diagnostic, DocumentStore, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
 import LanguageServer.Protocol.Uri (filenameToUri, uriToFilename)
 import LanguageServer.Protocol.Window (showError, showWarningWithActions)
@@ -208,7 +207,8 @@ buildDocumentsInQueue ::
 buildDocumentsInQueue config conn state logError = do
   queue <- (_.buildQueue <<< unwrap) <$> Ref.read state
   let docs = Object.values $ queue
-  launchAffLog' logError
+  void
+    $ launchAffLog logError
     $ sequence_
     $ map (rebuildAndSendDiagnostics config conn state logError) docs
 
@@ -347,10 +347,6 @@ cleanProject conn _ _ _ config _ _ = do
   liftEffect $ info conn "Finished cleaning compiled output"
   liftEffect $ sendCleanEnd conn
 
-launchAffLog' :: forall a. Notify -> Aff a -> Effect Unit
-launchAffLog' logError =
-  runAff_ (either (logError Error <<< show) (const $ pure unit))
-
 -- | Starts PscIDE Server if autoStart enabled in config.
 autoStartPcsIdeServer ::
   Ref Foreign ->
@@ -361,7 +357,7 @@ autoStartPcsIdeServer ::
   Aff Unit
 autoStartPcsIdeServer config conn state logError documents = do
   let workspaceRoot = getWorkspaceRoot state
-  let launchAffLog = launchAffLog' logError
+  let launchAff = void <<< launchAffLog logError
   let startPscIdeServer = mkStartPscIdeServer config conn state documents logError
   let resolvePath p = workspaceRoot >>= \root -> resolve [ root ] p
   -- Ensure we only run once
@@ -388,59 +384,12 @@ autoStartPcsIdeServer config conn state logError documents = do
         exists <- FS.exists outputDir
         unless exists
           $ liftEffect
-          $ launchAffLog do
+          $ launchAff do
               let message = "Output directory does not exist at '" <> outputDir <> "'"
               liftEffect $ info conn message
               buildWarningDialog conn state documents c logError
                 $ message
                 <> ". Ensure project is built, or check configuration of output directory and build command."
-
--- | Builds module and provides diagnostics
-rebuildAndSendDiagnostics ::
-  Ref Foreign ->
-  Connection ->
-  Ref ServerState ->
-  Notify ->
-  TextDocument ->
-  Aff Unit
-rebuildAndSendDiagnostics config conn state _logError document = do
-  let uri = getUri document
-  c <- liftEffect $ Ref.read config
-  s <- liftEffect $ Ref.read state
-  when (Config.fastRebuild c) do
-    liftEffect $ sendDiagnosticsBegin conn
-    { pscErrors, diagnostics } <- getDiagnostics uri c s
-    filename <- liftEffect $ uriToFilename uri
-    let fileDiagnostics = fromMaybe [] $ Object.lookup filename diagnostics
-    liftEffect do
-      log conn
-        $ "Built with "
-        <> show (length fileDiagnostics)
-        <> "/"
-        <> show (length pscErrors)
-        <> " issues for file: "
-        <> show filename
-        <> ", all diagnostic files: "
-        <> show (Object.keys diagnostics)
-      let nonFileDiagnostics = Object.delete filename diagnostics
-      when (Object.size nonFileDiagnostics > 0) do
-        log conn $ "Unmatched diagnostics: " <> show nonFileDiagnostics
-      Ref.write
-        ( over ServerState
-            ( \s1 ->
-                s1
-                  { diagnostics = Object.insert (un DocumentUri uri) pscErrors (s1.diagnostics)
-                  , modulesFile = Nothing -- Force reload of modules on next request
-                  }
-            )
-            s
-        )
-        state
-      publishDiagnostics conn
-        { uri
-        , diagnostics: fileDiagnostics
-        }
-      sendDiagnosticsEnd conn
 
 -- | Checks if file uri path belongs to installed libraries
 isLibSourceFile :: String -> Boolean
@@ -460,7 +409,7 @@ handleEvents config conn state documents logError = do
   let
     runHandler = mkRunHandler config state documents
     stopPscIdeServer = mkStopPscIdeServer state logError
-    launchAffLog = launchAffLog' logError
+    launchAff = void <<< launchAffLog logError
   onCompletion conn
     $ runHandler
         "onCompletion" getTextDocUri (getCompletions logError documents)
@@ -503,7 +452,7 @@ handleEvents config conn state documents logError = do
                 <> un DocumentUri uri
                 <> " - full build may be required"
             Just DeletedChangeType ->
-              log conn
+              log conn    
                 $ "Deleted "
                 <> un DocumentUri uri
                 <> " - full build may be required"
@@ -515,32 +464,32 @@ handleEvents config conn state documents logError = do
   -- On document opened rebuild it,
   -- or place it in a queue if no IDE server started
   onDidOpenDocument documents \{ document } -> do
-    let uri = un DocumentUri $ getUri document
+    let
+      uri = un DocumentUri $ getUri document
+      enqueue =
+        Ref.modify_
+          ( over ServerState
+              ( \st ->
+                  st
+                    { buildQueue = Object.insert uri document (st.buildQueue)
+                    }
+              )
+          )
+          state
     c <- liftEffect $ Ref.read config
     when (Config.buildOpenedFiles c && not (isLibSourceFile uri))
-      $ launchAffLog do
-          (liftEffect $ getPort state)
-            >>= case _ of
-                Just _ -> rebuildAndSendDiagnostics config conn state logError document
-                _ -> do
-                  liftEffect
-                    $ Ref.modify_
-                        ( over ServerState
-                            ( \st ->
-                                st
-                                  { buildQueue = Object.insert uri document (st.buildQueue)
-                                  }
-                            )
-                        )
-                        state
+      $ getPort state
+      >>= maybe
+          enqueue
+          (\_ -> launchRebuildAndSendDiagnostics config conn state logError document)
   onDidSaveDocument documents \{ document } -> do
     c <- liftEffect $ Ref.read config
-    launchAffLog
-      if Config.fullBuildOnSave c then do
-        s <- liftEffect $ Ref.read state
-        buildProject conn state logError documents c s []
-      else
-        rebuildAndSendDiagnostics config conn state logError document
+    if Config.fullBuildOnSave c then do
+      s <- liftEffect $ Ref.read state
+      launchAff
+        $ buildProject conn state logError documents c s []
+    else
+      launchRebuildAndSendDiagnostics config conn state logError document
 
 handleConfig ::
   Ref Foreign ->
@@ -549,7 +498,7 @@ handleConfig ::
   DocumentStore ->
   Maybe Foreign -> Notify -> Aff Unit
 handleConfig config conn state documents cmdLineConfig logError = do
-  let launchAffLog = launchAffLog' logError
+  let launchAff = void <<< launchAffLog logError
   gotConfig :: AVar Unit <- AVar.empty
   let
     setConfig :: String -> Foreign -> Aff Unit
@@ -564,7 +513,7 @@ handleConfig config conn state documents cmdLineConfig logError = do
   liftEffect
     $ onDidChangeConfiguration conn
     $ \{ settings } ->
-        launchAffLog $ setConfig "client push" settings
+        launchAff $ setConfig "client push" settings
   _ <-
     forkAff do
       -- Ensure we only run once
@@ -687,5 +636,5 @@ main' { filename: logFile, config: cmdLineConfig } = do
   let logError = mkLogError logFile state
   handleEvents config conn state documents logError
   handleCommands config conn state documents logError
-  launchAffLog' logError $ handleConfig config conn state documents cmdLineConfig logError
+  void $ launchAffLog logError $ handleConfig config conn state documents cmdLineConfig logError
   log conn "PureScript Language Server started"

@@ -3,14 +3,18 @@ module LanguageServer.IdePurescript.Build where
 import Prelude
 
 import Data.Array (filter, mapMaybe, notElem, uncons)
+import Data.Array as Array
 import Data.Either (Either(..), either)
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
+import Data.Newtype (over, un)
 import Data.Nullable (toNullable)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Aff (Aff, attempt)
 import Effect.Class (liftEffect)
+import Effect.Ref (Ref)
+import Effect.Ref as Ref
 import Foreign (Foreign)
 import Foreign.Object (Object)
 import Foreign.Object as Object
@@ -18,9 +22,13 @@ import IdePurescript.Build (Command(Command), build, rebuild)
 import IdePurescript.PscErrors (PscResult(..))
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.IdePurescript.Config (addNpmPath, buildCommand, censorCodes, codegenTargets)
+import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.IdePurescript.Server (loadAll)
 import LanguageServer.IdePurescript.Types (ServerState(..))
-import LanguageServer.Protocol.Types (Diagnostic(Diagnostic), DocumentStore, DocumentUri, Position(Position), Range(Range), Settings)
+import LanguageServer.IdePurescript.Util (launchAffLog)
+import LanguageServer.Protocol.Handlers (publishDiagnostics, sendDiagnosticsBegin, sendDiagnosticsEnd)
+import LanguageServer.Protocol.TextDocument (TextDocument, getUri, getVersion)
+import LanguageServer.Protocol.Types (Connection, Diagnostic(Diagnostic), DocumentStore, DocumentUri(..), Position(Position), Range(Range), Settings)
 import LanguageServer.Protocol.Uri (uriToFilename)
 import Node.Path (resolve)
 import PscIde.Command (RebuildError(RebuildError))
@@ -123,3 +131,76 @@ fullBuild logCb _ settings state _ = do
       pure $ Left "Error parsing build command"
     ServerState { port, root }, _ -> do
       pure $ Left $ "Error running build: port=" <> show port <> ", root=" <> show root
+
+-- | Builds module and provides diagnostics
+rebuildAndSendDiagnostics ::
+  Ref Foreign ->
+  Connection ->
+  Ref ServerState ->
+  Notify ->
+  TextDocument ->
+  Aff Unit
+rebuildAndSendDiagnostics config conn state notify document = do
+  let uri = getUri document
+  c <- liftEffect $ Ref.read config
+  s <- liftEffect $ Ref.read state
+  when (Config.fastRebuild c) do
+    liftEffect $ sendDiagnosticsBegin conn
+    { pscErrors, diagnostics } <- getDiagnostics uri c s
+    filename <- liftEffect $ uriToFilename uri
+    let fileDiagnostics = fromMaybe [] $ Object.lookup filename diagnostics
+    liftEffect do
+      notify Info
+        $ "Built with "
+        <> show (Array.length fileDiagnostics)
+        <> "/"
+        <> show (Array.length pscErrors)
+        <> " issues for file: "
+        <> show filename
+        <> ", all diagnostic files: "
+        <> show (Object.keys diagnostics)
+      let nonFileDiagnostics = Object.delete filename diagnostics
+      when (Object.size nonFileDiagnostics > 0) do
+        notify Info $ "Unmatched diagnostics: " <> show nonFileDiagnostics
+      Ref.write
+        ( over ServerState
+            ( \s1 ->
+                s1
+                  { diagnostics = Object.insert (un DocumentUri uri) pscErrors (s1.diagnostics)
+                  , modulesFile = Nothing -- Force reload of modules on next request
+                  , runningRebuild = Nothing
+                  }
+            )
+            s
+        )
+        state
+      publishDiagnostics conn
+        { uri
+        , diagnostics: fileDiagnostics
+        }
+      sendDiagnosticsEnd conn
+
+launchRebuildAndSendDiagnostics ::
+  Ref Foreign ->
+  Connection ->
+  Ref ServerState ->
+  Notify ->
+  TextDocument ->
+  Effect Unit
+launchRebuildAndSendDiagnostics config conn state notify document = do
+  runningRebuild <- (_.runningRebuild <<< un ServerState) <$> Ref.read state
+  version <- getVersion document
+  let documentUri = getUri document
+  notify Info $ "Running rebuild: " <> maybe "None" (\{ uri, version } -> show {uri, version }) runningRebuild
+  case runningRebuild of
+    Just _rebuildFiber -> do
+      -- TODO or requeue after the fiber completes ? Cancel ?
+      notify Info $ "Rebuild requested for " <> show documentUri <> " when already running one, ignoring"
+      pure unit
+    Nothing -> do
+      fiber <- launchAffLog notify $ rebuildAndSendDiagnostics config conn state notify document
+      Ref.modify_
+        ( over ServerState
+            $ _ { runningRebuild = Just { fiber, uri: documentUri, version } }
+        )
+        state

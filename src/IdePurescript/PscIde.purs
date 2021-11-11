@@ -1,6 +1,7 @@
 module IdePurescript.PscIde
   ( getCompletion
   , getCompletion'
+  , typesInModule
   , cwd
   , loadDeps
   , getType
@@ -128,6 +129,11 @@ getCompletion' matcher mainFilter port currentModule modulePrefix unqualModules 
   where
   modules = maybe unqualModules getQualifiedModule modulePrefix
   moduleFilters = [ C.ModuleFilter $ if null modules then unqualModules else modules ]
+
+typesInModule :: Int -> String -> Aff (Array C.TypeInfo)
+typesInModule port moduleName =
+  eitherToErr $ P.complete port [ C.ModuleFilter [ moduleName ] ] Nothing (Just moduleName) P.defaultCompletionOptions
+
 
 loadDeps :: Int -> String -> Aff String
 loadDeps port main = result runMsg $ P.load port [] [ main ]

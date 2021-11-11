@@ -19,7 +19,7 @@ newtype ServerState
   , conn :: Maybe Connection
   , clientCapabilities :: Maybe ClientCapabilities
   , deactivate :: Aff Unit
-  , runningRebuild :: Maybe (Fiber Unit)
+  , runningRebuild :: Maybe { fiber :: Fiber Unit, uri :: DocumentUri, version :: Number }
   , modules :: Modules.State
   , modulesFile :: Maybe DocumentUri
   , buildQueue :: Object TextDocument
