@@ -7,35 +7,29 @@ import Data.Array ((:))
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
+import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Nullable as Nullable
 import Data.Tuple (Tuple(..))
 import Data.Tuple as Tuple
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
-import IdePurescript.PscIdeServer (Notify)
-import LanguageServer.IdePurescript.Types (ServerState)
-import LanguageServer.Protocol.DocumentStore (getDocument)
+import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
+import LanguageServer.IdePurescript.Types (ServerState(..))
+import LanguageServer.IdePurescript.Util (maybeParseResult)
 import LanguageServer.Protocol.Handlers (FoldingRangesParams)
-import LanguageServer.Protocol.TextDocument (getText)
 import LanguageServer.Protocol.Types (DocumentStore, FoldingRange(..), Settings, TextDocumentIdentifier(..))
-import PureScript.CST (RecoveredParserResult(..))
-import PureScript.CST as CST
 import PureScript.CST.Types (DataCtor(..), Declaration(..), DoStatement(..), Expr(..), Foreign(..), Guarded(..), GuardedExpr(..), Ident, ImportDecl(..), Instance(..), InstanceBinding(..), Labeled(..), LetBinding(..), Module(..), ModuleBody(..), ModuleHeader(..), Name(..), QualifiedName(..), Separated(..), SourceToken, Where(..), Wrapped(..), SourceRange)
 import PureScript.CST.Types as CSTTypes
 
 getFoldingRanges :: Notify -> DocumentStore -> Settings -> ServerState -> FoldingRangesParams -> Aff (Array FoldingRange)
-getFoldingRanges _log docs _ _ { textDocument: TextDocumentIdentifier textDocId } =
-  liftEffect do
-    doc <- getDocument docs textDocId.uri
-    text <- getText doc
-    let res = CST.parseModule text
-    let
-      ranges = case res of
-        ParseSucceeded x -> getRanges x
-        ParseSucceededWithErrors x _errs -> getRanges x
-        ParseFailed _err -> []
-    pure ranges
+getFoldingRanges notify _docs _ (ServerState { parsedModules }) { textDocument: TextDocumentIdentifier { uri } } =
+  case Map.lookup uri parsedModules of
+    Just { parsed } -> 
+      pure $ maybeParseResult [] getRanges parsed
+    Nothing -> do
+      liftEffect $ notify Warning $ "getFoldingRanges - no parsed CST for " <> show uri
+      pure []
 
 getRanges :: forall a. Module a -> Array FoldingRange
 getRanges (Module { header, body: ModuleBody { decls } }) =

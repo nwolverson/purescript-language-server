@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.CodeActions where
 
 import Prelude
+
 import Control.Monad.Except (runExcept)
 import Data.Array (catMaybes, concat, filter, foldl, head, length, mapMaybe, nubByEq, singleton, sortWith, (:))
 import Data.Either (Either(..), either)
@@ -20,16 +21,16 @@ import Foreign.Index ((!))
 import Foreign.Object as Object
 import IdePurescript.QuickFix (getReplacement, getTitle, isImport, isUnknownToken)
 import IdePurescript.Regex (replace')
-import LanguageServer.Protocol.DocumentStore (getDocument)
-import LanguageServer.Protocol.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.IdePurescript.Assist (fixTypoActions)
 import LanguageServer.IdePurescript.Build (positionToRange)
 import LanguageServer.IdePurescript.Commands (Replacement, build, replaceAllSuggestions, replaceSuggestion, typedHole)
 import LanguageServer.IdePurescript.Commands as Commands
 import LanguageServer.IdePurescript.Types (ServerState(..))
+import LanguageServer.Protocol.DocumentStore (getDocument)
+import LanguageServer.Protocol.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.Protocol.Text (makeWorkspaceEdit)
 import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVersion)
-import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind, CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
+import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind, CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 m :: forall a. Nullable a -> Maybe a
@@ -194,7 +195,7 @@ onReplaceAllSuggestions docs _ (ServerState { conn, clientCapabilities }) args =
           $ applyEdit conn'
           $ workspaceEdit clientCapabilities
               [ TextDocumentEdit
-                  { textDocument: TextDocumentIdentifier { uri: DocumentUri uri, version }
+                  { textDocument: OptionalVersionedTextDocumentIdentifier { uri: DocumentUri uri, version: Nullable.notNull version }
                   , edits
                   }
               ]

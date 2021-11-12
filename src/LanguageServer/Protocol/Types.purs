@@ -40,6 +40,7 @@ instance showDocumentUri :: Show DocumentUri where
   show (DocumentUri uri) = "DocumentUri " <> show uri
 
 derive newtype instance eqDocumentUri :: Eq DocumentUri
+derive newtype instance Ord DocumentUri
 
 newtype Position
   = Position { line :: Int, character :: Int }
@@ -339,7 +340,7 @@ workspaceEdit capabilities edits =
     }
   where
   useDocumentChanges = supportsDocumentChanges capabilities
-  uri (TextDocumentEdit { textDocument: TextDocumentIdentifier { uri: DocumentUri uri' } }) = uri'
+  uri (TextDocumentEdit { textDocument: OptionalVersionedTextDocumentIdentifier { uri: DocumentUri uri' } }) = uri'
   edit (TextDocumentEdit { edits: edits' }) = edits'
 
 supportsDocumentChanges :: Maybe ClientCapabilities -> Boolean
@@ -347,13 +348,21 @@ supportsDocumentChanges Nothing = false
 supportsDocumentChanges (Just { workspace }) = fromMaybe false $ toMaybe workspace >>= (_.workspaceEdit >>> toMaybe) >>= (_.documentChanges >>> toMaybe)
 
 newtype TextDocumentEdit
-  = TextDocumentEdit { textDocument :: TextDocumentIdentifier, edits :: Array TextEdit }
+  = TextDocumentEdit { textDocument :: OptionalVersionedTextDocumentIdentifier, edits :: Array TextEdit }
 
 newtype TextDocumentIdentifier
-  = TextDocumentIdentifier { uri :: DocumentUri, version :: Number }
+  = TextDocumentIdentifier { uri :: DocumentUri }
 
-derive instance newtypeTextDocumentIdentifier :: Newtype TextDocumentIdentifier _
-derive instance eqTextDocumentIdentifier :: Eq TextDocumentIdentifier
+derive instance Newtype TextDocumentIdentifier _
+derive instance Eq TextDocumentIdentifier
+
+newtype OptionalVersionedTextDocumentIdentifier
+  = OptionalVersionedTextDocumentIdentifier { uri :: DocumentUri, version :: Nullable Number }
+
+derive instance Newtype OptionalVersionedTextDocumentIdentifier _
+derive instance Eq OptionalVersionedTextDocumentIdentifier
+
+
 
 type Settings
   = Foreign

@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Main (main) where
 
 import Prelude
-
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise)
 import Control.Promise as Promise
@@ -9,6 +8,7 @@ import Data.Array (length, (!!), (\\))
 import Data.Array as Array
 import Data.Either (Either(..), either)
 import Data.Foldable (for_, or, sequence_)
+import Data.Map as Map
 import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toMaybe, toNullable)
@@ -53,10 +53,10 @@ import LanguageServer.Protocol.Console (error, info, log, warn)
 import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidOpenDocument, onDidSaveDocument)
 import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendCleanBegin, sendCleanEnd, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.Protocol.Setup (InitParams(..), getConfiguration, initConnection, initDocumentStore)
-import LanguageServer.Protocol.TextDocument (getText, getUri)
+import LanguageServer.Protocol.TextDocument (getText, getUri, getVersion)
 import LanguageServer.Protocol.Types (Connection, Diagnostic, DocumentStore, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
 import LanguageServer.Protocol.Uri (filenameToUri, uriToFilename)
-import LanguageServer.Protocol.Window (createWorkDoneProgress, reportMsg, showError, showWarningWithActions, workBegin, workDone)
+import LanguageServer.Protocol.Window (createWorkDoneProgress, showError, showWarningWithActions, workBegin, workDone)
 import LanguageServer.Protocol.Workspace (codeLensRefresh)
 import Node.Encoding as Encoding
 import Node.FS.Aff as FS
@@ -64,6 +64,7 @@ import Node.FS.Sync as FSSync
 import Node.Path (resolve)
 import Node.Process as Process
 import PscIde.Command (RebuildError(..))
+import PureScript.CST as CST
 
 defaultServerState :: ServerState
 defaultServerState =
@@ -78,6 +79,7 @@ defaultServerState =
     , buildQueue: Object.empty
     , diagnostics: Object.empty
     , clientCapabilities: Nothing
+    , parsedModules: Map.empty
     }
 
 type CmdLineArguments
@@ -232,10 +234,8 @@ mkStartPscIdeServer :: Ref Foreign -> Connection -> Ref ServerState -> DocumentS
 mkStartPscIdeServer config conn state documents logError = do
   let workspaceRoot = getWorkspaceRoot state
   liftEffect $ logError Info "Starting IDE server"
-  
   progressReporter <- createWorkDoneProgress conn
   liftEffect $ workBegin progressReporter { title: "Starting PureScript IDE server" }
-
   rootPath <- liftEffect workspaceRoot
   settings <- liftEffect $ Ref.read config
   startRes <- Server.startServer' settings rootPath logError logError
@@ -258,8 +258,8 @@ mkStartPscIdeServer config conn state documents logError = do
             _ -> pure unit
       liftEffect do
         Ref.modify_
-            (over ServerState $ _ { port = Just port, deactivate = quit })
-            state
+          (over ServerState $ _ { port = Just port, deactivate = quit })
+          state
         codeLensRefresh conn
     _ -> pure unit
   liftEffect $ workDone progressReporter
@@ -450,7 +450,7 @@ handleEvents config conn state documents logError = do
         "onCodeAction" getTextDocUri (getActions documents)
   onCodeLens conn
     $ runHandler
-        "onCodeLens" getTextDocUri (getCodeLenses state documents)
+        "onCodeLens" getTextDocUri (getCodeLenses logError state documents)
   onShutdown conn $ Promise.fromAff stopPscIdeServer
   onDidChangeWatchedFiles conn
     $ \{ changes } -> do
@@ -462,15 +462,28 @@ handleEvents config conn state documents logError = do
                 <> un DocumentUri uri
                 <> " - full build may be required"
             Just DeletedChangeType ->
-              log conn    
+              log conn
                 $ "Deleted "
                 <> un DocumentUri uri
                 <> " - full build may be required"
 
             _ -> pure unit
   onDidChangeContent documents
-    $ \_ -> do
-        Ref.modify_ (over ServerState (_ { modulesFile = Nothing })) state
+    $ \{ document } -> do
+        v <- getVersion document
+        text <- getText document
+        let res = CST.parseModule text
+        logError Info $ "Change at " <> show v <> " on " <> show (getUri document)
+        Ref.modify_
+          ( over ServerState
+              ( \s ->
+                  s
+                    { modulesFile = Nothing
+                    , parsedModules = Map.insert (getUri document) { version: v, parsed: res } s.parsedModules
+                    }
+              )
+          )
+          state
   -- On document opened rebuild it,
   -- or place it in a queue if no IDE server started
   onDidOpenDocument documents \{ document } -> do

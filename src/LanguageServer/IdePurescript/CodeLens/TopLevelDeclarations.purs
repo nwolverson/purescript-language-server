@@ -3,41 +3,30 @@ module LanguageServer.IdePurescript.CodeLens.TopLevelDeclarations
   ) where
 
 import Prelude
+
 import Data.Array (mapMaybe, mapWithIndex)
 import Data.Array as Array
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Nullable as Nullable
 import Data.Set as Set
 import Data.String (joinWith)
 import Data.String.Utils as String
 import Effect.Aff (Aff)
-import Effect.Class (liftEffect)
 import Foreign (unsafeToForeign)
 import IdePurescript.PscIde (typesInModule)
 import LanguageServer.IdePurescript.Commands (cmdName, replaceSuggestionCmd)
 import LanguageServer.IdePurescript.Types (ServerState(..))
-import LanguageServer.Protocol.DocumentStore (getDocument)
+import LanguageServer.IdePurescript.Util (maybeParseResult)
 import LanguageServer.Protocol.Handlers (CodeLensResult)
-import LanguageServer.Protocol.TextDocument (getText)
 import LanguageServer.Protocol.Types (Command(..), DocumentStore, DocumentUri, Position(..), Range(..), Settings)
 import PscIde.Command (TypeInfo(..))
-import PureScript.CST (RecoveredParserResult(..))
-import PureScript.CST as CST
 import PureScript.CST.Types (Declaration(..), Ident(..), Labeled(..), Module(..), ModuleBody(..), ModuleHeader(..), ModuleName(..), Name(..))
 
 -- TODO force code lens refresh on server load, full build, consider rebuild even if it is meant to be "global"
 topLevelDeclarationLenses ∷ DocumentStore -> Settings -> ServerState -> DocumentUri -> Aff (Array CodeLensResult)
-topLevelDeclarationLenses docs _settings (ServerState { port }) uri = do
-  res <-
-    liftEffect do
-      doc <- getDocument docs uri
-      text <- getText doc
-      pure $ CST.parseModule text
-  let
-    binds = case res of
-      ParseSucceeded x -> Just $ getDecls x
-      ParseSucceededWithErrors x _errs -> Just $ getDecls x
-      ParseFailed _err -> Nothing
+topLevelDeclarationLenses _docs _settings (ServerState { port, parsedModules }) uri = do
+  let binds = maybeParseResult Nothing (Just <<< getDecls) =<< _.parsed <$> Map.lookup uri parsedModules
   case port, binds of
     Just port', Just { moduleName, decls } -> do
       types <- typesInModule port' moduleName

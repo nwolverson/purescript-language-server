@@ -5,18 +5,19 @@ import Prelude
 import Data.Array (findIndex, last, length, null, reverse, slice, zip)
 import Data.Either (either)
 import Data.Maybe (Maybe(..))
+import Data.Nullable as Nullable
 import Data.String (joinWith)
 import Data.String.Regex (regex)
 import Data.String.Regex as Regex
 import Data.String.Regex.Flags (noFlags)
 import Data.Tuple (uncurry)
-import LanguageServer.Protocol.Types (DocumentUri, Position(..), Range(..), TextDocumentEdit(..), TextDocumentIdentifier(..), TextEdit(..), WorkspaceEdit, ClientCapabilities, workspaceEdit)
+import LanguageServer.Protocol.Types (ClientCapabilities, DocumentUri, OptionalVersionedTextDocumentIdentifier(..), Position(..), Range(..), TextDocumentEdit(..), TextEdit(..), WorkspaceEdit, workspaceEdit)
 
 makeWorkspaceEdit :: Maybe ClientCapabilities -> DocumentUri -> Number -> Range -> String -> WorkspaceEdit
 makeWorkspaceEdit capabilities uri version range newText = workspaceEdit capabilities [ edit ]
   where 
       textEdit = TextEdit { range, newText }
-      docid = TextDocumentIdentifier { uri, version }
+      docid = OptionalVersionedTextDocumentIdentifier { uri, version: Nullable.notNull version }
       edit = TextDocumentEdit { textDocument: docid, edits: [ textEdit ] }
 
 -- | Make a full-text workspace edit via a minimal diff under the assumption that at most one change is required
