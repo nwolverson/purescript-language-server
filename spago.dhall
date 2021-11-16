@@ -43,6 +43,7 @@ You can edit this file as you like.
   , "ordered-collections"
   , "prelude"
   , "profunctor"
+  , "profunctor-lenses"
   , "psc-ide"
   , "psci-support"
   , "refs"

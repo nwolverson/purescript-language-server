@@ -6,13 +6,14 @@ import Data.Maybe (Maybe(..))
 import Effect.Aff (Aff, joinFiber)
 import Effect.Ref (Ref)
 import IdePurescript.PscIdeServer (Notify)
+import LanguageServer.IdePurescript.CodeLens.ExportManagement (exportManagementCodeLenses)
 import LanguageServer.IdePurescript.CodeLens.TopLevelDeclarations (topLevelDeclarationLenses)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Protocol.Handlers (CodeLensParams, CodeLensResult)
 import LanguageServer.Protocol.Types (DocumentStore, Settings, TextDocumentIdentifier(..))
 
 getCodeLenses ∷ Notify -> Ref ServerState -> DocumentStore -> Settings -> ServerState -> CodeLensParams -> Aff (Array CodeLensResult)
-getCodeLenses _notify _stateRef documentStore settings state { textDocument: TextDocumentIdentifier { uri } } = do
+getCodeLenses _notify _stateRef documentStore settings state@(ServerState { conn }) { textDocument: TextDocumentIdentifier { uri } } = do
   let ServerState { runningRebuild } = state
   case runningRebuild of
     Just { fiber } -> do
@@ -20,4 +21,6 @@ getCodeLenses _notify _stateRef documentStore settings state { textDocument: Tex
     Nothing -> do
       pure unit
 
-  topLevelDeclarationLenses documentStore settings state uri
+  topLevelDeclarations <- topLevelDeclarationLenses documentStore settings state uri
+  exportManagement  <- exportManagementCodeLenses conn documentStore uri
+  pure $ topLevelDeclarations <> exportManagement 
