@@ -67,10 +67,10 @@ Use [atom-ide-purescript](https://github.com/nwolverson/atom-ide-purescript).
 
 ## Neovim’s built-in language server + nvim-lspconfig
 
-As of `0.5.0`, Neovim has a built-in [language server client](https://neovim.io/doc/user/lsp.html). A popular plugin to help with configuring this server is [`nvim-lspconfig`](https://github.com/neovim/nvim-lspconfig/blob/master/README.md). This plugin includes `purescriptls` which will automatically find and root the language server as well as connect PSCIDE, etc. (for more info, read the [config](https://github.com/neovim/nvim-lspconfig/blob/master/CONFIG.md#purescriptls)). To use, add this to your `init.lua` or inside a `EOF << lua … EOF` block in your `init.vim`.
+As of `0.5.0`, Neovim has a built-in [language server client](https://neovim.io/doc/user/lsp.html). A popular plugin to help with configuring this server is [`nvim-lspconfig`](https://github.com/neovim/nvim-lspconfig/blob/master/README.md). This plugin includes `purescriptls` which will automatically find and root the language server as well as connect PSCIDE, etc. (for more info, read the [config](https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#purescriptls)). To use, add this to your `init.lua` or inside a `EOF << lua … EOF` block in your `init.vim`.
 
 ```lua
-nvim_lsp.purescripttls.setup {
+nvim_lsp.purescriptls.setup {
   " Your personal on_attach function referenced before to include
   " keymaps & other ls options
   on_attach = on_attach,
