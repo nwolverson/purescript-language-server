@@ -13,13 +13,14 @@ import Data.String (Pattern(..))
 import Data.String as String
 import Data.String.Regex (regex)
 import Data.String.Regex.Flags (noFlags)
+import Data.String.Regex.Flags as RegexFlags
 import Data.Traversable (traverse)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign (F, Foreign, readArray, readString)
 import Foreign.Index ((!))
 import Foreign.Object as Object
-import IdePurescript.QuickFix (getReplacement, getTitle, isImport, isUnknownToken)
+import IdePurescript.QuickFix (getTitle, isImport, isUnknownToken, wildcardInferredType)
 import IdePurescript.Regex (replace')
 import LanguageServer.IdePurescript.Assist (fixTypoActions)
 import LanguageServer.IdePurescript.Build (positionToRange)
@@ -32,6 +33,7 @@ import LanguageServer.Protocol.Text (makeWorkspaceEdit)
 import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVersion)
 import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind, CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
+
 
 m :: forall a. Nullable a -> Maybe a
 m = Nullable.toMaybe
@@ -57,7 +59,7 @@ codeActionToCommand capabilities action =
   convert _ = Nothing
 
 getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array CodeActionResult)
-getActions documents settings state@(ServerState { diagnostics, conn: Just conn, clientCapabilities }) { textDocument, range } =
+getActions documents settings state@(ServerState { diagnostics, conn: Just _conn, clientCapabilities }) { textDocument, range } =
   case Object.lookup (un DocumentUri $ docUri) diagnostics of
     Just errs ->
       mapMaybe (codeActionToCommand clientCapabilities)
@@ -76,7 +78,9 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just conn,
   asCommand error@(RebuildError { position: Just position, errorCode })
     | Just { replacement, range: replaceRange } <- getReplacementRange error
     , intersects (positionToRange position) range = do
-      Just $ replaceSuggestion (getTitle errorCode) docUri replacement replaceRange
+      let replacement' = replace' (regex "\\s*\\n\\s*$" RegexFlags.global) "\n" replacement
+          replacement'' = if errorCode == wildcardInferredType then replace' (regex "\\n\\s*$" RegexFlags.noFlags) "" replacement' else replacement'
+      Just $ replaceSuggestion (getTitle errorCode) docUri replacement'' replaceRange
   asCommand _ = Nothing
 
   getReplacementRange (RebuildError { position: Just position, suggestion: Just (PscSuggestion { replacement, replaceRange }) }) =
@@ -173,9 +177,14 @@ onReplaceSuggestion docs _ (ServerState { conn, clientCapabilities }) args =
 getReplacementEdit :: TextDocument -> Replacement -> Aff TextEdit
 getReplacementEdit doc { replacement, range } = do
   afterText <- liftEffect $ replace' (regex "\n$" noFlags) "" <$> getTextAtRange doc (afterEnd range)
-  let newText = getReplacement replacement afterText
-  let
+  let 
+  -- trim spaces at the end of lines
+    replacementTrimSpaces =  replace' (regex "\\s+\n" RegexFlags.global) "\n" replacement
+  -- remove trailing newline (inserting changes midway through line - eg _ fix)
+    removeTrailingNewline = not $ String.null afterText
+    newText = if removeTrailingNewline then replace' (regex "\\s+\n$" RegexFlags.noFlags) "" replacementTrimSpaces else replacementTrimSpaces
     range' =
+      -- deletion (eg import line)
       if newText == "" && afterText == "" then
         toNextLine range
       else

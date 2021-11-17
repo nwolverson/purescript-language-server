@@ -1,15 +1,20 @@
 module LanguageServer.IdePurescript.CodeLens.ExportManagement
   ( exportManagementCodeLenses
   , printExports
-  ) where
+  )
+where
+
 import Prelude
 
 import Data.Array (intercalate, (:))
 import Data.Array as Array
 import Data.Foldable (fold)
-import Data.Maybe (Maybe(..), isNothing)
+import Data.Maybe (Maybe(..), fromMaybe, isNothing)
 import Data.Newtype (class Newtype, un)
 import Data.Nullable as Nullable
+import Data.String (Pattern(..), stripSuffix)
+import Data.String.CodeUnits as String
+import Data.String.Utils as StringUtils
 import Data.Tuple (snd)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
@@ -19,15 +24,12 @@ import Foreign.Object as Object
 import LanguageServer.IdePurescript.Commands (replaceSuggestion)
 import LanguageServer.IdePurescript.Formatting (mkTextEdit)
 import LanguageServer.IdePurescript.Util.CST (sourcePosToPosition, sourceRangeToRange)
-import LanguageServer.IdePurescript.Util.Position (shiftPositionDown, shiftRangeDown)
 import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (CodeLensResult)
 import LanguageServer.Protocol.TextDocument (getText)
 import LanguageServer.Protocol.Types (Command, DocumentStore, DocumentUri)
 import LanguageServer.Protocol.Types as LSP
 import PureScript.CST (RecoveredParserResult(..), parseModule)
-import PureScript.CST.Parser (Recovered)
-import PureScript.CST.Parser.Monad (ParserResult)
 import PureScript.CST.Traversal (defaultMonoidalVisitor, foldMapModule)
 import PureScript.CST.Types as CST
 
@@ -80,7 +82,7 @@ addExportManagementCodeLenses connection documentStore uri = do
     _ -> pure []
 
 printExports ∷ Array String -> String
-printExports exports = "  ( " <> (intercalate "\n  , " (Array.sort exports)) <> "\n  )\n  "
+printExports exports = "\n  ( " <> (intercalate "\n  , " (Array.sort exports)) <> "\n  )\n  "
 
 printExport ∷ ∀ e. CST.Export e -> Maybe String
 printExport = case _ of
@@ -145,21 +147,27 @@ mkCodeLenses uri parsedModule moduleNameEnd whereClauseStart exports =
       ) -> exportsToArray separatedExports
     exportNames = Array.mapMaybe printExport exportArray
     decls = getSemigroupRanges parsedModule <#> un SemigroupRange
-    declToCodeLens declarationName range = do
+    declToCodeLens name range = do
       let codeLensRange = range -- shiftRangeUp 1 range
-      Array.singleton $ mkCodeLensResult codeLensRange
-        $ if noExplicitExports || Array.elem declarationName exportNames then
-            replaceSuggestion
-              "exported (make private)"
-              uri
-              (printExports (exportNames # Array.delete declarationName))
-              exportsRange
+      let replace title exps = Array.singleton $ mkCodeLensResult codeLensRange $ replaceSuggestion title uri (printExports exps) exportsRange
+      let exportedWithConstructors x = Array.elem (withConstructors x) exportNames
+      let exportedWithoutConstructors x = StringUtils.endsWith "(..)" x && Array.elem (String.dropRight 4 x <> "(..)") exportNames
+      -- [TODO] This isn't quite right yet
+      if noExplicitExports then
+        replace ("exported (export only " <> name <> ")") [name] <>
+          replace ("(export everything but " <> name <> ")") (decls # Object.keys # Array.delete name)
+      else
+        if exportedWithConstructors name then
+          replace ("exported as " <> withConstructors name <> " (export only type)") (exportNames # Array.delete (withConstructors name) # Array.cons name)
+        else
+          if exportedWithoutConstructors name then
+            replace ("exported as " <> withoutConstructors name <> " (export with constructors)") (exportNames # Array.delete (withoutConstructors name) # Array.cons name)
           else
-            replaceSuggestion
-              "private (add to exports)"
-              uri
-              (printExports (Array.snoc exportNames declarationName))
-              exportsRange
+            if Array.elem name exportNames then
+              replace ("exported (remove " <> name <> " from exports)") (exportNames # Array.delete name)
+            else
+              replace ("private (add " <> name <> " to exports)") (Array.snoc exportNames name)
+
     privatePublicCodeLenses ∷ Array CodeLensResult
     privatePublicCodeLenses = decls # Object.mapWithKey declToCodeLens # fold
   in
@@ -171,3 +179,9 @@ mkCodeLenses uri parsedModule moduleNameEnd whereClauseStart exports =
     , command: Nullable.notNull replaceCommand
     , data: Nullable.null # unsafeToForeign
     }
+
+withConstructors ∷ String -> String
+withConstructors s = s <> "(..)"
+
+withoutConstructors ∷ String -> String
+withoutConstructors s = fromMaybe s $ stripSuffix (Pattern "(..)") s

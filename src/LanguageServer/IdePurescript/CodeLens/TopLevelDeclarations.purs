@@ -1,6 +1,7 @@
-module LanguageServer.IdePurescript.CodeLens.TopLevelDeclarations
-  ( topLevelDeclarationLenses
-  ) where
+module LanguageServer.IdePurescript.CodeLens.TopLevelDeclarations( getDecls
+  , topLevelDeclarationLenses
+  )
+where
 
 import Prelude
 
@@ -10,7 +11,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Nullable as Nullable
 import Data.Set as Set
-import Data.String (joinWith)
+import Data.String (joinWith, trim)
 import Data.String.Utils as String
 import Effect.Aff (Aff)
 import Foreign (unsafeToForeign)
@@ -53,7 +54,7 @@ topLevelDeclarationLenses _docs _settings (ServerState { port, parsedModules }) 
 
   mkReplaceCommand name ty range =
     let
-      signature = name <> " ∷ " <> ty
+      signature = name <> " ∷ " <> trim ty
     in
       Command
         { command: cmdName replaceSuggestionCmd
@@ -61,7 +62,7 @@ topLevelDeclarationLenses _docs _settings (ServerState { port, parsedModules }) 
         , arguments:
             Nullable.notNull
               [ unsafeToForeign uri
-              , unsafeToForeign (ensureSpaceAfterFirstLine $ signature <> "\n")
+              , unsafeToForeign (ensureSpaceAfterFirstLine signature <> "\n")
               , unsafeToForeign range
               ]
         }
