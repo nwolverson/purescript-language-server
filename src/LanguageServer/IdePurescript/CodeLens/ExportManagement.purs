@@ -8,6 +8,7 @@ import Prelude
 import Data.Array (intercalate, (:))
 import Data.Array as Array
 import Data.Foldable (fold)
+import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, isNothing)
 import Data.Newtype (class Newtype, un)
 import Data.Nullable as Nullable
@@ -16,42 +17,28 @@ import Data.String.CodeUnits as String
 import Data.String.Utils as StringUtils
 import Data.Tuple (snd)
 import Effect.Aff (Aff)
-import Effect.Class (liftEffect)
 import Foreign (unsafeToForeign)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import LanguageServer.IdePurescript.Commands (replaceSuggestion)
+import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.IdePurescript.Util.CST (sourcePosToPosition, sourceRangeToRange)
-import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (CodeLensResult)
-import LanguageServer.Protocol.TextDocument (getText)
-import LanguageServer.Protocol.Types (Command, DocumentStore, DocumentUri)
+import LanguageServer.Protocol.Types (Command, DocumentStore, DocumentUri, Settings)
 import LanguageServer.Protocol.Types as LSP
-import PureScript.CST (RecoveredParserResult(..), parseModule)
+import PureScript.CST (RecoveredParserResult(..))
 import PureScript.CST.Traversal (defaultMonoidalVisitor, foldMapModule)
 import PureScript.CST.Types as CST
 
-exportManagementCodeLenses ∷
-  Maybe LSP.Connection ->
-  DocumentStore ->
-  DocumentUri -> Aff (Array CodeLensResult)
-exportManagementCodeLenses maybeConnection documentStore uri = case maybeConnection of
-  Nothing -> pure []
-  Just connection -> ado
-    addExportManagement <- addExportManagementCodeLenses connection documentStore uri
-    in addExportManagement
+exportManagementCodeLenses ∷ DocumentStore -> Settings -> ServerState ->  DocumentUri -> Aff (Array CodeLensResult)
+exportManagementCodeLenses _documentStore _settings (ServerState { parsedModules }) uri = do
+  case  _.parsed <$> Map.lookup uri parsedModules of
+    Just (ParseSucceeded parsedModule) -> pure $ mkCodeLenses uri parsedModule
+    Just (ParseSucceededWithErrors parsedModule _) -> pure $ mkCodeLenses uri parsedModule
+    _ -> pure []
 
 exportsToArray ∷ ∀ err. CST.Separated (CST.Export err) -> Array (CST.Export err)
 exportsToArray (CST.Separated { head, tail }) = head : (snd <$> tail)
-
-addExportManagementCodeLenses ∷ LSP.Connection -> DocumentStore -> DocumentUri -> Aff (Array CodeLensResult)
-addExportManagementCodeLenses _connection documentStore uri = do
-  textDocument <- getDocument documentStore uri # liftEffect
-  text <- getText textDocument # liftEffect
-  case parseModule text of
-    ParseSucceeded parsedModule -> pure $ mkCodeLenses uri parsedModule
-    ParseSucceededWithErrors parsedModule _ -> pure $ mkCodeLenses uri parsedModule
-    _ -> pure []
 
 printExports ∷ Array String -> String
 printExports exports = "\n  ( " <> (intercalate "\n  , " (Array.sort exports)) <> "\n  )\n  "

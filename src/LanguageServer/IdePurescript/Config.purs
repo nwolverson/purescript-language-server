@@ -137,3 +137,9 @@ codegenTargets =
 ignoreEmpty :: Maybe String -> Maybe String
 ignoreEmpty (Just "") = Nothing
 ignoreEmpty x = x
+
+exportsCodeLens :: ConfigFn Boolean
+exportsCodeLens = getBoolean "exportsCodeLens" true
+
+declarationTypeCodeLens :: ConfigFn Boolean
+declarationTypeCodeLens = getBoolean "declarationTypeCodeLens" true
