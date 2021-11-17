@@ -1,7 +1,8 @@
-module LanguageServer.IdePurescript.CodeLens.TopLevelDeclarations( getDecls
+module LanguageServer.IdePurescript.CodeLens.TopLevelDeclarations
+  ( getDecls
   , topLevelDeclarationLenses
   )
-where
+  where
 
 import Prelude
 

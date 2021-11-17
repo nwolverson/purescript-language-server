@@ -1,8 +1,7 @@
 module LanguageServer.IdePurescript.CodeLens.ExportManagement
   ( exportManagementCodeLenses
   , printExports
-  )
-where
+  ) where
 
 import Prelude
 
@@ -22,7 +21,6 @@ import Foreign (unsafeToForeign)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import LanguageServer.IdePurescript.Commands (replaceSuggestion)
-import LanguageServer.IdePurescript.Formatting (mkTextEdit)
 import LanguageServer.IdePurescript.Util.CST (sourcePosToPosition, sourceRangeToRange)
 import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (CodeLensResult)
@@ -43,42 +41,16 @@ exportManagementCodeLenses maybeConnection documentStore uri = case maybeConnect
     addExportManagement <- addExportManagementCodeLenses connection documentStore uri
     in addExportManagement
 
-exportToName ∷ ∀ err. CST.Export err -> Maybe String
-exportToName = case _ of
-  CST.ExportValue (CST.Name { name: CST.Ident name }) -> Just name
-  _ -> Nothing
-
 exportsToArray ∷ ∀ err. CST.Separated (CST.Export err) -> Array (CST.Export err)
 exportsToArray (CST.Separated { head, tail }) = head : (snd <$> tail)
 
 addExportManagementCodeLenses ∷ LSP.Connection -> DocumentStore -> DocumentUri -> Aff (Array CodeLensResult)
-addExportManagementCodeLenses connection documentStore uri = do
+addExportManagementCodeLenses _connection documentStore uri = do
   textDocument <- getDocument documentStore uri # liftEffect
   text <- getText textDocument # liftEffect
   case parseModule text of
-    ParseSucceeded
-      ( parsedModule@( CST.Module
-          { header:
-          CST.ModuleHeader
-          { name: CST.Name { token: { range: { end: moduleNameEnd } } }
-        , exports
-        , where: { range: { start: whereClauseStart } }
-        }
-        }
-      )
-    ) -> pure $ mkCodeLenses uri parsedModule moduleNameEnd whereClauseStart exports
-    ParseSucceededWithErrors
-      ( parsedModule@( CST.Module
-          { header:
-          CST.ModuleHeader
-          { name: CST.Name { token: { range: { end: moduleNameEnd } } }
-        , exports
-        , where: { range: { start: whereClauseStart } }
-        }
-        }
-      )
-    )
-      _ -> pure $ mkCodeLenses uri parsedModule moduleNameEnd whereClauseStart exports
+    ParseSucceeded parsedModule -> pure $ mkCodeLenses uri parsedModule
+    ParseSucceededWithErrors parsedModule _ -> pure $ mkCodeLenses uri parsedModule
     _ -> pure []
 
 printExports ∷ Array String -> String
@@ -93,9 +65,10 @@ printExport = case _ of
   CST.ExportKind _ (CST.Name { name: (CST.Proper name) }) -> Just $ name
   CST.ExportModule _ (CST.Name { name: CST.ModuleName name }) -> Just $ "module " <> name
   CST.ExportValue (CST.Name { name: CST.Ident name }) -> Just $ name
-  CST.ExportError e -> Nothing
+  CST.ExportError _ -> Nothing
 
-newtype SemigroupRange = SemigroupRange LSP.Range
+newtype SemigroupRange
+  = SemigroupRange LSP.Range
 
 instance semigroupSemigroupRange ∷ Semigroup SemigroupRange where
   append sr1 _ = sr1
@@ -123,15 +96,19 @@ getSemigroupRanges =
             _ -> Object.empty
         }
 
-mkCodeLenses ∷
-  ∀ err.
-  DocumentUri ->
-  CST.Module err ->
-  CST.SourcePos ->
-  CST.SourcePos ->
-  Maybe (CST.Wrapped (CST.Separated (CST.Export err))) ->
-  (Array CodeLensResult)
-mkCodeLenses uri parsedModule moduleNameEnd whereClauseStart exports =
+mkCodeLenses ∷ ∀ err. DocumentUri -> CST.Module err -> Array CodeLensResult
+mkCodeLenses uri
+  parsedModule@
+    ( CST.Module
+        { header:
+            CST.ModuleHeader
+              { name: CST.Name { token: { range: { end: moduleNameEnd } } }
+              , exports
+              , where: { range: { start: whereClauseStart } }
+              , keyword
+              }
+        }
+    ) =
   let
     start = sourcePosToPosition moduleNameEnd
     end = sourcePosToPosition whereClauseStart
@@ -142,36 +119,39 @@ mkCodeLenses uri parsedModule moduleNameEnd whereClauseStart exports =
       Nothing -> []
       Just
         ( CST.Wrapped
-          { value: separatedExports
-        }
-      ) -> exportsToArray separatedExports
+            { value: separatedExports
+            }
+        ) -> exportsToArray separatedExports
     exportNames = Array.mapMaybe printExport exportArray
     decls = getSemigroupRanges parsedModule <#> un SemigroupRange
     declToCodeLens name range = do
       let codeLensRange = range -- shiftRangeUp 1 range
-      let replace title exps = Array.singleton $ mkCodeLensResult codeLensRange $ replaceSuggestion title uri (printExports exps) exportsRange
-      let exportedWithConstructors x = Array.elem (withConstructors x) exportNames
-      let exportedWithoutConstructors x = StringUtils.endsWith "(..)" x && Array.elem (String.dropRight 4 x <> "(..)") exportNames
+          replace title exps = Array.singleton $ mkCodeLensResult codeLensRange $ replaceSuggestion title uri (printExports exps) exportsRange
+          exportedWithConstructors x = Array.elem (withConstructors x) exportNames
+          exportedWithoutConstructors x = StringUtils.endsWith "(..)" x && Array.elem (String.dropRight 4 x <> "(..)") exportNames
       -- [TODO] This isn't quite right yet
       if noExplicitExports then
-        replace ("exported (export only " <> name <> ")") [name] <>
-          replace ("(export everything but " <> name <> ")") (decls # Object.keys # Array.delete name)
+        replace ("exported (export only " <> name <> ")") [ name ]
+          <> replace ("(export everything but " <> name <> ")") (decls # Object.keys # Array.delete name)
+      else if exportedWithConstructors name then
+        replace ("exported as " <> withConstructors name <> " (export only type)") (exportNames # Array.delete (withConstructors name) # Array.cons name)
+      else if exportedWithoutConstructors name then
+        replace ("exported as " <> withoutConstructors name <> " (export with constructors)") (exportNames # Array.delete (withoutConstructors name) # Array.cons name)
+      else if Array.elem name exportNames then
+        replace ("exported (remove " <> name <> " from exports)") (exportNames # Array.delete name)
       else
-        if exportedWithConstructors name then
-          replace ("exported as " <> withConstructors name <> " (export only type)") (exportNames # Array.delete (withConstructors name) # Array.cons name)
-        else
-          if exportedWithoutConstructors name then
-            replace ("exported as " <> withoutConstructors name <> " (export with constructors)") (exportNames # Array.delete (withoutConstructors name) # Array.cons name)
-          else
-            if Array.elem name exportNames then
-              replace ("exported (remove " <> name <> " from exports)") (exportNames # Array.delete name)
-            else
-              replace ("private (add " <> name <> " to exports)") (Array.snoc exportNames name)
+        replace ("private (add " <> name <> " to exports)") (Array.snoc exportNames name)
 
+    moduleLens :: Maybe CodeLensResult
+    moduleLens =
+      if noExplicitExports then
+        Just $ mkCodeLensResult (sourceRangeToRange keyword.range) $ replaceSuggestion "implicit module exports - make all explicit" uri (printExports $ Object.keys decls) exportsRange
+      else
+        Nothing
     privatePublicCodeLenses ∷ Array CodeLensResult
     privatePublicCodeLenses = decls # Object.mapWithKey declToCodeLens # fold
   in
-    privatePublicCodeLenses
+    Array.fromFoldable moduleLens <> privatePublicCodeLenses
   where
   mkCodeLensResult ∷ LSP.Range -> Command -> CodeLensResult
   mkCodeLensResult codeLensRange replaceCommand = do

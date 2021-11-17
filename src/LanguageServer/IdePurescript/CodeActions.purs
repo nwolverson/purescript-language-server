@@ -34,7 +34,6 @@ import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVe
 import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind, CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
-
 m :: forall a. Nullable a -> Maybe a
 m = Nullable.toMaybe
 
