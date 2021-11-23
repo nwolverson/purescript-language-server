@@ -1,5 +1,25 @@
 # Changelog
 
+### 0.16.0
+
+Code lenses added:
+
+- Add declaration type signature code lens (Idea/initial implementation @i-am-the-slime, rewritten to source data differently)
+
+   - Enabled via config: `purescript.declarationTypeCodeLens`
+
+- Add export management code lenses (@i-am-the-slime)
+   - This features both code lenses on individual declarations, to add/remove from exports appropriately, and a module-level code lens
+     to enable explicit exports if the module has implicit ones.
+
+   - Enabled via config: `purescript.exportsCodeLense`
+
+Other changes:
+
+- (Internal) CST parsing shared between multiple features, currently executed on document change
+
+- Add progress report on full build / server start
+
 ### 0.15.8
 
 - Default `purescript.addSpagoSources` true (already true in vscode default for some time).
@@ -129,7 +149,6 @@
 
 - Filter overlapping edits (better apply-all suggestions)
 - Deduplicate replacments
-
 
 ### 0.13.3 
 
