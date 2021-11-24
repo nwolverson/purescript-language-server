@@ -1,4 +1,7 @@
-module LanguageServer.IdePurescript.Completion where
+module LanguageServer.IdePurescript.Completion
+  ( getCompletions
+  )
+  where
 
 import Prelude
 import Data.Array (filter, mapMaybe)

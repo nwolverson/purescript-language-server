@@ -1,4 +1,7 @@
-module LanguageServer.IdePurescript.Tooltips where
+module LanguageServer.IdePurescript.Tooltips
+  ( getTooltips
+  )
+  where
 
 import Prelude
 

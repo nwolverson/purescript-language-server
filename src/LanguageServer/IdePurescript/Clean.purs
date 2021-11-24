@@ -1,4 +1,7 @@
-module LanguageServer.IdePurescript.Clean where
+module LanguageServer.IdePurescript.Clean
+  ( clean
+  )
+  where
 
 import Prelude
 

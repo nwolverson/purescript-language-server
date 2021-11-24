@@ -426,7 +426,7 @@ handleEvents config conn state documents logError = do
   -- Handles go to definition
   onDefinition conn
     $ runHandler
-        "onDefinition" getTextDocUri (getDefinition documents)
+        "onDefinition" getTextDocUri (getDefinition logError documents)
   onDocumentSymbol conn
     $ runHandler
         "onDocumentSymbol" getTextDocUri getDocumentSymbols
@@ -473,7 +473,7 @@ handleEvents config conn state documents logError = do
         v <- getVersion document
         text <- getText document
         let res = CST.parseModule text
-        logError Info $ "Change at " <> show v <> " on " <> show (getUri document)
+        -- logError Info $ "Change at " <> show v <> " on " <> show (getUri document)
         Ref.modify_
           ( over ServerState
               ( \s ->

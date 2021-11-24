@@ -1,4 +1,11 @@
-module LanguageServer.IdePurescript.Build where
+module LanguageServer.IdePurescript.Build
+  ( collectByFirst
+  , fullBuild
+  , launchRebuildAndSendDiagnostics
+  , positionToRange
+  , rebuildAndSendDiagnostics
+  )
+  where
 
 import Prelude
 
@@ -30,7 +37,6 @@ import LanguageServer.Protocol.Handlers (publishDiagnostics, sendDiagnosticsBegi
 import LanguageServer.Protocol.TextDocument (TextDocument, getUri, getVersion)
 import LanguageServer.Protocol.Types (Connection, Diagnostic(Diagnostic), DocumentStore, DocumentUri(..), Position(Position), Range(Range), Settings)
 import LanguageServer.Protocol.Uri (uriToFilename)
-import LanguageServer.Protocol.Window (createWorkDoneProgress, workBegin, workDone)
 import Node.Path (resolve)
 import PscIde.Command (RebuildError(RebuildError))
 import PscIde.Command as PC

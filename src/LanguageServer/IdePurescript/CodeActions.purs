@@ -1,4 +1,9 @@
-module LanguageServer.IdePurescript.CodeActions where
+module LanguageServer.IdePurescript.CodeActions
+  ( getActions
+  , onReplaceAllSuggestions
+  , onReplaceSuggestion
+  )
+  where
 
 import Prelude
 
@@ -7,7 +12,6 @@ import Data.Array (catMaybes, concat, filter, foldl, head, length, mapMaybe, nub
 import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Newtype (un)
-import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
 import Data.String (Pattern(..))
 import Data.String as String
@@ -33,29 +37,6 @@ import LanguageServer.Protocol.Text (makeWorkspaceEdit)
 import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVersion)
 import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind, CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
-
-m :: forall a. Nullable a -> Maybe a
-m = Nullable.toMaybe
-
-codeActionLiteralsSupported :: ClientCapabilities -> Boolean
-codeActionLiteralsSupported c =
-  c
-    # (_.textDocument >>> m)
-    >>= (_.codeAction >>> m)
-    >>= (_.codeActionLiteralSupport >>> m)
-    # isJust
-
-codeActionToCommand :: Maybe ClientCapabilities -> Either CodeAction Command -> Maybe CodeActionResult
-codeActionToCommand capabilities action =
-  codeActionResult
-    <$> if supportsLiteral then
-        Just action
-      else
-        either convert (Just <<< Right) action
-  where
-  supportsLiteral = maybe true codeActionLiteralsSupported capabilities
-  convert (CodeAction { command }) | Just c <- m command = Just $ Right c
-  convert _ = Nothing
 
 getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array CodeActionResult)
 getActions documents settings state@(ServerState { diagnostics, conn: Just _conn, clientCapabilities }) { textDocument, range } =
@@ -131,6 +112,27 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just _conn
   intersects (Range { start, end }) (Range { start: start', end: end' }) = start <= end' && start' <= end
 
 getActions _ _ _ _ = pure []
+
+codeActionLiteralsSupported :: ClientCapabilities -> Boolean
+codeActionLiteralsSupported capabilities =
+  capabilities
+    # (_.textDocument >>> Nullable.toMaybe)
+    >>= (_.codeAction >>> Nullable.toMaybe)
+    >>= (_.codeActionLiteralSupport >>> Nullable.toMaybe)
+    # isJust
+
+codeActionToCommand :: Maybe ClientCapabilities -> Either CodeAction Command -> Maybe CodeActionResult
+codeActionToCommand capabilities action =
+  codeActionResult
+    <$> if supportsLiteral then
+        Just action
+      else
+        either convert (Just <<< Right) action
+  where
+  supportsLiteral = maybe true codeActionLiteralsSupported capabilities
+  convert (CodeAction { command }) | Just c <- Nullable.toMaybe command = Just $ Right c
+  convert _ = Nothing
+
 
 commandAction :: CodeActionKind -> Command -> CodeAction
 commandAction kind c@(Command { title }) =

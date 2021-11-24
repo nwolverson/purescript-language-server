@@ -1,5 +1,6 @@
 module LanguageServer.IdePurescript.Symbols
-  ( getDefinition
+  ( convPosition
+  , getDefinition
   , getDocumentSymbols
   , getSymbols
   , getWorkspaceSymbols

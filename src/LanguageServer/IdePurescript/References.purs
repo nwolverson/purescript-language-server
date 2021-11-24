@@ -1,4 +1,7 @@
-module LanguageServer.IdePurescript.References where
+module LanguageServer.IdePurescript.References
+  ( getReferences
+  )
+  where
 
 import Prelude
 
