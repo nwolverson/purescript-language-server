@@ -1,33 +1,53 @@
-module LanguageServer.IdePurescript.Symbols where
+module LanguageServer.IdePurescript.Symbols
+  ( convPosition
+  , getDefinition
+  , getDocumentSymbols
+  , getSymbols
+  , getWorkspaceSymbols
+  )
+  where
 
 import Prelude
-
 import Control.Alt ((<|>))
 import Control.Apply (lift2)
-import Data.Array (catMaybes, singleton)
-import Data.Either (Either(..))
-import Data.Maybe (Maybe(..), isJust, maybe)
+import Data.Array (catMaybes, foldr, singleton, (:))
+import Data.Array as Array
+import Data.Array.NonEmpty (foldl1)
+import Data.Array.NonEmpty as NEA
+import Data.Either (Either(..), either)
+import Data.Map as Map
+import Data.Maybe (Maybe(..), isJust, isNothing, maybe)
 import Data.Newtype (over, un)
 import Data.Nullable (Nullable, toNullable)
 import Data.Nullable as Nullable
+import Data.Set (Set)
+import Data.Set as Set
 import Data.String (Pattern(..), contains)
 import Data.String as Str
 import Data.String as String
-import Data.Traversable (traverse)
+import Data.Traversable (foldMap, traverse)
+import Data.Tuple (Tuple(..), snd)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import IdePurescript.Modules (getQualModule, getUnqualActiveModules)
 import IdePurescript.PscIde (getCompletion, getLoadedModules, getModuleInfo, getTypeInfo)
+import IdePurescript.PscIdeServer (Notify)
 import IdePurescript.Tokens (identifierAtPoint)
 import LanguageServer.IdePurescript.Types (ServerState(..))
+import LanguageServer.IdePurescript.Util.CST (sourceRangeToRange)
 import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (TextDocumentPositionParams, WorkspaceSymbolParams, DocumentSymbolParams)
 import LanguageServer.Protocol.TextDocument (getTextAtRange)
-import LanguageServer.Protocol.Types (ClientCapabilities, DocumentStore, GotoDefinitionResult, Location(..), LocationLink(..), Position(..), Range(..), Settings, SymbolInformation(..), SymbolKind(..), TextDocumentIdentifier(..), gotoDefinitionResult, symbolKindToInt)
+import LanguageServer.Protocol.Types (ClientCapabilities, DocumentStore, DocumentUri, GotoDefinitionResult, Location(..), LocationLink(..), Position(..), Range(..), Settings, SymbolInformation(..), SymbolKind(..), TextDocumentIdentifier(..), gotoDefinitionResult, symbolKindToInt)
 import LanguageServer.Protocol.Uri (filenameToUri)
 import Node.Path (resolve)
 import PscIde.Command (CompletionOptions(..))
 import PscIde.Command as Command
+import PureScript.CST (RecoveredParserResult(..))
+import PureScript.CST.Range (class RangeOf, rangeOf)
+import PureScript.CST.Traversal as CSTTraversals
+import PureScript.CST.Types (Declaration(..), DoStatement(..), Expr(..), LetBinding, Separated(..), SourceRange)
+import PureScript.CST.Types as CST
 
 convPosition :: Command.Position -> Position
 convPosition { line, column } = Position { line: line - 1, character: column - 1 }
@@ -36,30 +56,40 @@ convTypePosition :: Command.TypePosition -> Range
 convTypePosition (Command.TypePosition { start, end }) = Range { start: convPosition start, end: convPosition end }
 
 getDefinition ::
+  Notify ->
   DocumentStore ->
   Settings ->
   ServerState ->
   TextDocumentPositionParams ->
   Aff (Nullable GotoDefinitionResult)
-getDefinition docs _ state@(ServerState { conn: Just conn, clientCapabilities: Just clientCapabilities }) ({ textDocument, position }) = do
-  doc <- liftEffect $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
+getDefinition _notify docs _ state@(ServerState { clientCapabilities: Just clientCapabilities, parsedModules }) ({ textDocument, position }) = do
+  let uri = _.uri $ un TextDocumentIdentifier textDocument
+  doc <- liftEffect $ getDocument docs uri
   text <- liftEffect $ getTextAtRange doc (mkLineRange position)
   let { port, modules, root } = un ServerState $ state
   case port, root, identifierAtPoint text (_.character $ un Position position) of
-    Just port', Just root', Just identRes@{ word, qualifier, range } -> do
-      info <- lift2 (<|>) (moduleInfo port' identRes range) (typeInfo port' modules identRes)
-      liftEffect
-        $ toNullable
-        <$> case info of
-            Just { typePos: Command.TypePosition { name, start }, originRange } -> do
-              uri <- filenameToUri =<< resolve [ root' ] name
-              let startRange = Range { start: convPosition start, end: convPosition start }
-              pure $ Just $ mkResult uri originRange startRange
-            Nothing -> pure Nothing
+    Just port', Just root', Just identRes@{ range, qualifier, word } -> do
+      localDefn uri word
+        >>= case _ of
+            Just res | isNothing qualifier -> pure $ toNullable $ Just res
+            _ -> do
+              info <- lift2 (<|>) (moduleInfo port' identRes range) (typeInfo port' modules identRes)
+              liftEffect
+                $ toNullable
+                <$> case info of
+                    Just { typePos: Command.TypePosition { name, start }, originRange } -> do
+                      defnUri <- filenameToUri =<< resolve [ root' ] name
+                      let startRange = Range { start: convPosition start, end: convPosition start }
+                      pure $ Just $ mkResult defnUri originRange startRange
+                    Nothing -> pure Nothing
     _, _, _ -> pure $ toNullable Nothing
   where
+  localDefn uri ident = case _.parsed <$> Map.lookup uri parsedModules of
+    Just (ParseSucceeded parsedModule) -> getLocalDefinitions uri position ident parsedModule
+    Just (ParseSucceededWithErrors parsedModule _) -> getLocalDefinitions uri position ident parsedModule
+    _ -> pure Nothing
 
-  moduleInfo port' { word, qualifier, range } { right } = do
+  moduleInfo port' { word, qualifier } { right } = do
     let
       fullModule = case qualifier of
         Just q -> q <> "." <> word
@@ -71,7 +101,7 @@ getDefinition docs _ state@(ServerState { conn: Just conn, clientCapabilities: J
           Just (Command.TypeInfo { definedAt: Just typePos }) ->
             Just { typePos, originRange: Just $ mkNewRange position left right }
           _ -> Nothing
-  typeInfo port' modules { word, qualifier, range } = do
+  typeInfo port' modules { word, qualifier } = do
     info <- getTypeInfo port' word modules.main qualifier (getUnqualActiveModules modules $ Just word) (flip getQualModule modules)
     pure
       $ case info of
@@ -87,30 +117,25 @@ getDefinition docs _ state@(ServerState { conn: Just conn, clientCapabilities: J
     Range { start: over Position (_ { character = left }) pos, end: over Position (_ { character = right }) pos }
   mkResult uri (Just sourceRange) range =
     if locationLinkSupported clientCapabilities then
-      gotoDefinitionResult
-        $ Right
-        $ LocationLink
-            { originSelectionRange: toNullable $ Just sourceRange
-            , targetRange:
-                over Range
-                  ( \rr ->
-                      rr
-                        { start = over Position (\pp -> pp { character = 0 }) rr.start
-                        , end = over Position (\pp -> pp { line = pp.line + 1 }) rr.end
-                        }
-                  )
-                  range
-            , targetSelectionRange:
-                over Range
-                  ( \rr ->
-                      rr
-                        { start = over Position (\pp -> pp { character = 0 }) rr.start
-                        , end = over Position (\pp -> pp { line = pp.line + 1 }) rr.end
-                        }
-                  )
-                  range
-            , targetUri: uri
-            }
+      let
+        targetRange =
+          over Range
+            ( \rr ->
+                rr
+                  { start = over Position (\pp -> pp { character = 0 }) rr.start
+                  , end = over Position (\pp -> pp { line = pp.line + 1 }) rr.end
+                  }
+            )
+            range
+      in
+        gotoDefinitionResult
+          $ Right
+          $ LocationLink
+              { originSelectionRange: toNullable $ Just sourceRange
+              , targetRange
+              , targetSelectionRange: targetRange
+              , targetUri: uri
+              }
     else
       gotoDefinitionResult $ Left $ Location { uri, range }
   mkResult uri Nothing range = gotoDefinitionResult $ Left $ Location { uri, range }
@@ -120,8 +145,93 @@ getDefinition docs _ state@(ServerState { conn: Just conn, clientCapabilities: J
 
   m :: forall a. Nullable a -> Maybe a
   m = Nullable.toMaybe
+getDefinition _ _ _ _ _ = pure $ toNullable Nothing
 
-getDefinition _ _ _ _ = pure $ toNullable Nothing
+guard' ∷ ∀ t. Monoid t ⇒ Boolean → (Unit → t) → t
+guard' cond f = if cond then f unit else mempty
+
+type IdentRange
+  = { ident :: SourceRange, scope :: SourceRange }
+
+newtype DoStatementsScope err
+  = DoStatementsScope (NEA.NonEmptyArray (Either (Expr err) (DoStatement err)))
+
+instance rangeOfDoStatementsScope :: RangeOf err => RangeOf (DoStatementsScope err) where
+  rangeOf (DoStatementsScope stmts) = foldl1 (\a b -> { start: a.start, end: b.end }) $ either rangeOf rangeOf <$> stmts
+
+getLocalDefinitions :: ∀ err. RangeOf err => DocumentUri -> Position -> String -> CST.Module err -> Aff (Maybe GotoDefinitionResult)
+getLocalDefinitions uri position ident =
+  toRes
+    <<< ( CSTTraversals.foldMapModule
+          $ CSTTraversals.defaultMonoidalVisitor
+              { onExpr =
+                \e -> case e of
+                  ExprLet { bindings } -> foldMap (onLetBind e) bindings
+                  ExprLambda { binders, body } -> foldMap (onBinder body) binders
+                  ExprCase { branches } -> foldMap (\(Tuple (Separated { head, tail }) guarded) -> foldMap (onBinder guarded) (head : map snd tail)) branches
+                  ExprDo { statements } -> _.res $ foldr onStmt { scope: [], res: Set.empty } $ NEA.toArray statements
+                  ExprAdo { statements, result } -> _.res $ foldr onStmt { scope: [ Left result ], res: Set.empty } statements
+                  _ -> Set.empty
+              , onDecl =
+                \d -> case d of
+                  DeclValue { name: CST.Name { name: CST.Ident x }, binders }
+                    | x == ident ->
+                      foldMap (onBinder d) binders
+                  _ -> Set.empty
+              }
+      )
+  where
+
+  onLetBind :: forall e. RangeOf e => e -> LetBinding err -> Set IdentRange
+  onLetBind eScope = case _ of
+    CST.LetBindingName { name: CST.Name { name: CST.Ident x, token }, binders, guarded } ->
+      -- TODO scope is not fully e if patterns binds split the block
+      guard' (x == ident) (\_ -> Set.singleton { ident: token.range, scope: rangeOf eScope })
+        <> foldMap (onBinder guarded) binders
+    CST.LetBindingPattern binder _ _ewhere -> onBinder eScope binder -- TODO should be bound in rest of bindings only
+
+    _ -> Set.empty
+
+  onStmt :: DoStatement err -> { res :: Set IdentRange, scope :: Array (Either (Expr err) (DoStatement err)) } -> { res :: Set IdentRange, scope :: Array (Either (Expr err) (DoStatement err)) }
+  onStmt stmt acc = case stmt of
+    DoLet _ letBinds ->
+      let
+        res' = maybe Set.empty (\scopeStmts -> foldMap (onLetBind (DoStatementsScope scopeStmts)) letBinds) $ NEA.fromArray acc.scope
+      in
+        { res: acc.res <> res', scope: (Right stmt) : acc.scope }
+    DoBind binder _ _ ->
+      let
+        res' = maybe Set.empty (\scopeStmts -> onBinder (DoStatementsScope scopeStmts) binder) $ NEA.fromArray acc.scope
+      in
+        { res: acc.res <> res', scope: (Right stmt) : acc.scope }
+    _ -> acc { scope = (Right stmt) : acc.scope }
+
+  onBinder :: forall e. RangeOf e => e -> CST.Binder err -> Set IdentRange
+  onBinder eScope =
+    CSTTraversals.foldMapBinder
+      $ CSTTraversals.defaultMonoidalVisitor
+          { onBinder =
+            case _ of
+              CST.BinderVar (CST.Name { name: CST.Ident x, token }) | x == ident -> Set.singleton { ident: token.range, scope: rangeOf eScope }
+              CST.BinderNamed (CST.Name { name: CST.Ident x, token }) _ _ | x == ident -> Set.singleton { ident: token.range, scope: rangeOf eScope }
+
+              _ -> Set.empty
+          }
+
+  (Position { line: targetLine, character: targetChar }) = position
+  containsPosition { start: { line: startLine, column: startCol }, end: { line: endLine, column: endCol } } =
+    let
+      target = Tuple targetLine targetChar
+    in
+      target >= Tuple startLine startCol && target <= Tuple endLine endCol
+
+  toRes :: Set IdentRange -> Aff (Maybe GotoDefinitionResult)
+  toRes ranges = do
+    let validRanges = Array.filter (containsPosition <<< _.scope) $ Array.fromFoldable ranges
+    pure $ (res <<< _.ident) <$> Array.last validRanges
+
+  res :: SourceRange -> GotoDefinitionResult
+  res range = gotoDefinitionResult $ Left $ Location { uri, range: sourceRangeToRange range }
 
 getDocumentSymbols ::
   Settings ->

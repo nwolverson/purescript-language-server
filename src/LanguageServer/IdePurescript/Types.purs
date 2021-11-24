@@ -1,4 +1,8 @@
-module LanguageServer.IdePurescript.Types where
+module LanguageServer.IdePurescript.Types
+  ( CommandHandler
+  , ServerState(..)
+  )
+  where
 
 import Prelude
 

@@ -1,4 +1,10 @@
-module LanguageServer.IdePurescript.Server where
+module LanguageServer.IdePurescript.Server
+  ( getEnvPursIdeSources
+  , loadAll
+  , retry
+  , startServer'
+  )
+  where
 
 import Prelude
 

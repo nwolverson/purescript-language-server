@@ -1,4 +1,7 @@
-module LanguageServer.IdePurescript.Formatting where
+module LanguageServer.IdePurescript.Formatting
+  ( getFormattedDocument
+  )
+  where
 
 import Prelude
 

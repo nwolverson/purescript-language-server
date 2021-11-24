@@ -1,4 +1,14 @@
-module LanguageServer.IdePurescript.Assist where
+module LanguageServer.IdePurescript.Assist
+  ( TypoResult
+  , addClause
+  , caseSplit
+  , decodeTypoResult
+  , encodeTypoResult
+  , fillTypedHole
+  , fixTypo
+  , fixTypoActions
+  )
+  where
 
 import Prelude
 

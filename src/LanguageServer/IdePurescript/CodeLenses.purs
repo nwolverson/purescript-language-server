@@ -1,4 +1,7 @@
-module LanguageServer.IdePurescript.CodeLenses where
+module LanguageServer.IdePurescript.CodeLenses
+  ( getCodeLenses
+  )
+  where
 
 import Prelude
 

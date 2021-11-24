@@ -32,7 +32,7 @@ import PureScript.CST.Types as CST
 
 exportManagementCodeLenses ∷ DocumentStore -> Settings -> ServerState ->  DocumentUri -> Aff (Array CodeLensResult)
 exportManagementCodeLenses _documentStore _settings (ServerState { parsedModules }) uri = do
-  case  _.parsed <$> Map.lookup uri parsedModules of
+  case _.parsed <$> Map.lookup uri parsedModules of
     Just (ParseSucceeded parsedModule) -> pure $ mkCodeLenses uri parsedModule
     Just (ParseSucceededWithErrors parsedModule _) -> pure $ mkCodeLenses uri parsedModule
     _ -> pure []

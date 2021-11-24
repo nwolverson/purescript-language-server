@@ -1,4 +1,13 @@
-module LanguageServer.IdePurescript.Imports where
+module LanguageServer.IdePurescript.Imports
+  ( addCompletionImport
+  , addCompletionImport'
+  , addCompletionImportEdit
+  , addModuleImport'
+  , getAllModules
+  , reformatImports
+  , showNS
+  )
+  where
 
 import Prelude
 

@@ -1,4 +1,9 @@
-module LanguageServer.IdePurescript.Search where
+module LanguageServer.IdePurescript.Search
+  ( SearchResult
+  , decodeSearchResult
+  , search
+  )
+  where
 
 import Prelude
 import Control.Monad.Except (Except, runExcept)
