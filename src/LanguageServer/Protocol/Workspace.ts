@@ -1,3 +1,8 @@
-import { CodeLensRefreshRequest, Connection, MessageActionItem } from "vscode-languageserver/node";
+import {
+  CodeLensRefreshRequest,
+  Connection,
+  MessageActionItem,
+} from "vscode-languageserver/node";
 
-export const codeLensRefresh = (conn: Connection) => () => conn.sendRequest(CodeLensRefreshRequest.type);
+export const codeLensRefresh = (conn: Connection) => () =>
+  conn.sendRequest(CodeLensRefreshRequest.type);
