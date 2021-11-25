@@ -18,7 +18,7 @@
   "main": "./server.js",
   "bin": "./cli.js",
   "engines": {
-    "node": "12"
+    "node": ">=14"
   },
   "targets": {
     "main": {
