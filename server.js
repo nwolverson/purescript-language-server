@@ -1,0 +1,1 @@
+require("./bundle.js").main();
