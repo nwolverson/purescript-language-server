@@ -1,3 +1,7 @@
 exports.version = function () {
-  return require("./package.json").version;
+  try {
+    return require("./package.json").version;
+  } catch (e) {
+    return e.message;
+  }
 };
