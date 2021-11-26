@@ -174,9 +174,7 @@ getLocalDefinitions uri position ident =
                   _ -> Set.empty
               , onDecl =
                 \d -> case d of
-                  DeclValue { name: CST.Name { name: CST.Ident x }, binders }
-                    | x == ident ->
-                      foldMap (onBinder d) binders
+                  DeclValue { binders } -> foldMap (onBinder d) binders
                   _ -> Set.empty
               }
       )

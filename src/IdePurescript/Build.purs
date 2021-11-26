@@ -1,6 +1,7 @@
 module IdePurescript.Build where
 
 import Prelude
+
 import Control.Monad.Error.Class (throwError)
 import Data.Array (intercalate, uncons, (:))
 import Data.Array as Array
@@ -20,6 +21,8 @@ import Foreign.Object as Object
 import IdePurescript.Exec (findBins, getPathVar)
 import IdePurescript.PscErrors (PscResult(..), parsePscOutput)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
+import Node.Buffer (Buffer)
+import Node.Buffer as Buffer
 import Node.ChildProcess (ChildProcess)
 import Node.ChildProcess as CP
 import Node.Encoding as Encoding
@@ -95,19 +98,19 @@ build logCb buildOptions@{ command: Command cmd args } = do
           Just cp -> do
             logCb Info $ "Running build command: " <> intercalate " " (cmd : args)
             CP.onError cp (cb <<< Left <<< CP.toStandardError)
-            errOutput <- Ref.new ""
-            outOutput <- Ref.new ""
+            errOutput <- Ref.new []
+            outOutput <- Ref.new []
             let
-              res :: Ref String -> String -> Effect Unit
-              res r s = Ref.modify_ (_ <> s) r
-            catchException err $ S.onDataString (CP.stderr cp) Encoding.UTF8 (res errOutput)
-            catchException err $ S.onDataString (CP.stdout cp) Encoding.UTF8 (res outOutput)
+              res :: Ref (Array Buffer) -> Buffer -> Effect Unit
+              res r s = Ref.modify_ (_ `Array.snoc` s) r
+            catchException err $ S.onData (CP.stderr cp) (res errOutput)
+            catchException err $ S.onData (CP.stdout cp) (res outOutput)
             CP.onClose cp
               ( \exit -> case exit of
                   CP.Normally n
                     | n == 0 || n == 1 -> do
-                      pursError <- Ref.read (errOutput)
-                      pursOutput <- Ref.read (outOutput)
+                      pursError <- Ref.read errOutput >>= Buffer.concat >>= Buffer.toString Encoding.UTF8
+                      pursOutput <- Ref.read outOutput >>= Buffer.concat >>= Buffer.toString Encoding.UTF8
                       let
                         lines = split (Pattern "\n") $ pursError <> pursOutput
                         { yes: json, no: toLog } = Array.partition (\s -> indexOf (Pattern "{\"") s == Just 0) lines

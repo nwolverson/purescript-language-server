@@ -9,7 +9,8 @@ import Prelude
 
 import Control.Monad.Except (runExcept)
 import Data.Array (catMaybes, concat, filter, foldl, head, length, mapMaybe, nubByEq, singleton, sortWith, (:))
-import Data.Either (Either(..), either)
+import Data.Array as Array
+import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Newtype (un)
 import Data.Nullable as Nullable
@@ -18,7 +19,7 @@ import Data.String as String
 import Data.String.Regex (regex)
 import Data.String.Regex.Flags (noFlags)
 import Data.String.Regex.Flags as RegexFlags
-import Data.Traversable (traverse)
+import Data.Traversable (any, traverse)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign (F, Foreign, readArray, readString)
@@ -35,32 +36,47 @@ import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.Protocol.Text (makeWorkspaceEdit)
 import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVersion)
-import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind, CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
+import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind(..), CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionEmpty, codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
+import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVersion)
+import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind(..), CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionEmpty, codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
+import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array CodeActionResult)
-getActions documents settings state@(ServerState { diagnostics, conn: Just _conn, clientCapabilities }) { textDocument, range } =
+getActions documents settings state@(ServerState { diagnostics, conn: Just _conn, clientCapabilities }) { textDocument, range, context: { only }  } =
   case Object.lookup (un DocumentUri $ docUri) diagnostics of
     Just errs ->
       mapMaybe (codeActionToCommand clientCapabilities)
         <$> do
-            codeActions <- traverse commandForCode errs
-            pure
-              $ (map Right $ catMaybes $ map asCommand errs)
-              <> (map Right $ fixAllCommand "Apply all suggestions" $ notImplicitPrelude errs)
-              <> (organizeImports $ notImplicitPrelude errs)
-              <> (map Right $ concat codeActions)
-              <> sortImports
+            codeActions :: Array (Array CodeAction) <- traverse commandForCode errs
+            let actions =
+                    (catMaybes $ map asCommand errs)
+                    <> (commandAction_ <$> (fixAllCommand "Apply all suggestions" $ notImplicitPrelude errs))
+                    <> (organizeImports $ notImplicitPrelude errs)
+                    <> concat codeActions
+                    <> sortImports
+            pure $ filterKind actions
     _ -> pure []
   where
   docUri = _.uri $ un TextDocumentIdentifier textDocument
 
+  filterKind :: Array CodeAction -> Array CodeAction
+  filterKind actions =
+    case Nullable.toMaybe only of
+      Nothing -> actions
+      Just kinds -> Array.filter (\(CodeAction { kind }) -> any (kind `isSubKindOf` _) kinds) actions
+
+    where
+    -- Sub kind, eg source.organizeImports is a sub-kind of source
+    isSubKindOf (CodeActionKind k1) (CodeActionKind k2) = String.indexOf (Pattern k2) k1 == Just 0
+
+  asCommand :: _ -> Maybe CodeAction
   asCommand error@(RebuildError { position: Just position, errorCode })
     | Just { replacement, range: replaceRange } <- getReplacementRange error
     , intersects (positionToRange position) range = do
       let replacement' = replace' (regex "\\s*\\n\\s*$" RegexFlags.global) "\n" replacement
           replacement'' = if errorCode == wildcardInferredType then replace' (regex "\\n\\s*$" RegexFlags.noFlags) "" replacement' else replacement'
-      Just $ replaceSuggestion (getTitle errorCode) docUri replacement'' replaceRange
+      Just $ commandAction_ $ replaceSuggestion (getTitle errorCode) docUri replacement'' replaceRange
   asCommand _ = Nothing
 
   getReplacementRange (RebuildError { position: Just position, suggestion: Just (PscSuggestion { replacement, replaceRange }) }) =
@@ -72,12 +88,13 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just _conn
   notImplicitPrelude = filter (\(RebuildError { errorCode, message }) -> not (errorCode == "ImplicitImport" && String.contains (Pattern "Module Prelude") message))
 
   -- Sort/format imports via purs ide
-  sortImports = [ Left $ commandAction codeActionSourceSortImports (Commands.sortImports docUri) ]
+  sortImports = [ commandAction codeActionSourceSortImports (Commands.sortImports docUri) ]
 
   -- Apply all import suggestions from the compiler
   -- TODO this should probably sort too!
+  organizeImports :: _ -> Array CodeAction
   organizeImports errs =
-    map (Left <<< commandAction codeActionSourceOrganizeImports)
+    map (commandAction codeActionSourceOrganizeImports)
       $ fixAllCommand "Organize Imports" (filter (\(RebuildError { errorCode }) -> isImport errorCode) errs)
 
   fixAllCommand text rebuildErrors = if length replacements > 0 then [ replaceAllSuggestions text docUri replacements ] else []
@@ -94,18 +111,19 @@ getActions documents settings state@(ServerState { diagnostics, conn: Just _conn
       , lastEnd < start = x : acc
     go acc _ = acc
 
+  commandForCode :: _ -> Aff (Array CodeAction)
   commandForCode err@(RebuildError { position: Just position, errorCode })
     | intersects (positionToRange position) range =
       case errorCode of
-        "ModuleNotFound" -> pure [ build ]
+        "ModuleNotFound" -> pure [ commandAction_  build ]
         "HoleInferredType" -> case err of
           RebuildError { pursIde: Just (PursIdeInfo { name, completions }) } ->
-            pure $ singleton $ typedHole name docUri (positionToRange position) completions
+            pure $ singleton $ commandAction_ $ typedHole name docUri (positionToRange position) completions
           _ -> pure []
         x
           | isUnknownToken x
           , { startLine, startColumn } <- position ->
-            fixTypoActions documents settings state docUri (startLine - 1) (startColumn - 1)
+            map commandAction_ <$> fixTypoActions documents settings state docUri (startLine - 1) (startColumn - 1)
         _ -> pure []
   commandForCode _ = pure []
 
@@ -121,13 +139,13 @@ codeActionLiteralsSupported capabilities =
     >>= (_.codeActionLiteralSupport >>> Nullable.toMaybe)
     # isJust
 
-codeActionToCommand :: Maybe ClientCapabilities -> Either CodeAction Command -> Maybe CodeActionResult
+codeActionToCommand :: Maybe ClientCapabilities -> CodeAction -> Maybe CodeActionResult
 codeActionToCommand capabilities action =
   codeActionResult
     <$> if supportsLiteral then
-        Just action
+        Just $ Left action
       else
-        either convert (Just <<< Right) action
+        convert action
   where
   supportsLiteral = maybe true codeActionLiteralsSupported capabilities
   convert (CodeAction { command }) | Just c <- Nullable.toMaybe command = Just $ Right c
@@ -143,6 +161,9 @@ commandAction kind c@(Command { title }) =
     , edit: Nullable.toNullable Nothing
     , command: Nullable.toNullable $ Just c
     }
+
+commandAction_ :: Command -> CodeAction
+commandAction_ = commandAction codeActionEmpty
 
 -- codeActionSourceOrganizeImports
 -- codeActionEmpty

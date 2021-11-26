@@ -8,7 +8,7 @@ import Data.Nullable (Nullable)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Foreign (Foreign)
-import LanguageServer.Protocol.Types (CodeActionResult, Command, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, FoldingRange, GotoDefinitionResult, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, TextEdit, WorkspaceEdit)
+import LanguageServer.Protocol.Types (CodeActionKind(..), CodeActionResult, Command, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, FoldingRange, GotoDefinitionResult, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, TextEdit, WorkspaceEdit)
 
 type TextDocumentPositionParams
   = { textDocument :: TextDocumentIdentifier, position :: Position }
@@ -23,7 +23,7 @@ type WorkspaceSymbolParams
 type CodeActionParams
   = { textDocument :: TextDocumentIdentifier, range :: Range, context :: CodeActionContext }
 type CodeActionContext
-  = { diagnostics :: Array Diagnostic }
+  = { diagnostics :: Array Diagnostic, only :: Nullable (Array CodeActionKind) }
 
 type CodeLensParams = { textDocument ∷ TextDocumentIdentifier }
 
