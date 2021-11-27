@@ -30,16 +30,18 @@
   "scripts": {
     "prepare": "run-s install:* build",
     "install:spago": "spago install",
-    "build": "run-s build:tsc build:spago build:bundle",
+    "build": "run-s build:tsc build:spago build:bundle-min",
     "build:tsc": "tsc -p src/LanguageServer/",
     "build:spago": "spago build",
     "build:bundle": "esbuild --bundle --platform=node --outfile=bundle.js ./output/LanguageServer.IdePurescript.Main",
+    "build:bundle-min": "npm run build:bundle -- --minify --sourcemap --sources-content=false",
     "watch:bundle": "npm run build:bundle -- --watch",
     "watch:tsc": "npm run build:tsc -- --watch",
-    "format:js": "prettier --write ./{src,test}/**/*.{ts,js} && build:tsc"
+    "format:js": "prettier --write ./{src,test}/**/*.{ts,js} && npm run build:tsc"
   },
   "files": [
     "bundle.js",
+    "bundle.js.map",
     "cli.js",
     "server.js"
   ],
