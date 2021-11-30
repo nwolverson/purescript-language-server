@@ -660,4 +660,5 @@ main' { filename: logFile, config: cmdLineConfig } = do
   handleEvents config conn state documents logError
   handleCommands config conn state documents logError
   void $ launchAffLog logError $ handleConfig config conn state documents cmdLineConfig logError
-  log conn "PureScript Language Server started"
+  plsVersion <- version
+  log conn $ "PureScript Language Server started (" <> plsVersion <> ")"
