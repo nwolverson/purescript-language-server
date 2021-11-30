@@ -1,8 +1,7 @@
 bower_components/
 node_modules/
 output/
-server.js
+bundle.js*
 .psc*
 yarn.lock
 .spago/
-src/LanguageServer/*.js
