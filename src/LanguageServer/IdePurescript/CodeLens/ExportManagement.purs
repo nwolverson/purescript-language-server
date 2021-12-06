@@ -4,24 +4,19 @@ module LanguageServer.IdePurescript.CodeLens.ExportManagement
   ) where
 
 import Prelude
+
 import Data.Array (intercalate, (:))
 import Data.Array as Array
-import Data.Foldable (fold, foldMap)
-import Data.Generic.Rep (NoConstructors)
+import Data.Foldable (foldMap)
 import Data.Map (SemigroupMap(..))
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing)
+import Data.Maybe (Maybe(..), isJust, isNothing)
 import Data.Monoid (guard)
-import Data.Newtype (class Newtype, un)
+import Data.Newtype (class Newtype)
 import Data.Nullable as Nullable
-import Data.String (Pattern(..), stripSuffix)
-import Data.String.CodeUnits as String
-import Data.String.Utils as StringUtils
 import Data.Tuple (snd)
 import Effect.Aff (Aff)
 import Foreign (unsafeToForeign)
-import Foreign.Object (Object)
-import Foreign.Object as Object
 import LanguageServer.IdePurescript.Commands (replaceSuggestion)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.IdePurescript.Util.CST (sourcePosToPosition, sourceRangeToRange)
@@ -81,17 +76,22 @@ getDeclNameInfo =
         { onDecl =
           case _ of
             CST.DeclSignature (CST.Labeled { label: (CST.Name { token, name: CST.Ident name }) }) -> entry name token.range NoConstructors
+            CST.DeclKindSignature { value: CST.TokLowerName Nothing "class" } (CST.Labeled { label: (CST.Name { token, name: CST.Proper name }) }) -> entry ("class " <> name) token.range NoConstructors
+            CST.DeclKindSignature _ (CST.Labeled { label: (CST.Name { token, name: CST.Proper name }) }) -> entry name token.range NoConstructors
+            CST.DeclValue { name: (CST.Name { token, name: CST.Ident name }) } -> entry name token.range NoConstructors
             CST.DeclData { name: (CST.Name { token, name: CST.Proper name }) } _ -> entry name token.range WithConstructors
             CST.DeclNewtype { name: (CST.Name { token, name: CST.Proper name }) } _ _ _ -> entry name token.range WithConstructors
             CST.DeclType { name: (CST.Name { token, name: CST.Proper name }) } _ _ -> entry name token.range NoConstructors
-            CST.DeclClass { name: (CST.Name { token, name: CST.Proper name }) } _ -> entry ("class " <> name) token.range NoConstructors --  Object.singleton  (SemigroupRange (sourceRangeToRange token.range))
-            CST.DeclFixity { operator: CST.FixityValue _ _ (CST.Name { token, name: CST.Operator name }) } -> entry ("(" <> name <> ")") token.range NoConstructors -- Object.singleton ("(" <> name <> ")") (SemigroupRange (sourceRangeToRange token.range))
+            CST.DeclClass { name: (CST.Name { token, name: CST.Proper name }) } _ -> entry ("class " <> name) token.range NoConstructors
+            CST.DeclFixity { operator: CST.FixityValue _ _ (CST.Name { token, name: CST.Operator name }) } -> entry ("(" <> name <> ")") token.range NoConstructors
             CST.DeclFixity { operator: CST.FixityType _ _ _ (CST.Name { token, name: CST.Operator name }) } -> entry ("type (" <> name <> ")") token.range NoConstructors
             CST.DeclForeign _ _ (CST.ForeignValue (CST.Labeled { label: (CST.Name { token, name: CST.Ident name }) })) -> entry name token.range NoConstructors
             CST.DeclForeign _ _ (CST.ForeignData _ (CST.Labeled { label: (CST.Name { token, name: CST.Proper name }) })) -> entry name token.range NoConstructors
             CST.DeclForeign _ _ (CST.ForeignKind _ (CST.Name { token, name: CST.Proper name })) -> entry name token.range NoConstructors
-            -- [TODO] Add type classes, type aliases, etc.
-            _ -> SemigroupMap $ Map.empty
+            CST.DeclInstanceChain _ -> mempty
+            CST.DeclDerive _ _ _ -> mempty
+            CST.DeclRole _ _ _ _ -> mempty
+            CST.DeclError _ -> mempty
         }
   where
   entry name range ctors = SemigroupMap $ Map.singleton name $ DeclNameInfo { range: sourceRangeToRange range, ctors, name }
