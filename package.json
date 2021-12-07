@@ -1,7 +1,7 @@
 {
   "name": "purescript-language-server",
   "description": "Language Server Protocol server for PureScript wrapping purs ide server functionality",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "publisher": "nwolverson",
   "author": {
     "name": "Nicholas Wolverson"
@@ -30,7 +30,7 @@
   "scripts": {
     "prepare": "run-s install:* build",
     "install:spago": "spago install",
-    "build": "run-s build:tsc build:spago build:bundle-min",
+    "build": "run-s build:tsc build:spago build:bundle",
     "build:tsc": "tsc -p src/LanguageServer/",
     "build:spago": "spago build",
     "build:bundle": "esbuild --bundle --platform=node --outfile=bundle.js ./output/LanguageServer.IdePurescript.Main",

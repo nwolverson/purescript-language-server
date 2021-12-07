@@ -1,6 +1,5 @@
 module LanguageServer.IdePurescript.CodeLens.TopLevelDeclarations
-  ( getDecls
-  , topLevelDeclarationLenses
+  ( topLevelDeclarationLenses
   )
   where
 
@@ -23,7 +22,7 @@ import LanguageServer.IdePurescript.Util (maybeParseResult)
 import LanguageServer.Protocol.Handlers (CodeLensResult)
 import LanguageServer.Protocol.Types (Command(..), DocumentStore, DocumentUri, Position(..), Range(..), Settings)
 import PscIde.Command (TypeInfo(..))
-import PureScript.CST.Types (Declaration(..), Ident(..), Labeled(..), Module(..), ModuleBody(..), ModuleHeader(..), ModuleName(..), Name(..))
+import PureScript.CST.Types (Declaration(..), Expr(..), Guarded(..), Ident(..), Labeled(..), Module(..), ModuleBody(..), ModuleHeader(..), ModuleName(..), Name(..), Where(..))
 
 -- TODO force code lens refresh on server load, full build, consider rebuild even if it is meant to be "global"
 topLevelDeclarationLenses ∷ DocumentStore -> Settings -> ServerState -> DocumentUri -> Aff (Array CodeLensResult)
@@ -68,7 +67,6 @@ topLevelDeclarationLenses _docs _settings (ServerState { port, parsedModules }) 
               ]
         }
 
-
 getDecls :: forall a. Module a -> { moduleName :: String, decls :: Array _ }
 getDecls (Module { header: ModuleHeader { name: Name { name: ModuleName moduleName } }, body: ModuleBody { decls } }) =
   { moduleName, decls: mapMaybe go decls }
@@ -78,6 +76,7 @@ getDecls (Module { header: ModuleHeader { name: Name { name: ModuleName moduleNa
     DeclSignature (Labeled { label: Name { name: Ident name } }) -> Just name
     _ -> Nothing
   go = case _ of
+    DeclValue { guarded: Unconditional _ (Where { expr: ExprTyped _ _ _, bindings: Nothing })}-> Nothing
     DeclValue { name: Name { name: Ident name, token } } | not (name `Set.member` signatures) -> Just { name, range: token.range }
     _ -> Nothing
 

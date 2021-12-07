@@ -7,6 +7,7 @@ module LanguageServer.IdePurescript.Assist
   , fillTypedHole
   , fixTypo
   , fixTypoActions
+  , lineRange'
   )
   where
 

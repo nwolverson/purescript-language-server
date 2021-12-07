@@ -1,5 +1,29 @@
 # Changelog
 
+### 0.16.1
+
+- Fix formatting provider issue with multi-byte characters leading to mangled results
+
+- Fix code lenses stripping data constructor exports (#165) and add code lenses to toggle data constructor exports on/off. Tweak the text of these.
+
+- (Internal) Bundling changes to use esbuild
+
+- Filter code action by requested kind (#154) (possible but likely negligable minor performance improvement, possibility some language client might behave differently)
+
+- Initial goto-defintion for local symbols
+
+  - This provides goto-definition only (so not finding references, for example) for some locally bound identifiers based on the parsed CST
+
+  - Navigate to e.g. arguments of top-level declarations, let bindings and arguments to let-bound functions, bindings in do blocks
+
+  - Known issues/future thoughts:
+    - Goto-defn for top level declarations is still provided by `purs ide` typings, even though we could enable navigation to some more private declarations where type info is not available
+
+    - Let block scoping is not technically correct as the scope boundaries created by pattern bindings are not respected
+
+    - Some binders may be missing, eg record puns 
+
+
 ### 0.16.0
 
 Code lenses added:
