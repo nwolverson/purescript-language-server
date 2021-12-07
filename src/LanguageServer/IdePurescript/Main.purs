@@ -1,6 +1,7 @@
 module LanguageServer.IdePurescript.Main (main) where
 
 import Prelude
+
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise)
 import Control.Promise as Promise
@@ -18,7 +19,7 @@ import Data.String as String
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, try)
+import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, launchAff_, try)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Class (liftEffect)
@@ -49,6 +50,7 @@ import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, 
 import LanguageServer.IdePurescript.Tooltips (getTooltips)
 import LanguageServer.IdePurescript.Types (ServerState(..), CommandHandler)
 import LanguageServer.IdePurescript.Util (launchAffLog)
+import LanguageServer.IdePurescript.WatchedFiles (handleDidChangeWatchedFiles)
 import LanguageServer.Protocol.Console (error, info, log, warn)
 import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidOpenDocument, onDidSaveDocument)
 import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendCleanBegin, sendCleanEnd, sendDiagnosticsBegin, sendDiagnosticsEnd)
@@ -452,22 +454,9 @@ handleEvents config conn state documents logError = do
     $ runHandler
         "onCodeLens" getTextDocUri (getCodeLenses logError state documents)
   onShutdown conn $ Promise.fromAff stopPscIdeServer
-  onDidChangeWatchedFiles conn
-    $ \{ changes } -> do
-        for_ changes \(FileEvent { uri, "type": FileChangeTypeCode n }) -> do
-          case intToFileChangeType n of
-            Just CreatedChangeType ->
-              log conn
-                $ "Created "
-                <> un DocumentUri uri
-                <> " - full build may be required"
-            Just DeletedChangeType ->
-              log conn
-                $ "Deleted "
-                <> un DocumentUri uri
-                <> " - full build may be required"
-
-            _ -> pure unit
+  onDidChangeWatchedFiles
+    conn $ launchAff_ 
+      <<< handleDidChangeWatchedFiles config conn state documents
   onDidChangeContent documents
     $ \{ document } -> do
         v <- getVersion document

@@ -387,6 +387,13 @@ intToFileChangeType = case _ of
   3 -> Just DeletedChangeType
   _ -> Nothing
 
+fromFileChangeTypeCode ∷ FileChangeTypeCode -> Maybe FileChangeType
+fromFileChangeTypeCode = case _ of
+  FileChangeTypeCode 1 -> Just CreatedChangeType
+  FileChangeTypeCode 2 -> Just ChangedChangeType
+  FileChangeTypeCode 3 -> Just DeletedChangeType
+  _ -> Nothing
+
 newtype FileEvent
   = FileEvent { uri :: DocumentUri, type :: FileChangeTypeCode }
 
