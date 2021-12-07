@@ -31,9 +31,7 @@ handleDidChangeWatchedFiles configRef conn stateRef documents { changes } = do
   for_ changes \(FileEvent { uri, "type": fileChangeTypeCode }) -> do
     case fromFileChangeTypeCode fileChangeTypeCode of
       Just CreatedChangeType -> do
-        liftEffect $ log conn $ "CREATED " <> show uri
         handleFileCreated configRef conn stateRef documents uri
-        liftEffect $ log conn  "CREATED DONE"
       Just DeletedChangeType -> do
         liftEffect 
           $ log conn 

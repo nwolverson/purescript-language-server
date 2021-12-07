@@ -56,7 +56,7 @@ import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, o
 import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendCleanBegin, sendCleanEnd, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.Protocol.Setup (InitParams(..), getConfiguration, initConnection, initDocumentStore)
 import LanguageServer.Protocol.TextDocument (getText, getUri, getVersion)
-import LanguageServer.Protocol.Types (Connection, Diagnostic, DocumentStore, DocumentUri(..), FileChangeType(..), FileChangeTypeCode(..), FileEvent(..), Settings, TextDocumentIdentifier(..), intToFileChangeType)
+import LanguageServer.Protocol.Types (Connection, Diagnostic, DocumentStore, DocumentUri(..), Settings, TextDocumentIdentifier(..))
 import LanguageServer.Protocol.Uri (filenameToUri, uriToFilename)
 import LanguageServer.Protocol.Window (createWorkDoneProgress, showError, showWarningWithActions, workBegin, workDone)
 import LanguageServer.Protocol.Workspace (codeLensRefresh)
