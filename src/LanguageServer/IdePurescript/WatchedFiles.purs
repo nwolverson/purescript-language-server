@@ -2,9 +2,10 @@ module LanguageServer.IdePurescript.WatchedFiles where
 
 import Prelude
 
+import Data.Array ((!!), (:))
 import Data.Array as Array
 import Data.Foldable (for_)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (un)
 import Data.String as String
 import Effect.Aff (Aff)
@@ -74,9 +75,12 @@ inferModuleName (DocumentUri uri) = ado
 -- | Then glues them together with a dot
 -- | Expects a string that has no ".purs" extension
 moduleNameFromFolderStructure ∷ String -> String
-moduleNameFromFolderStructure =
-  String.split (String.Pattern "/")
-    >>> Array.reverse
-    >>> Array.takeWhile startsWithCapitalLetter
-    >>> Array.reverse
-    >>> String.joinWith "."
+moduleNameFromFolderStructure path =
+  let
+    dirs = String.split (String.Pattern "/") path
+    parentIndex = fromMaybe (-1) $ Array.findLastIndex (not <<< startsWithCapitalLetter) dirs
+    parts = Array.drop (parentIndex + 1) dirs
+    parts' = case dirs !! parentIndex of
+              Just "test" | parts !! 0 /= Just "Test" -> "Test" : parts
+              _ -> parts
+  in String.joinWith "." parts'
