@@ -12,6 +12,7 @@ import Data.Array (catMaybes, concat, filter, foldl, head, length, mapMaybe, nub
 import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
+import Data.Map as Map
 import Data.Newtype (un)
 import Data.Nullable as Nullable
 import Data.String (Pattern(..))
@@ -24,7 +25,6 @@ import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign (F, Foreign, readArray, readString)
 import Foreign.Index ((!))
-import Foreign.Object as Object
 import IdePurescript.QuickFix (getTitle, isImport, isUnknownToken, wildcardInferredType)
 import IdePurescript.Regex (replace')
 import LanguageServer.IdePurescript.Assist (fixTypoActions)
@@ -37,15 +37,12 @@ import LanguageServer.Protocol.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.Protocol.Text (makeWorkspaceEdit)
 import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVersion)
 import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind(..), CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionEmpty, codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
-import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVersion)
-import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind(..), CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionEmpty, codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
-import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array CodeActionResult)
 getActions documents settings state@(ServerState { diagnostics, conn: Just _conn, clientCapabilities }) { textDocument, range, context: { only }  } =
-  case Object.lookup (un DocumentUri $ docUri) diagnostics of
-    Just errs ->
+  case Map.lookup docUri diagnostics of
+    Just { errors: errs } ->
       mapMaybe (codeActionToCommand clientCapabilities)
         <$> do
             codeActions :: Array (Array CodeAction) <- traverse commandForCode errs
@@ -199,7 +196,7 @@ onReplaceSuggestion docs _ (ServerState { conn, clientCapabilities }) args =
 getReplacementEdit :: TextDocument -> Replacement -> Aff TextEdit
 getReplacementEdit doc { replacement, range } = do
   afterText <- liftEffect $ replace' (regex "\n$" noFlags) "" <$> getTextAtRange doc (afterEnd range)
-  let 
+  let
   -- trim spaces at the end of lines
     replacementTrimSpaces =  replace' (regex "\\s+\n" RegexFlags.global) "\n" replacement
   -- remove trailing newline (inserting changes midway through line - eg _ fix)

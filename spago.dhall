@@ -27,6 +27,8 @@ You can edit this file as you like.
   , "foreign-generic"
   , "foreign-object"
   , "integers"
+  , "js-date"
+  , "js-timers"
   , "language-cst-parser"
   , "lists"
   , "maybe"
@@ -41,6 +43,7 @@ You can edit this file as you like.
   , "nonempty"
   , "nullable"
   , "ordered-collections"
+  , "parallel"
   , "prelude"
   , "profunctor"
   , "profunctor-lenses"
@@ -53,7 +56,6 @@ You can edit this file as you like.
   , "transformers"
   , "tuples"
   , "unsafe-coerce"
-  , "untagged-union"
   , "uuid"
   ]
 , packages = ./packages.dhall

@@ -11,6 +11,7 @@ import Data.Maybe (maybe, Maybe(..))
 import Data.String (Pattern(Pattern), indexOf, joinWith, split)
 import Data.String as String
 import Data.Traversable (traverse_)
+import Debug (spy)
 import Effect (Effect)
 import Effect.Aff (Aff, error, makeAff)
 import Effect.Class (liftEffect)
@@ -62,7 +63,7 @@ spawn { command: Command cmd args, directory, useNpmDir } = do
       pure $ Just $ Object.insert (getPathProp env) (either identity identity pathVar) env
     else
       pure Nothing
-  CP.spawn cmd args (CP.defaultSpawnOptions { cwd = Just directory, env = env })
+  CP.spawn cmd args (CP.defaultSpawnOptions { cwd = Just directory, env = env, shell = true })
 
 -- Spawn with npm path, "which" call (windows support) and version info gathering
 spawnWithVersion :: BuildOptions -> Aff { cmdBins :: Array Executable, cp :: Maybe ChildProcess }
@@ -131,9 +132,9 @@ build logCb buildOptions@{ command: Command cmd args } = do
               )
         pure mempty
 
-rebuild :: Int -> String -> Maybe (Array CodegenTarget) -> Aff BuildResult
-rebuild port file targets = do
-  res <- P.rebuild port file (Just file) targets
+rebuild :: Int -> String -> Maybe String -> Maybe (Array CodegenTarget) -> Aff BuildResult
+rebuild port file actualFile targets = do
+  res <- P.rebuild port file actualFile targets
   either
     (throwError <<< error)
     (pure <<< onResult)
