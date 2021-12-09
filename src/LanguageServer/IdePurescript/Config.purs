@@ -15,6 +15,7 @@ module LanguageServer.IdePurescript.Config
   , codegenTargets
   , cacheDbRevertTimeout
   , declarationTypeCodeLens
+  , diagnosticsCodegen
   , diagnosticsOnType
   , diagnosticsOnTypeDebounce
   , diagnosticsOnOpen
@@ -159,6 +160,9 @@ diagnosticsOnOpen = getBoolean "diagnosticsOnOpen" false
 
 diagnosticsOnTypeDebounce :: ConfigFn Int
 diagnosticsOnTypeDebounce = getInt "diagnosticsOnTypeDebounce" 100
+
+diagnosticsCodegen :: ConfigFn Boolean
+diagnosticsCodegen = getBoolean "diagnosticsCodegen" false
 
 -- This flag works only with experimental compiler version
 -- that will not update externs and can accept module source without files

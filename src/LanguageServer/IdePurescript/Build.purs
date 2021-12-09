@@ -454,7 +454,7 @@ getDestFiles :: String -> ForeignExt -> Aff DestFiles
 getDestFiles filename (ForeignExt foreignExt) = do
   tmpDir <- liftEffect $ getOsTmpDir
   foreignFile <-
-    case mbForeign of
+    case foreignPath of
       Just fp ->
         FS.exists fp
           <#> \exists -> if exists then Just fp else Nothing
@@ -473,7 +473,9 @@ getDestFiles filename (ForeignExt foreignExt) = do
     }
   where
   hash = (getHash filename)
-  mbForeign = String.stripSuffix (String.Pattern ".purs") filename <#> ((<>) foreignExt)
+  foreignPath =
+    String.stripSuffix (String.Pattern ".purs") filename
+      <#> (flip (<>) foreignExt)
 
 hasSevereErrors :: PscResult -> Boolean
 hasSevereErrors (PscResult { errors }) =
@@ -503,7 +505,12 @@ Currently the problem with ide rebuild:
 getDiagnosticsOnType ::
   TextDocument -> Settings -> ServerState -> (Maybe ModuleName) -> Aff DiagnosticResult
 getDiagnosticsOnType document cfg state moduleName = do
-  let targets = Just []
+  let
+    targets =
+      if Config.diagnosticsCodegen cfg then
+        Config.codegenTargets cfg
+      else
+        Just []
   let uri = getUri document
   case state of
     ServerState { port: Just port, root: Just root } -> do
