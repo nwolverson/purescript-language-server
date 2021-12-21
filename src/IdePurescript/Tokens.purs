@@ -32,10 +32,10 @@ identifierAtPoint :: String -> Int -> Maybe { word :: String, range :: WordRange
 identifierAtPoint line column =
   go $ TokenStream.step $ CST.Lexer.lex line
   where
-  go (TokenStream.TokenCons tok@{ range: { start: { column: startCol }, end: { column: endCol } }, value } _ str _) =
+  go (TokenStream.TokenCons { range: { start: { column: startCol }, end: { column: endCol } }, value } _ str _) =
     if column < startCol then
       Nothing
-    else if column > endCol then
+    else if column >= endCol then
       go $ TokenStream.step str
     else
       let
