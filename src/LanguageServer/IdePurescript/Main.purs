@@ -37,6 +37,7 @@ import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, launchRebu
 import LanguageServer.IdePurescript.Clean (clean)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
 import LanguageServer.IdePurescript.CodeLenses (getCodeLenses)
+import LanguageServer.IdePurescript.CodeLenses as CodeLenses
 import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cleanCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, sortImportsCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
 import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config as Config
@@ -262,7 +263,9 @@ mkStartPscIdeServer config conn state documents logError = do
         Ref.modify_
           (over ServerState $ _ { port = Just port, deactivate = quit })
           state
-        codeLensRefresh conn
+        ServerState { clientCapabilities } <- liftEffect $ Ref.read state
+        when (CodeLenses.supportsRefresh clientCapabilities) do
+          codeLensRefresh conn
     _ -> pure unit
   liftEffect $ workDone progressReporter
   liftEffect $ buildDocumentsInQueue config conn state logError
