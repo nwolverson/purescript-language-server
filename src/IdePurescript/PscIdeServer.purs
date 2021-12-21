@@ -158,7 +158,7 @@ startServer logCb { exe, combinedExe, glob, logLevel, outputDirectory, port: con
   joinServer :: Int -> Maybe Int -> String -> Aff ServerStartResult
   joinServer port launchPort message = do
     workingDir <- attempt $ PscIde.cwd port
-    liftEffect $ logCb Info $ message <> ": " <> show port <> (either (const "") (", cwd: " <> _) workingDir)
+    liftEffect $ logCb Info $ message <> ": " <> show port <> (either (const " (couldn't connect to existing server)") (", cwd: " <> _) workingDir)
     either (const $ launchServer launchPort) (gotPath port) workingDir
 
   launchServer connectPort = do
