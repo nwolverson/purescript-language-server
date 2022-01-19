@@ -13,13 +13,14 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toMaybe, toNullable)
+import Data.Nullable as Nullable
 import Data.Profunctor.Strong (first)
 import Data.String (Pattern(..), contains)
 import Data.String as String
-import Data.Traversable (traverse)
+import Data.Traversable (for, traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, launchAff_, try)
+import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, try)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Class (liftEffect)
@@ -119,15 +120,15 @@ updateModules state documents uri =
     >>= case _ of
         ServerState { port: Just port, modulesFile }
           | modulesFile /= Just uri -> do
-            text <- liftEffect $ getDocument documents uri >>= getText
-            path <- liftEffect $ uriToFilename uri
-            modules <- getModulesForFileTemp port path text
-            s <-
+            maybeDoc <- liftEffect $ getDocument documents uri
+            for (Nullable.toMaybe maybeDoc) \doc -> do
+              text <- liftEffect $ getText doc
+              path <- liftEffect $ uriToFilename uri
+              modules <- getModulesForFileTemp port path text
               liftEffect
                 $ Ref.modify
                     (over ServerState (_ { modules = modules, modulesFile = Just uri }))
                     state
-            pure $ Just s
         _ -> pure Nothing
 
 mkRunHandler ::
@@ -458,8 +459,9 @@ handleEvents config conn state documents logError = do
         "onCodeLens" getTextDocUri (getCodeLenses logError state documents)
   onShutdown conn $ Promise.fromAff stopPscIdeServer
   onDidChangeWatchedFiles
-    conn $ launchAff_ 
-      <<< handleDidChangeWatchedFiles config conn state documents
+    conn
+    $ launchAff
+    <<< handleDidChangeWatchedFiles config conn state documents
   onDidChangeContent documents
     $ \{ document } -> do
         v <- getVersion document

@@ -19,6 +19,7 @@ import Data.Foldable (all, for_)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (un, unwrap)
 import Data.Nullable (toNullable)
+import Data.Nullable as Nullable
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign (Foreign, readString, unsafeToForeign)
@@ -30,7 +31,7 @@ import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (applyEdit)
 import LanguageServer.Protocol.Text (makeMinimalWorkspaceEdit)
-import LanguageServer.Protocol.TextDocument (TextDocument, getText, getVersion)
+import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtVersion)
 import LanguageServer.Protocol.Types (DocumentStore, DocumentUri(DocumentUri), Settings, WorkspaceEdit)
 import LanguageServer.Protocol.Uri (uriToFilename)
 import LanguageServer.Protocol.Window as Window
@@ -45,17 +46,19 @@ addCompletionImport' existingEdit log docs config state@(ServerState { conn }) a
   case conn, (runExcept <<< readString) <$> args, shouldAddImport of
     Just conn', [ Right identifier, mod, qual, Right uriRaw, Right ns ], true -> do
       let uri = DocumentUri uriRaw
-      doc <- liftEffect $ getDocument docs uri
-      version <- liftEffect $ getVersion doc
-      text <- liftEffect $ getText doc
-      edit <- addCompletionImportEdit log docs config state { identifier, mod: hush mod, qual: hush qual, uri } doc version text (parseNS ns)
-      case edit of
-        Right edits -> do
-          void $ applyEdit conn' (fold $ existingEdit : edits)
-          pure $ unsafeToForeign $ toNullable Nothing
-        Left res -> do
-          void $ applyEdit conn' existingEdit
-          pure res
+      maybeDoc <- liftEffect $ getDocument docs uri
+      case Nullable.toMaybe maybeDoc of
+        Nothing -> pure $ unsafeToForeign $ toNullable Nothing
+        Just doc -> do
+          { text, version } <- liftEffect $ getTextAtVersion doc
+          edit <- addCompletionImportEdit log docs config state { identifier, mod: hush mod, qual: hush qual, uri } doc version text (parseNS ns)
+          case edit of
+            Right edits -> do
+              void $ applyEdit conn' (fold $ existingEdit : edits)
+              pure $ unsafeToForeign $ toNullable Nothing
+            Left res -> do
+              void $ applyEdit conn' existingEdit
+              pure res
     Just conn', _, _ -> do
       void $ applyEdit conn' existingEdit
       pure $ unsafeToForeign $ toNullable Nothing
@@ -145,33 +148,35 @@ addModuleImport' log docs config state args = do
   let ServerState { port, modules, conn, clientCapabilities } = state
   case port, (runExcept <<< readString) <$> args of
     Just port', [ Right mod', qual', Right uri ] -> do
-      doc <- liftEffect $ getDocument docs (DocumentUri uri)
-      version <- liftEffect $ getVersion doc
-      text <- liftEffect $ getText doc
-      fileName <- liftEffect $ uriToFilename $ DocumentUri uri
-      edit <- case qual' of
-        Right _ ->
-          addCompletionImportEdit log docs config state
-            { identifier: ""
-            , qual: hush qual'
-            , mod: Just mod'
-            , uri: DocumentUri uri
-            }
-            doc
-            version
-            text
-            Nothing
-        Left _ -> do
-          { result: res } <- addModuleImport modules port' fileName text mod'
-          case res of
-            UpdatedImports result -> do
-              pure $ Right $ fromFoldable $ makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
-            _ -> pure $ Right []
-      case conn, edit of
-        Just conn', Right edits -> do
-          void $ applyEdit conn' (fold edits)
-        _, _ -> pure unit
-      pure successResult
+      maybeDoc <- liftEffect $ getDocument docs (DocumentUri uri)
+      case Nullable.toMaybe maybeDoc of
+        Nothing -> pure successResult
+        Just doc -> do 
+          { text, version } <- liftEffect $ getTextAtVersion doc
+          fileName <- liftEffect $ uriToFilename $ DocumentUri uri
+          edit <- case qual' of
+            Right _ ->
+              addCompletionImportEdit log docs config state
+                { identifier: ""
+                , qual: hush qual'
+                , mod: Just mod'
+                , uri: DocumentUri uri
+                }
+                doc
+                version
+                text
+                Nothing
+            Left _ -> do
+              { result: res } <- addModuleImport modules port' fileName text mod'
+              case res of
+                UpdatedImports result -> do
+                  pure $ Right $ fromFoldable $ makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
+                _ -> pure $ Right []
+          case conn, edit of
+            Just conn', Right edits -> do
+              void $ applyEdit conn' (fold edits)
+            _, _ -> pure unit
+          pure successResult
 
     _, args' -> do
       liftEffect $ log Info $ show args'
@@ -194,19 +199,21 @@ reformatImports log docs _ state args = do
   let ServerState { port, modules, conn, clientCapabilities } = state
   case port, (runExcept <<< readString) <$> args of
     Just port', [ Right uri ] -> do
-      doc <- liftEffect $ getDocument docs (DocumentUri uri)
-      version <- liftEffect $ getVersion doc
-      text <- liftEffect $ getText doc
-      fileName <- liftEffect $ uriToFilename $ DocumentUri uri
-      res <- reformatModuleImports log modules port' fileName text
-      case res of
-        Just { result } -> do
-          let edit = makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
-          case conn, edit of
-            Just conn', Just edit' -> void $ applyEdit conn' edit'
-            _, _ -> pure unit
-        _ -> pure unit
-      pure successResult
+      maybeDoc <- liftEffect $ getDocument docs (DocumentUri uri)
+      case Nullable.toMaybe maybeDoc of
+        Nothing -> pure successResult
+        Just doc -> do
+          { version, text } <- liftEffect $ getTextAtVersion doc
+          fileName <- liftEffect $ uriToFilename $ DocumentUri uri
+          res <- reformatModuleImports log modules port' fileName text
+          case res of
+            Just { result } -> do
+              let edit = makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
+              case conn, edit of
+                Just conn', Just edit' -> void $ applyEdit conn' edit'
+                _, _ -> pure unit
+            _ -> pure unit
+          pure successResult
 
     _, args' -> do
       liftEffect $ log Info $ show args'

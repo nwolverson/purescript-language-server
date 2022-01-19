@@ -9,6 +9,7 @@ import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Foldable (length)
 import Data.Maybe (Maybe(..))
+import Data.Nullable as Nullable
 import Data.String.Utils (lines)
 import Effect (Effect)
 import Effect.Aff (Aff, attempt, makeAff)
@@ -38,12 +39,16 @@ getFormattedDocument logCb docs settings serverState { textDocument: TextDocumen
   case Config.formatter settings of
     NoFormatter -> pure []
     formatter -> do
-      text <- liftEffect $ getText =<< getDocument docs textDocId.uri
-      newTextEither <- attempt $ format logCb settings serverState formatter text
-      case newTextEither of
-        Left err -> liftEffect (logCb Error $ show err) $> []
-        Right "" -> pure []
-        Right newText -> pure [ mkTextEdit text newText ]
+      maybeDoc <- liftEffect $ Nullable.toMaybe <$> getDocument docs textDocId.uri
+      case maybeDoc of
+        Nothing -> pure []
+        Just doc -> do
+          text <- liftEffect $ getText doc
+          newTextEither <- attempt $ format logCb settings serverState formatter text
+          case newTextEither of
+            Left err -> liftEffect (logCb Error $ show err) $> []
+            Right "" -> pure []
+            Right newText -> pure [ mkTextEdit text newText ]
 
 purtyCommand :: Command
 purtyCommand = Command "purty" [ "format", "-" ]

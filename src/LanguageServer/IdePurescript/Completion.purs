@@ -4,12 +4,14 @@ module LanguageServer.IdePurescript.Completion
   where
 
 import Prelude
+
 import Data.Array (filter, mapMaybe)
 import Data.Array (length, null) as Arr
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toNullable)
+import Data.Nullable as Nullable
 import Data.String (Pattern(..), Replacement(..), indexOf, joinWith, length, replaceAll, split, toUpper)
 import Data.String.Utils (toCharArray)
 import Effect.Aff (Aff)
@@ -19,14 +21,14 @@ import IdePurescript.Modules (State, getAllActiveModules, getModuleFromUnknownQu
 import IdePurescript.Modules as Modules
 import IdePurescript.PscIde (getLoadedModules)
 import IdePurescript.PscIdeServer (Notify)
-import LanguageServer.Protocol.DocumentStore (getDocument)
-import LanguageServer.Protocol.Handlers (TextDocumentPositionParams)
 import LanguageServer.IdePurescript.Commands (addCompletionImport)
 import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.IdePurescript.Imports (showNS)
 import LanguageServer.IdePurescript.SuggestionRank (Ranking(..), cmapRanking)
 import LanguageServer.IdePurescript.SuggestionRank as SuggestionRank
 import LanguageServer.IdePurescript.Types (ServerState)
+import LanguageServer.Protocol.DocumentStore (getDocument)
+import LanguageServer.Protocol.Handlers (TextDocumentPositionParams)
 import LanguageServer.Protocol.TextDocument (getTextAtRange)
 import LanguageServer.Protocol.Types (CompletionItem(..), CompletionItemLabelDetails(..), CompletionItemList(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, markupContent)
 import LanguageServer.Protocol.Types as LS
@@ -35,37 +37,38 @@ getCompletions :: Notify -> DocumentStore -> Settings -> ServerState -> TextDocu
 getCompletions notify docs settings state ({ textDocument, position }) = do
   let uri = _.uri $ un TextDocumentIdentifier textDocument
   doc <- liftEffect $ getDocument docs uri
-  line <- liftEffect $ getTextAtRange doc (mkRange position)
-  let
-    autoCompleteAllModules = Config.autoCompleteAllModules settings
-    { port, modules } = unwrap state
-    getQualifiedModule = (flip getQualModule) modules
-  case port of
-    Just port' -> do
-      usedModules <-
-        if autoCompleteAllModules then
-          getLoadedModules port'
-        else
-          pure $ getUnqualActiveModules modules Nothing
-      let qualifiers = mapMaybe (\(Modules.Module { moduleName, qualifier }) -> { moduleName, qualifier: _ } <$> qualifier) modules.modules
-      { results, isIncomplete } <-
-        getSuggestions notify port'
-          { line
-          , moduleInfo:
-              { modules: usedModules
-              , openModules: getUnqualActiveModules modules Nothing
-              , candidateModules: getUnqualActiveModules modules <<< Just
-              , getQualifiedModule
-              , mainModule: modules.main
-              , importedModules: getAllActiveModules modules
-              }
-          , qualifiers
-          , maxResults: Config.autocompleteLimit settings
-          , groupCompletions: Config.autocompleteGrouped settings
-          , preferredModules: Config.importsPreferredModules settings
-          }
-      pure $ CompletionItemList { items: convert uri <$> results, isIncomplete }
-    _ -> pure $ result []
+  Nullable.toMaybe doc # maybe (pure $ result []) \doc -> do
+    line <- liftEffect $ getTextAtRange doc (mkRange position)
+    let
+      autoCompleteAllModules = Config.autoCompleteAllModules settings
+      { port, modules } = unwrap state
+      getQualifiedModule = (flip getQualModule) modules
+    case port of
+      Just port' -> do
+        usedModules <-
+          if autoCompleteAllModules then
+            getLoadedModules port'
+          else
+            pure $ getUnqualActiveModules modules Nothing
+        let qualifiers = mapMaybe (\(Modules.Module { moduleName, qualifier }) -> { moduleName, qualifier: _ } <$> qualifier) modules.modules
+        { results, isIncomplete } <-
+          getSuggestions notify port'
+            { line
+            , moduleInfo:
+                { modules: usedModules
+                , openModules: getUnqualActiveModules modules Nothing
+                , candidateModules: getUnqualActiveModules modules <<< Just
+                , getQualifiedModule
+                , mainModule: modules.main
+                , importedModules: getAllActiveModules modules
+                }
+            , qualifiers
+            , maxResults: Config.autocompleteLimit settings
+            , groupCompletions: Config.autocompleteGrouped settings
+            , preferredModules: Config.importsPreferredModules settings
+            }
+        pure $ CompletionItemList { items: convert uri <$> results, isIncomplete }
+      _ -> pure $ result []
 
   where
   result arr =

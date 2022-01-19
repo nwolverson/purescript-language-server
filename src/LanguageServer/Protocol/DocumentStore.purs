@@ -1,13 +1,15 @@
 module LanguageServer.Protocol.DocumentStore where
 
 import Prelude
+
+import Data.Nullable (Nullable)
 import Effect (Effect)
 import LanguageServer.Protocol.TextDocument (TextDocument)
 import LanguageServer.Protocol.Types (DocumentStore, DocumentUri)
 
 foreign import getDocuments :: DocumentStore -> Effect (Array TextDocument)
 
-foreign import getDocument :: DocumentStore -> DocumentUri -> Effect TextDocument
+foreign import getDocument :: DocumentStore -> DocumentUri -> Effect (Nullable TextDocument)
 
 type TextDocumentChangeEvent
   = { document :: TextDocument }
