@@ -28,14 +28,6 @@ jobs:
       - name: Build source
         run: npm run-script build
 
-      - name: Prepare Bundled JS
-        run: |
-          npm install -g parcel
-          mv server.js server.unbundled.js
-          parcel build server.unbundled.js
-          echo "#!/usr/bin/env node" > bundle.js
-          cat server.js >> bundle.js
-
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
