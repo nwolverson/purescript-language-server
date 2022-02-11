@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "ES5",    
+    "module": "ESNext",
+    "target": "ES5",
+    "moduleResolution": "NodeNext",
     "sourceMap": false,
     "noImplicitAny": true,
     "newLine": "LF",

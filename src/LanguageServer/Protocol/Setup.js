@@ -1,12 +1,9 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getConfigurationImpl = exports.initDocumentStore = exports.initConnection = void 0;
-var node_1 = require("vscode-languageserver/node");
-var vscode_languageserver_textdocument_1 = require("vscode-languageserver-textdocument");
-var initConnection = function (commands) {
+import { createConnection, TextDocuments, TextDocumentSyncKind, CodeActionKind } from "vscode-languageserver/node";
+import { TextDocument } from "vscode-languageserver-textdocument";
+export var initConnection = function (commands) {
     return function (cb) {
         return function () {
-            var conn = (0, node_1.createConnection)();
+            var conn = createConnection();
             conn.listen();
             conn.onInitialize(function (params) {
                 conn.console.info(JSON.stringify(params));
@@ -17,7 +14,7 @@ var initConnection = function (commands) {
                 return {
                     capabilities: {
                         // Tell the client that the server works in FULL text document sync mode
-                        textDocumentSync: node_1.TextDocumentSyncKind.Full,
+                        textDocumentSync: TextDocumentSyncKind.Full,
                         // Tell the client that the server support code complete
                         completionProvider: {
                             resolveProvider: false,
@@ -32,11 +29,11 @@ var initConnection = function (commands) {
                         documentSymbolProvider: true,
                         codeActionProvider: {
                             codeActionKinds: [
-                                node_1.CodeActionKind.Empty,
-                                node_1.CodeActionKind.SourceOrganizeImports,
+                                CodeActionKind.Empty,
+                                CodeActionKind.SourceOrganizeImports,
                                 "source.sortImports",
-                                node_1.CodeActionKind.SourceFixAll,
-                                node_1.CodeActionKind.Source,
+                                CodeActionKind.SourceFixAll,
+                                CodeActionKind.Source,
                             ],
                         },
                         executeCommandProvider: (params.initializationOptions || {})
@@ -55,16 +52,13 @@ var initConnection = function (commands) {
         };
     };
 };
-exports.initConnection = initConnection;
-var initDocumentStore = function (conn) { return function () {
-    var documents = new node_1.TextDocuments(vscode_languageserver_textdocument_1.TextDocument);
+export var initDocumentStore = function (conn) { return function () {
+    var documents = new TextDocuments(TextDocument);
     documents.listen(conn);
     return documents;
 }; };
-exports.initDocumentStore = initDocumentStore;
-var getConfigurationImpl = function (conn) { return function () {
+export var getConfigurationImpl = function (conn) { return function () {
     return conn.workspace.getConfiguration("purescript").then(function (config) {
         return { purescript: config };
     });
 }; };
-exports.getConfigurationImpl = getConfigurationImpl;

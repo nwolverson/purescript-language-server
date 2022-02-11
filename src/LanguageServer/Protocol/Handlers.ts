@@ -15,8 +15,7 @@ let registerHandler =
   () =>
     registerF((x) => f(x)());
 
-// For some reason this is getting deleted by DCE even though it is used and the same form as the others...
-export let registerHandler0 =
+let registerHandler0 =
   <T>(registerF: (handler: RequestHandler0<T, void>) => void) =>
   (f: () => T) =>
   () =>

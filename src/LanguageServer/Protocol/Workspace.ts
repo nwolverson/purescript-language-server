@@ -1,7 +1,7 @@
 import {
   CodeLensRefreshRequest,
   Connection,
-  MessageActionItem,
+  MessageActionItem
 } from "vscode-languageserver/node";
 
 export const codeLensRefresh = (conn: Connection) => () =>

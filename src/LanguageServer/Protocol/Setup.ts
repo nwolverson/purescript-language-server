@@ -5,7 +5,7 @@ import {
   TextDocuments,
   TextDocumentSyncKind,
   CodeActionKind,
-  LSPObject,
+  LSPObject
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
