@@ -2,13 +2,13 @@ module LanguageServer.IdePurescript.Build
   ( collectByFirst
   , fullBuild
   , launchRebuildAndSendDiagnostics
+  , maybeRebuildAndSendDiagnostics
   , positionToRange
   , rebuildAndSendDiagnostics
   )
   where
 
 import Prelude
-
 import Data.Array (filter, mapMaybe, notElem, uncons)
 import Data.Array as Array
 import Data.Either (Either(..), either)
@@ -18,7 +18,7 @@ import Data.Nullable (toNullable)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Aff (Aff, attempt)
+import Effect.Aff (Aff, attempt, catchError, finally, joinFiber, suspendAff)
 import Effect.Class (liftEffect)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
@@ -175,7 +175,6 @@ rebuildAndSendDiagnostics config conn state notify document = do
                 s1
                   { diagnostics = Object.insert (un DocumentUri uri) pscErrors (s1.diagnostics)
                   , modulesFile = Nothing -- Force reload of modules on next request
-                  , runningRebuild = Nothing
                   }
             )
             s
@@ -187,6 +186,36 @@ rebuildAndSendDiagnostics config conn state notify document = do
         }
       sendDiagnosticsEnd conn
 
+-- | As `rebuildAndSendDiagnostics` but only allow one running rebuild at once, saving the fiber of the currently running rebuild in state
+maybeRebuildAndSendDiagnostics ::
+  Ref Foreign ->
+  Connection ->
+  Ref ServerState ->
+  Notify ->
+  TextDocument ->
+  Aff Boolean
+maybeRebuildAndSendDiagnostics config conn state notify document = do
+  runningRebuild <- liftEffect $ (_.runningRebuild <<< un ServerState) <$> Ref.read state
+  version <- liftEffect $ getVersion document
+  let documentUri = getUri document
+  liftEffect $ notify Info $ "Running rebuild: " <> maybe "None" (\{ uri, version } -> show { uri, version }) runningRebuild
+  case runningRebuild of
+    Just _rebuildFiber -> do
+      -- TODO or requeue after the fiber completes ? Cancel ?
+      liftEffect $ notify Info $ "Rebuild requested for " <> show documentUri <> " when already running one, ignoring"
+      pure false
+    Nothing -> do
+      fiber <-
+        suspendAff
+          $ finally (liftEffect $ Ref.modify_ (over ServerState $ _ { runningRebuild = Nothing }) state)
+              (rebuildAndSendDiagnostics config conn state notify document)
+      liftEffect do
+        notify Info "Launched rebuild run"
+        Ref.modify_ (over ServerState $ _ { runningRebuild = Just { fiber, uri: documentUri, version } }) state
+      joinFiber fiber
+      pure true
+
+-- | See `maybeRebuildAndSendDiagnostics`
 launchRebuildAndSendDiagnostics ::
   Ref Foreign ->
   Connection ->
@@ -194,20 +223,4 @@ launchRebuildAndSendDiagnostics ::
   Notify ->
   TextDocument ->
   Effect Unit
-launchRebuildAndSendDiagnostics config conn state notify document = do
-  runningRebuild <- (_.runningRebuild <<< un ServerState) <$> Ref.read state
-  version <- getVersion document
-  let documentUri = getUri document
-  notify Info $ "Running rebuild: " <> maybe "None" (\{ uri, version } -> show {uri, version }) runningRebuild
-  case runningRebuild of
-    Just _rebuildFiber -> do
-      -- TODO or requeue after the fiber completes ? Cancel ?
-      notify Info $ "Rebuild requested for " <> show documentUri <> " when already running one, ignoring"
-      pure unit
-    Nothing -> do
-      fiber <- launchAffLog notify $ rebuildAndSendDiagnostics config conn state notify document
-      Ref.modify_
-        ( over ServerState
-            $ _ { runningRebuild = Just { fiber, uri: documentUri, version } }
-        )
-        state
+launchRebuildAndSendDiagnostics config conn state notify document = void $ launchAffLog notify $ maybeRebuildAndSendDiagnostics config conn state notify document
