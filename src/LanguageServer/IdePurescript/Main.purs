@@ -189,7 +189,7 @@ mkStopPscIdeServer state logError = do
   quit
   liftEffect do
     Ref.modify_
-      (over ServerState $ _ { port = Nothing, deactivate = pure unit })
+      (over ServerState $ _ { port = Nothing, deactivate = pure unit, modules = initialModulesState, runningRebuild = Nothing })
       state
     logError Success "Stopped IDE server"
 
