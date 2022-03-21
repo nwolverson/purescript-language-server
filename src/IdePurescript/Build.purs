@@ -7,7 +7,7 @@ import Data.Array (intercalate, uncons, (:))
 import Data.Array as Array
 import Data.Bifunctor (bimap)
 import Data.Either (either, Either(..))
-import Data.Maybe (maybe, Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.String (Pattern(Pattern), indexOf, joinWith, split)
 import Data.String as String
 import Data.Traversable (traverse_)
@@ -18,7 +18,7 @@ import Effect.Exception (catchException)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Foreign.Object as Object
-import IdePurescript.Exec (findBins, getPathVar)
+import IdePurescript.Exec (findBins, getPathVar, whichSync)
 import IdePurescript.PscErrors (PscResult(..), parsePscOutput)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import Node.Buffer (Buffer)
@@ -52,17 +52,18 @@ getPathProp :: Object.Object String -> String
 getPathProp env =
   if Object.member "PATH" env then "PATH" else "Path"
 
--- Spawn with npm path, NO support for windows PATHEXT
 spawn :: BuildOptions -> Effect ChildProcess
 spawn { command: Command cmd args, directory, useNpmDir } = do
-  env <-
+  { env, path } <-
     if useNpmDir then do
       pathVar <- getPathVar useNpmDir directory
       env <- getEnv
-      pure $ Just $ Object.insert (getPathProp env) (either identity identity pathVar) env
+      pure { env: Just $ Object.insert (getPathProp env) (either identity identity pathVar) env, path: either (const Nothing) Just pathVar }
     else
-      pure Nothing
-  CP.spawn cmd args (CP.defaultSpawnOptions { cwd = Just directory, env = env })
+      pure { env: Nothing, path: Nothing }
+  
+  cmd' <- (fromMaybe cmd <<< Array.head) <$> whichSync { path, pathExt: Nothing } cmd
+  CP.spawn cmd' args (CP.defaultSpawnOptions { cwd = Just directory, env = env })
 
 -- Spawn with npm path, "which" call (windows support) and version info gathering
 spawnWithVersion :: BuildOptions -> Aff { cmdBins :: Array Executable, cp :: Maybe ChildProcess }

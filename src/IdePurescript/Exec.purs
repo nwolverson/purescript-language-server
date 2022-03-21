@@ -1,9 +1,13 @@
-module IdePurescript.Exec where
+module IdePurescript.Exec
+
+where
 
 import Prelude
+
 import Control.Alt ((<|>))
 import Data.Either (either, Either(..))
 import Data.Maybe (fromMaybe, maybe, Maybe(..))
+import Data.Nullable (Nullable, toNullable)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
@@ -40,3 +44,11 @@ getPathVar addNpmBin rootDir = do
 addNpmBinPath :: String -> Maybe String -> String
 addNpmBinPath rootDir path =
   Path.concat [ rootDir, "node_modules", ".bin" ] <> (maybe "" (Path.delimiter <> _) path)
+
+foreign import whichSyncImpl ::
+  { path :: Nullable String, pathExt :: Nullable String } ->
+  String ->
+  Effect (Array String)
+
+whichSync :: { path :: Maybe String, pathExt :: Maybe String } -> String -> Effect (Array String)
+whichSync { path, pathExt } = whichSyncImpl { path: toNullable path, pathExt: toNullable pathExt }
