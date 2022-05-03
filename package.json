@@ -26,7 +26,7 @@
     "build": "run-s build:tsc build:spago build:bundle-nodeps build:bundle-deps",
     "build:tsc": "tsc -p src/LanguageServer/",
     "build:spago": "spago build",
-    "build:bundle": "esbuild --bundle --platform=node main.js --banner:js='#!/usr/bin/env node'",
+    "build:bundle": "esbuild --bundle --platform=node main.js --banner:js=\"#!/usr/bin/env node\"",
     "build:bundle-nodeps": "npm run build:bundle -- --outfile=server.js --external:shell-quote --external:uuid --external:vscode-jsonrpc --external:vscode-languageserver --external:vscode-languageserver-textdocument --external:vscode-uri --external:which",
     "build:bundle-deps": "npm run build:bundle -- --outfile=bundle.js ",
     "watch:bundle": "npm run build:bundle-nodeps -- --watch",
