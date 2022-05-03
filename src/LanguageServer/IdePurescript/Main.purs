@@ -23,7 +23,7 @@ import Data.Traversable (for, traverse)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, try)
+import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, launchAff_, try)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Class (liftEffect)
@@ -57,7 +57,7 @@ import LanguageServer.IdePurescript.Types (CommandHandler, ServerState(..), Serv
 import LanguageServer.IdePurescript.Util (launchAffLog)
 import LanguageServer.IdePurescript.WatchedFiles (handleDidChangeWatchedFiles)
 import LanguageServer.Protocol.Console (error, info, log, warn)
-import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidSaveDocument)
+import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidCloseDocument, onDidSaveDocument)
 import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, sendCleanBegin, sendCleanEnd)
 import LanguageServer.Protocol.Setup (InitParams(..), getConfiguration, initConnection, initDocumentStore)
 import LanguageServer.Protocol.TextDocument (getText)
@@ -151,10 +151,9 @@ updateModules state documents uri =
               text <- liftEffect $ getText doc
               path <- liftEffect $ uriToFilename uri
               modules <- getModulesForFileTemp port path text
-              s <- liftEffect
+              liftEffect
                 $ modifyState state
                     _ { modules = modules, modulesFile = Just uri }
-            pure $ Just s
         _ -> pure Nothing
 
 mkRunHandler ::
@@ -394,9 +393,12 @@ handleEvents config conn state documents notify = do
     $ runHandler
         "onCodeLens" getTextDocUri (getCodeLenses notify state documents)
   onShutdown conn $ Promise.fromAff stopPscIdeServer
+  --
   onDidChangeWatchedFiles
-    conn $ launchAff_
-      <<< handleDidChangeWatchedFiles config conn state documents
+    conn
+    $ launchAff_
+    <<< handleDidChangeWatchedFiles config conn state documents
+  --
   onDidChangeContent documents
     $ \{ document } -> do
         Build.handleDocumentChange config conn state notify document
@@ -404,6 +406,10 @@ handleEvents config conn state documents notify = do
   onDidSaveDocument documents
     $ \{ document } -> do
         Build.handleDocumentSave config conn state notify document
+  --
+  onDidCloseDocument documents
+    $ \{ document } -> do
+        Build.handleDocumentClose config conn state notify document
 
 handleConfig ::
   Ref Foreign ->

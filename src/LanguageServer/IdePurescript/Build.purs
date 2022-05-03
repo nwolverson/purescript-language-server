@@ -3,12 +3,14 @@ module LanguageServer.IdePurescript.Build
   , getWorkspaceRoot
   , handleDocumentChange
   , handleDocumentSave
+  , handleDocumentClose
   , positionToRange
   , requestFullBuild
   , checkBuildTasks
   ) where
 
 import Prelude
+
 import Control.Monad.Except (catchError)
 import Control.Parallel (parSequence_)
 import Control.Promise (Promise)
@@ -24,7 +26,7 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe, isJust, isNothing)
 import Data.Newtype (over, un, unwrap)
-import Data.Nullable (toNullable)
+import Data.Nullable (notNull, toNullable)
 import Data.Set as Set
 import Data.String as String
 import Data.Time.Duration (Milliseconds(..))
@@ -214,15 +216,16 @@ handleDocumentChange config conn state notify document = do
   let
     isLibSource = isLibSourceFile $ unwrap $ getUri document
     doHandle =
-      {- if noFsDiagnostics use do it for all files -}
-      (Config.noFsDiagnostics cfg && Config.diagnosticsOnType cfg)
-        || case version of
-            {- exclude rebuild for just opened library modules -}
-            1.0 ->
-              Config.diagnosticsOnOpen cfg
-                && (Config.revertExternsAndCacheDb cfg || not isLibSource)
-            _ ->
-              Config.diagnosticsOnType cfg
+      case version of
+        1.0 ->
+          Config.diagnosticsOnOpen cfg
+            && ( Config.revertExternsAndCacheDb cfg
+                  || Config.noFsDiagnostics cfg
+                  {- exclude rebuild for just opened library modules -}
+                  || not isLibSource
+              )
+        _ ->
+          Config.diagnosticsOnType cfg
   when doHandle do
     addToDiagnosticsQueue state document
     checkBuildTasks config conn state notify
@@ -248,6 +251,34 @@ handleDocumentSave config conn state notify document = do
               }
           }
   checkBuildTasks config conn state notify
+
+handleDocumentClose ::
+  Ref Foreign ->
+  Connection ->
+  Ref ServerState ->
+  Notify ->
+  TextDocument ->
+  Effect Unit
+handleDocumentClose _ conn state notify document = do
+  filename <- uriToFilename uri
+  notify Info $ "Handling document close event: " <> show filename
+  _ <- removeDocumentFromQueues state document
+  modifyState_ state \s ->
+    s
+      { parsedModules = Map.delete uri s.parsedModules
+      , diagnostics = Map.delete uri s.diagnostics
+      }
+  {- Remove diagnostics from the editor if the file was deleted. -}
+  launchAff_ do
+    exists <- FS.exists filename
+    unless exists do
+      liftEffect
+        $ publishDiagnostics conn
+            { uri
+            , diagnostics: []
+            }
+  where
+  uri = getUri document
 
 -- STATE HELPERS
 readState ::
@@ -307,6 +338,14 @@ finishDiagnosticsRunning docs st =
           st { rebuildRunning = Just $ DiagnosticsRebuild left }
     _ ->
       st
+
+removeDocumentFromQueues :: Ref ServerState -> TextDocument -> Effect Unit
+removeDocumentFromQueues state document =
+  modifyState_ state \s ->
+    s
+      { fastRebuildQueue = Map.delete (getUri document) s.fastRebuildQueue
+      , diagnosticsQueue = Map.delete (getUri document) s.diagnosticsQueue
+      }
 
 -- CACHE DB
 {- Reads cache-db.json and puts it into state, so it can be reverted later.
@@ -381,7 +420,7 @@ type DiagnosticResult
 emptyDiagnostics :: DiagnosticResult
 emptyDiagnostics = { pscErrors: [], diagnostics: Map.empty }
 
-collectByFirst :: forall a. Array (Tuple (Maybe DocumentUri) a) -> Map DocumentUri (Array a)
+collectByFirst :: forall a. Array (Maybe DocumentUri /\ a) -> Map DocumentUri (Array a)
 collectByFirst x = Map.fromFoldableWith (<>) $ mapMaybe f x
   where
   f (Just a /\ b) = Just (a /\ [ b ])
@@ -605,7 +644,9 @@ unwrapModuleName r =
 
 getNoFsDiagnostics :: TextDocument -> Settings -> ServerState -> Aff DiagnosticResult
 getNoFsDiagnostics document settings state = do
-  let targets = Just []
+  --let targets = Just []
+  -- need to send default targets to enable foreign check
+  let targets = Config.codegenTargets settings
   let uri = getUri document
   case state of
     ServerState { port: Just port, root: Just root } -> do
@@ -647,6 +688,7 @@ fullBuild logCb settings state = do
                   $ "Couldn't reload modules, no ide server port"
 
               Just port -> do
+                pure unit
                 attempt (loadAll port)
                   >>= case _ of
                       Left e ->
@@ -714,7 +756,7 @@ rebuildWithDiagnostics
     filename <- uriToFilename uri
     allFiles <-
       traverse uriToFilename
-        $ (Set.toUnfoldable $ Map.keys diagnostics :: Array DocumentUri)
+        $ (Set.toUnfoldable $ Map.keys diagnostics :: Array _)
     notify Info
       $ "Built with "
       <> show (Array.length fileDiagnostics)
@@ -758,7 +800,7 @@ parseModuleDocument state document = do
           { modulesFile = Nothing
           , parsedModules =
             Map.insert (getUri document)
-              { version: v, parsed: res } s.parsedModules
+              { version: v, parsed: res, document } s.parsedModules
           }
     )
   pure res
@@ -830,27 +872,52 @@ fullBuildWithDiagnostics config conn state notify withProgress = do
                   pscErrorsMap
             prevDiag <- readState state _.diagnostics
             let actualDiag = updateDiagnostics prevDiag newDiagState
-            prevErrors <- _.diagnostics <$> un ServerState <$> Ref.read state
             let
               nonErrorFiles :: Array DocumentUri
               nonErrorFiles =
                 Set.toUnfoldable
                   $ Map.keys
-                  $ Map.difference prevErrors pscErrorsMap
-            log conn $ "Removing old diagnostics for: " <> show nonErrorFiles
+                  --$ Map.difference prevErrors pscErrorsMap
+                  $ Map.difference prevDiag actualDiag
+            nonErrorFilesNames <- traverse uriToFilename nonErrorFiles
+            log conn $ "Removing old diagnostics for: " <> show nonErrorFilesNames
             for_ nonErrorFiles \uri ->
               publishDiagnostics conn
                 { uri
                 , diagnostics: []
                 }
             modifyState_ state _ { diagnostics = actualDiag }
-            for_ (Map.toUnfoldable diagnostics :: Array (DocumentUri /\ Array Diagnostic)) \(uri /\ fileDiagnostics) -> do
+            for_ (Map.toUnfoldable diagnostics :: Array _) \(uri /\ fileDiagnostics) -> do
               filename <- uriToFilename uri
-              log conn $ "Publishing diagnostics for: " <> show uri <> " (" <> show filename <> ")"
+              log conn $ "Publishing diagnostics for: " <> show filename
               publishDiagnostics conn
                 { uri
                 , diagnostics: fileDiagnostics
                 }
+            {- after full build purs-ide reloads state from the disk
+
+            -}
+            -- when (Config.noFsDiagnostics cfg) do
+            --   parsedModules <- readState state _.parsedModules
+            --   for_ (parsedModules) \{ document } ->
+            --     addToDiagnosticsQueue state document
+            {- show error dialog if there where errors during full build -}
+            errorFiles <-
+              traverse uriToFilename
+                $ Set.toUnfoldable
+                $ Map.keys
+                $ Map.filter
+                    ( isJust
+                        <<< Array.find
+                            (\(Diagnostic d) -> d.severity == notNull 1)
+                    )
+                    diagnostics
+            case errorFiles of
+              [] -> pure unit
+              files ->
+                showError conn
+                  $ "Build failed with errors in files: "
+                  <> String.joinWith ", " files
         Left err ->
           liftEffect do
             error conn err

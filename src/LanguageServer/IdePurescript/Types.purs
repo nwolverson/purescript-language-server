@@ -31,11 +31,6 @@ type DiagnosticState
 type CacheDb
   = { path :: String, source :: String }
 
-type RebuildTask
-  = { document :: TextDocument
-    , codegen :: Boolean
-    }
-
 data RebuildRunning
   = FullBuild
   | FastRebuild (Map DocumentUri TextDocument)
@@ -66,6 +61,7 @@ type ServerStateRec
         Map DocumentUri
           { version :: Number
           , parsed :: RecoveredParserResult Module
+          , document :: TextDocument
           }
     }
 
