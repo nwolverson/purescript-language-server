@@ -6,8 +6,9 @@ module LanguageServer.IdePurescript.References
 import Prelude
 
 import Data.Either (either)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (over, un)
+import Data.Nullable as Nullable
 import Data.String.Utils (endsWith)
 import Data.Traversable (traverse)
 import Effect (Effect)
@@ -35,23 +36,24 @@ getReferences ::
   ReferenceParams ->
   Aff (Array Location)
 getReferences docs _ state ({ textDocument, position }) = do
-  doc <- liftEffect $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
-  text <- liftEffect $ getTextAtRange doc (mkRange position)
   let { port, modules, root } = un ServerState $ state
-  case port, root, identifierAtPoint text (_.character $ un Position position) of
-    Just port', Just root', Just { word, qualifier } -> do
-      info <- getTypeInfo port' word modules.main qualifier (getUnqualActiveModules modules $ Just word) (flip getQualModule modules)
-      case info of
-        Just (Command.TypeInfo { module', type' }) -> do
-          let
-            ns = case type' of
-              "Type" -> NSType
-              _ | endsWith "-> Type" type' -> NSType
-              _ -> NSValue
-          usg <- usages port' module' ns word
-          liftEffect $ either (pure $ pure []) (traverse $ convLocation root') usg
-        _ -> pure $ []
-    _, _, _ -> pure $ []
+  doc <- liftEffect $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
+  Nullable.toMaybe doc # maybe (pure []) \doc -> do
+    text <- liftEffect $ getTextAtRange doc (mkRange position)
+    case port, root, identifierAtPoint text (_.character $ un Position position) of
+      Just port', Just root', Just { word, qualifier } -> do
+        info <- getTypeInfo port' word modules.main qualifier (getUnqualActiveModules modules $ Just word) (flip getQualModule modules)
+        case info of
+          Just (Command.TypeInfo { module', type' }) -> do
+            let
+              ns = case type' of
+                "Type" -> NSType
+                _ | endsWith "-> Type" type' -> NSType
+                _ -> NSValue
+            usg <- usages port' module' ns word
+            liftEffect $ either (pure $ pure []) (traverse $ convLocation root') usg
+          _ -> pure $ []
+      _, _, _ -> pure $ []
   where
 
   convLocation :: String -> Command.TypePosition -> Effect Location

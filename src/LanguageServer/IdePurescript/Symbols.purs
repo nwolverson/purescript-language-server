@@ -8,6 +8,7 @@ module LanguageServer.IdePurescript.Symbols
   where
 
 import Prelude
+
 import Control.Alt ((<|>))
 import Control.Apply (lift2)
 import Data.Array (catMaybes, foldr, singleton, (:))
@@ -25,7 +26,7 @@ import Data.Set as Set
 import Data.String (Pattern(..), contains)
 import Data.String as Str
 import Data.String as String
-import Data.Traversable (foldMap, traverse)
+import Data.Traversable (foldMap, for, traverse)
 import Data.Tuple (Tuple(..), snd)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
@@ -62,27 +63,26 @@ getDefinition ::
   ServerState ->
   TextDocumentPositionParams ->
   Aff (Nullable GotoDefinitionResult)
-getDefinition _notify docs _ state@(ServerState { clientCapabilities: Just clientCapabilities, parsedModules }) ({ textDocument, position }) = do
+getDefinition _notify docs _ state@(ServerState { clientCapabilities: Just clientCapabilities, parsedModules }) ({ textDocument, position }) = toNullable <$> do
   let uri = _.uri $ un TextDocumentIdentifier textDocument
-  doc <- liftEffect $ getDocument docs uri
-  text <- liftEffect $ getTextAtRange doc (mkLineRange position)
-  let { port, modules, root } = un ServerState $ state
-  case port, root, identifierAtPoint text (_.character $ un Position position) of
-    Just port', Just root', Just identRes@{ range, qualifier, word } -> do
-      localDefn uri word
-        >>= case _ of
-            Just res | isNothing qualifier -> pure $ toNullable $ Just res
-            _ -> do
-              info <- lift2 (<|>) (moduleInfo port' identRes range) (typeInfo port' modules identRes)
-              liftEffect
-                $ toNullable
-                <$> case info of
-                    Just { typePos: Command.TypePosition { name, start }, originRange } -> do
-                      defnUri <- filenameToUri =<< resolve [ root' ] name
-                      let startRange = Range { start: convPosition start, end: convPosition start }
-                      pure $ Just $ mkResult defnUri originRange startRange
-                    Nothing -> pure Nothing
-    _, _, _ -> pure $ toNullable Nothing
+  maybeDoc <- liftEffect $ getDocument docs uri
+  case Nullable.toMaybe maybeDoc of 
+    Nothing -> pure Nothing
+    Just doc -> do 
+      text <- liftEffect $ getTextAtRange doc (mkLineRange position)
+      let { port, modules, root } = un ServerState $ state
+      case port, root, identifierAtPoint text (_.character $ un Position position) of
+        Just port', Just root', Just identRes@{ range, qualifier, word } -> do
+          localDefn uri word
+            >>= case _ of
+                Just res | isNothing qualifier -> pure $ Just res
+                _ -> do
+                  info <- lift2 (<|>) (moduleInfo port' identRes range) (typeInfo port' modules identRes)
+                  for info \{ typePos: Command.TypePosition { name, start }, originRange } -> do
+                    defnUri <- liftEffect $ filenameToUri =<< resolve [ root' ] name
+                    let startRange = Range { start: convPosition start, end: convPosition start }
+                    pure $ mkResult defnUri originRange startRange
+        _, _, _ -> pure  Nothing
   where
   localDefn uri ident = case _.parsed <$> Map.lookup uri parsedModules of
     Just (ParseSucceeded parsedModule) -> getLocalDefinitions uri position ident parsedModule

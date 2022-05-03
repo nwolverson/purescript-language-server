@@ -1,7 +1,7 @@
 {
   "name": "purescript-language-server",
   "description": "Language Server Protocol server for PureScript wrapping purs ide server functionality",
-  "version": "0.16.1",
+  "version": "0.16.6",
   "publisher": "nwolverson",
   "author": {
     "name": "Nicholas Wolverson"
@@ -16,33 +16,24 @@
   "homepage": "https://github.com/nwolverson/purescript-language-server",
   "license": "MIT",
   "main": "./server.js",
-  "bin": "./cli.js",
+  "bin": "./server.js",
   "engines": {
     "node": ">=14"
-  },
-  "targets": {
-    "main": {
-      "includeNodeModules": true,
-      "optimize": true,
-      "sourceMap": false
-    }
   },
   "scripts": {
     "prepare": "run-s install:* build",
     "install:spago": "spago install",
-    "build": "run-s build:tsc build:spago build:bundle",
+    "build": "run-s build:tsc build:spago build:bundle-nodeps build:bundle-deps",
     "build:tsc": "tsc -p src/LanguageServer/",
     "build:spago": "spago build",
-    "build:bundle": "esbuild --bundle --platform=node --outfile=bundle.js ./output/LanguageServer.IdePurescript.Main",
-    "build:bundle-min": "npm run build:bundle -- --minify --sourcemap --sources-content=false",
-    "watch:bundle": "npm run build:bundle -- --watch",
+    "build:bundle": "esbuild --bundle --platform=node main.js --banner:js='#!/usr/bin/env node'",
+    "build:bundle-nodeps": "npm run build:bundle -- --outfile=server.js --external:shell-quote --external:uuid --external:vscode-jsonrpc --external:vscode-languageserver --external:vscode-languageserver-textdocument --external:vscode-uri --external:which",
+    "build:bundle-deps": "npm run build:bundle -- --outfile=bundle.js ",
+    "watch:bundle": "npm run build:bundle-nodeps -- --watch",
     "watch:tsc": "npm run build:tsc -- --watch",
     "format:js": "prettier --write ./{src,test}/**/*.{ts,js} && npm run build:tsc"
   },
   "files": [
-    "bundle.js",
-    "bundle.js.map",
-    "cli.js",
     "server.js"
   ],
   "dependencies": {
@@ -61,9 +52,5 @@
     "npm-run-all": "^4.1.5",
     "prettier": "^2.4.1",
     "typescript": "^4.5.2"
-  },
-  "optionalDependencies": {
-    "purescript": "0.14.4",
-    "spago": "0.20.3"
   }
 }

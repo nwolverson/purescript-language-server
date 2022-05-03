@@ -20,7 +20,7 @@ import Data.String as String
 import Data.String.Regex (regex)
 import Data.String.Regex.Flags (noFlags)
 import Data.String.Regex.Flags as RegexFlags
-import Data.Traversable (any, traverse)
+import Data.Traversable (any, for_, traverse)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign (F, Foreign, readArray, readString)
@@ -36,7 +36,10 @@ import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (CodeActionParams, applyEdit)
 import LanguageServer.Protocol.Text (makeWorkspaceEdit)
 import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVersion)
+import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVersion)
 import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind(..), CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionEmpty, codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
+import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind(..), CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionEmpty, codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
+import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
 
 getActions :: DocumentStore -> Settings -> ServerState -> CodeActionParams -> Aff (Array CodeActionResult)
@@ -186,11 +189,12 @@ onReplaceSuggestion docs _ (ServerState { conn, clientCapabilities }) args =
       , Right replacement <- runExcept $ readString replacement'
       , Right range <- runExcept $ readRange range' -> do
         doc <- liftEffect $ getDocument docs (DocumentUri uri)
-        version <- liftEffect $ getVersion doc
-        TextEdit { range: range'', newText } <- getReplacementEdit doc { replacement, range }
-        let edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range'' newText
-        -- TODO: Check original & expected text ?
-        void $ applyEdit conn' edit
+        for_ (Nullable.toMaybe doc) \doc -> do
+          version <- liftEffect $ getVersion doc
+          TextEdit { range: range'', newText } <- getReplacementEdit doc { replacement, range }
+          let edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range'' newText
+          -- TODO: Check original & expected text ?
+          void $ applyEdit conn' edit
     _, _ -> pure unit
 
 getReplacementEdit :: TextDocument -> Replacement -> Aff TextEdit
@@ -217,16 +221,17 @@ onReplaceAllSuggestions docs _ (ServerState { conn, clientCapabilities }) args =
       | Right uri <- runExcept $ readString uri'
       , Right suggestions <- runExcept $ readArray suggestions' >>= traverse readSuggestion -> do
         doc <- liftEffect $ getDocument docs (DocumentUri uri)
-        version <- liftEffect $ getVersion doc
-        edits <- traverse (getReplacementEdit doc) suggestions
-        void
-          $ applyEdit conn'
-          $ workspaceEdit clientCapabilities
-              [ TextDocumentEdit
-                  { textDocument: OptionalVersionedTextDocumentIdentifier { uri: DocumentUri uri, version: Nullable.notNull version }
-                  , edits
-                  }
-              ]
+        for_ (Nullable.toMaybe doc) \doc -> do
+          version <- liftEffect $ getVersion doc
+          edits <- traverse (getReplacementEdit doc) suggestions
+          void
+            $ applyEdit conn'
+            $ workspaceEdit clientCapabilities
+                [ TextDocumentEdit
+                    { textDocument: OptionalVersionedTextDocumentIdentifier { uri: DocumentUri uri, version: Nullable.notNull version }
+                    , edits
+                    }
+                ]
     _, _ -> pure unit
 
 readSuggestion :: Foreign -> F Replacement

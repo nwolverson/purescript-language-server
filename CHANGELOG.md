@@ -1,5 +1,15 @@
 # Changelog
 
+### 0.16.2
+
+- Insert module header into empty .purs files automatically (#169, @i-am-the-slime)
+  - Currently this will use the full folder structure up to the parent non-module folder (eg `src`, `test`); in the case of 
+    `test` it will also add `Test.` prefix *if* there is no top level `Test` folder
+
+- Fix export lens positioning for kind signatures (#168)
+
+- Suppress signature lens on inline type annotations (#166)
+
 ### 0.16.1
 
 - Fix formatting provider issue with multi-byte characters leading to mangled results

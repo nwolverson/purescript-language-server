@@ -1,4 +1,3 @@
 {
-  "purescript.addNpmPath": true,
   "purescript.formatter": "pose"
 }

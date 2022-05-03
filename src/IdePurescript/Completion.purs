@@ -1,6 +1,7 @@
 module IdePurescript.Completion where
 
 import Prelude
+
 import Control.Alt ((<|>))
 import Data.Array (concatMap, filter, foldl, head, intersect, snoc, sortBy, (:))
 import Data.Array as Array
@@ -11,7 +12,7 @@ import Data.Set as Set
 import Data.String (Pattern(..), indexOf, length)
 import Data.String.Regex (Regex, regex)
 import Data.String.Regex.Flags (noFlags)
-import Data.String.Utils (startsWith)
+import Data.String.Utils (endsWith, startsWith)
 import Data.Traversable (any, traverse)
 import Data.Tuple (Tuple(..))
 import Data.Tuple as Tuple
@@ -245,9 +246,17 @@ simplifyImportChoice f before = foldl go [] before
     TypeInfo { declarationType: Just DeclValue, identifier } | startsWithCapitalLetter identifier -> true
     _ -> false
 
+  -- We could have data Foo = X and data Bar = Foo, check the dctor Foo has some type that could conceivably be a dctor for Foo
+  -- i.e. is a (possibly nullary) function to Foo
+  dctorMatchesType typeName (TypeInfo { type' }) =
+    endsWith ("-> " <> typeName) type'
+    || endsWith ("→ " <> typeName) type'
+    || typeName == type'
+
   isTheSameButDataConstructor (TypeInfo ti1) info2@(TypeInfo ti2) =
     ti1.identifier
       == ti2.identifier
       && ti1.module'
       == ti2.module'
       && isDataConstructor info2
+      && dctorMatchesType ti1.identifier info2

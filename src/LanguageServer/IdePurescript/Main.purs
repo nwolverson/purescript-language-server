@@ -15,14 +15,15 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toMaybe, toNullable)
+import Data.Nullable as Nullable
 import Data.Profunctor.Strong (first)
 import Data.String (Pattern(..), contains)
 import Data.String as String
-import Data.Traversable (traverse)
+import Data.Traversable (for, traverse)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, launchAff_, try)
+import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, try)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Class (liftEffect)
@@ -40,6 +41,7 @@ import LanguageServer.IdePurescript.Build as Build
 import LanguageServer.IdePurescript.Clean (clean)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
 import LanguageServer.IdePurescript.CodeLenses (getCodeLenses)
+import LanguageServer.IdePurescript.CodeLenses as CodeLenses
 import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cleanCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, sortImportsCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
 import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config as Config
@@ -144,11 +146,12 @@ updateModules state documents uri =
     >>= case _ of
         ServerState { port: Just port, modulesFile }
           | modulesFile /= Just uri -> do
-            text <- liftEffect $ getDocument documents uri >>= getText
-            path <- liftEffect $ uriToFilename uri
-            modules <- getModulesForFileTemp port path text
-            s <-
-              liftEffect
+            maybeDoc <- liftEffect $ getDocument documents uri
+            for (Nullable.toMaybe maybeDoc) \doc -> do
+              text <- liftEffect $ getText doc
+              path <- liftEffect $ uriToFilename uri
+              modules <- getModulesForFileTemp port path text
+              s <- liftEffect
                 $ modifyState state
                     _ { modules = modules, modulesFile = Just uri }
             pure $ Just s
@@ -212,7 +215,7 @@ mkStopPscIdeServer state notify = do
   quit
   liftEffect do
     Ref.modify_
-      (over ServerState $ _ { port = Nothing, deactivate = pure unit })
+      (over ServerState $ _ { port = Nothing, deactivate = pure unit, modules = initialModulesState, runningRebuild = Nothing })
       state
     notify Success "Stopped IDE server"
 
@@ -262,7 +265,9 @@ mkStartPscIdeServer config conn state notify = do
         Ref.modify_
           (over ServerState $ _ { port = Just port, deactivate = quit })
           state
-        codeLensRefresh conn
+        ServerState { clientCapabilities } <- liftEffect $ Ref.read state
+        when (CodeLenses.supportsRefresh clientCapabilities) do
+          codeLensRefresh conn
     _ -> pure unit
   liftEffect $ workDone progressReporter
   liftEffect $ Build.checkBuildTasks config conn state notify
