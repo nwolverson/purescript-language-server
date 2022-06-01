@@ -19,11 +19,9 @@ You can edit this file as you like.
   , "effect"
   , "either"
   , "enums"
-  , "errors"
   , "exceptions"
   , "foldable-traversable"
   , "foreign"
-  , "foreign-generic"
   , "foreign-object"
   , "integers"
   , "language-cst-parser"
@@ -53,6 +51,7 @@ You can edit this file as you like.
   , "tuples"
   , "unsafe-coerce"
   , "uuid"
+  , "foreign-generic"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

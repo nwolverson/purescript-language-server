@@ -46,7 +46,6 @@ printExport = case _ of
   CST.ExportType (CST.Name { name: (CST.Proper name) }) members -> Just $ name <> guard (isJust members) "(..)"
   CST.ExportTypeOp _ (CST.Name { name: (CST.Operator name) }) -> Just $ "type (" <> name <> ")"
   CST.ExportClass _ (CST.Name { name: (CST.Proper name) }) -> Just $ "class " <> name
-  CST.ExportKind _ (CST.Name { name: (CST.Proper name) }) -> Just $ name
   CST.ExportModule _ (CST.Name { name: CST.ModuleName name }) -> Just $ "module " <> name
   CST.ExportValue (CST.Name { name: CST.Ident name }) -> Just $ name
   CST.ExportError _ -> Nothing

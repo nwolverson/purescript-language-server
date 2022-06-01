@@ -11,10 +11,9 @@ module LanguageServer.IdePurescript.Imports
 
 import Prelude
 
-import Control.Error.Util (hush)
 import Control.Monad.Except (runExcept)
 import Data.Array (fold, fromFoldable, singleton, (:))
-import Data.Either (Either(..))
+import Data.Either (Either(..), hush)
 import Data.Foldable (all, for_)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (un, unwrap)

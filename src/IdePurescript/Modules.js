@@ -1,3 +1,3 @@
-exports.tmpDir = function () {
+export function tmpDir () {
   return require("os").tmpdir();
-};
+}

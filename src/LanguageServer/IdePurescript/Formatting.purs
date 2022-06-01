@@ -91,8 +91,8 @@ format _logCb settings state formatter text = do
                 let Command cmd _ = command
                 err $ error $ cmd <> " process exited abnormally"
             when (not $ Foreign.isUndefined $ unsafeToForeign $ CP.pid cp) do
-              catchException err $ void $ S.writeString (CP.stdin cp) UTF8 text (pure unit)
-              catchException err $ S.end (CP.stdin cp) (pure unit)
+              catchException err $ void $ S.writeString (CP.stdin cp) UTF8 text (const $ pure unit)
+              catchException err $ S.end (CP.stdin cp) (const $ pure unit)
             pure mempty
     _ -> pure ""
 

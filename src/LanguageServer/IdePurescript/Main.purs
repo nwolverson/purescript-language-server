@@ -63,7 +63,6 @@ import LanguageServer.Protocol.Uri (filenameToUri, uriToFilename)
 import LanguageServer.Protocol.Window (createWorkDoneProgress, showError, showWarningWithActions, workBegin, workDone)
 import LanguageServer.Protocol.Workspace (codeLensRefresh)
 import Node.Encoding as Encoding
-import Node.FS.Aff as FS
 import Node.FS.Sync as FSSync
 import Node.Path (resolve)
 import Node.Process as Process
@@ -385,9 +384,9 @@ autoStartPcsIdeServer config conn state logError documents = do
           liftEffect
             $ resolvePath
             $ Config.effectiveOutputDirectory c
-        hasPackageFile <-
+        hasPackageFile <- liftEffect $ 
           or
-            <$> traverse (FS.exists <=< liftEffect <<< resolvePath)
+            <$> traverse (FSSync.exists <=< resolvePath)
                 [ "bower.json", "psc-package.json", "spago.dhall", "flake.nix", "shell.nix" ]
         envIdeSources <- Server.getEnvPursIdeSources
         when (not hasPackageFile && isNothing envIdeSources) do
@@ -397,7 +396,7 @@ autoStartPcsIdeServer config conn state logError documents = do
                     <> "(has bower.json/psc-package.json/spago.dhall/flake.nix/shell.nix)."
                     <> "The PureScript project should be opened as a root workspace folder."
                 )
-        exists <- FS.exists outputDir
+        exists <- liftEffect $ FSSync.exists outputDir
         unless exists
           $ liftEffect
           $ launchAff do
