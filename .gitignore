@@ -2,6 +2,7 @@ bower_components/
 node_modules/
 output/
 bundle.js*
+server.js*
 .psc*
 yarn.lock
 .spago/
