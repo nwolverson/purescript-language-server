@@ -1,4 +1,49 @@
-module LanguageServer.IdePurescript.Config where
+module LanguageServer.IdePurescript.Config
+  ( ConfigFn
+  , Formatter(..)
+  , addNpmPath
+  , addPscPackageSources
+  , addSpagoSources
+  , autoCompleteAllModules
+  , autoStartPscIde
+  , autocompleteAddImport
+  , autocompleteGrouped
+  , autocompleteLimit
+  , buildCommand
+  , buildOpenedFiles
+  , censorCodes
+  , codegenTargets
+  , cacheDbRevertTimeout
+  , declarationTypeCodeLens
+  , diagnosticsCodegen
+  , diagnosticsOnType
+  , diagnosticsOnTypeDebounce
+  , diagnosticsOnOpen
+  , effectiveOutputDirectory
+  , exportsCodeLens
+  , fastRebuild
+  , foreignExt
+  , formatter
+  , fullBuildOnSave
+  , fullBuildOnSaveProgress
+  , getBoolean
+  , getConfig
+  , getConfigMaybe
+  , getInt
+  , getString
+  , ignoreEmpty
+  , importsPreferredModules
+  , logLevel
+  , revertExternsAndCacheDb
+  , noFsDiagnostics
+  , outputDirectory
+  , packagePath
+  , preludeModule
+  , pscIdePort
+  , pursExe
+  , sourceGlobs
+  , srcPath
+  ) where
 
 import Prelude
 import Control.Monad.Except (runExcept)
@@ -102,6 +147,36 @@ addSpagoSources = getBoolean "addSpagoSources" true
 
 fullBuildOnSave :: ConfigFn Boolean
 fullBuildOnSave = getBoolean "fullBuildOnSave" false
+
+fullBuildOnSaveProgress :: ConfigFn Boolean
+fullBuildOnSaveProgress = getBoolean "fullBuildOnSaveProgress" true
+
+
+diagnosticsOnType :: ConfigFn Boolean
+diagnosticsOnType = getBoolean "diagnosticsOnType" false
+
+diagnosticsOnOpen :: ConfigFn Boolean
+diagnosticsOnOpen = getBoolean "diagnosticsOnOpen" false
+
+diagnosticsOnTypeDebounce :: ConfigFn Int
+diagnosticsOnTypeDebounce = getInt "diagnosticsOnTypeDebounce" 100
+
+diagnosticsCodegen :: ConfigFn Boolean
+diagnosticsCodegen = getBoolean "diagnosticsCodegen" false
+
+-- This flag works only with experimental compiler version
+-- that will not update externs and can accept module source without files
+noFsDiagnostics :: ConfigFn Boolean
+noFsDiagnostics = getBoolean "noFsDiagnostics" false
+
+revertExternsAndCacheDb :: ConfigFn Boolean
+revertExternsAndCacheDb = getBoolean "revertExternsAndCacheDb" false
+
+cacheDbRevertTimeout :: ConfigFn Int
+cacheDbRevertTimeout = getInt "cacheDbRevertTimeout" 2500
+
+foreignExt :: ConfigFn String
+foreignExt = getString "foreignExt" ".js"
 
 logLevel :: ConfigFn (Maybe LogLevel)
 logLevel =

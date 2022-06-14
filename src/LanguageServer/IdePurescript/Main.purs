@@ -1,14 +1,16 @@
-module LanguageServer.IdePurescript.Main (main) where
+module LanguageServer.IdePurescript.Main
+  ( main
+  ) where
 
 import Prelude
 
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise)
 import Control.Promise as Promise
-import Data.Array (length, (!!), (\\))
+import Data.Array ((!!))
 import Data.Array as Array
 import Data.Either (Either(..), either)
-import Data.Foldable (for_, or, sequence_)
+import Data.Foldable (or)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap)
@@ -19,8 +21,9 @@ import Data.String (Pattern(..), contains)
 import Data.String as String
 import Data.Traversable (for, traverse)
 import Data.Tuple (Tuple(..))
+import Data.Tuple.Nested ((/\))
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, try)
+import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, launchAff_, try)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Class (liftEffect)
@@ -34,7 +37,7 @@ import Foreign.Object as Object
 import IdePurescript.Modules (getModulesForFileTemp, initialModulesState)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.IdePurescript.Assist (addClause, caseSplit, fillTypedHole, fixTypo)
-import LanguageServer.IdePurescript.Build (collectByFirst, fullBuild, launchRebuildAndSendDiagnostics, rebuildAndSendDiagnostics)
+import LanguageServer.IdePurescript.Build as Build
 import LanguageServer.IdePurescript.Clean (clean)
 import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggestions, onReplaceSuggestion)
 import LanguageServer.IdePurescript.CodeLenses (getCodeLenses)
@@ -50,24 +53,22 @@ import LanguageServer.IdePurescript.Search (search)
 import LanguageServer.IdePurescript.Server as Server
 import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, getWorkspaceSymbols)
 import LanguageServer.IdePurescript.Tooltips (getTooltips)
-import LanguageServer.IdePurescript.Types (ServerState(..), CommandHandler)
+import LanguageServer.IdePurescript.Types (CommandHandler, ServerState(..), ServerStateRec)
 import LanguageServer.IdePurescript.Util (launchAffLog)
 import LanguageServer.IdePurescript.WatchedFiles (handleDidChangeWatchedFiles)
 import LanguageServer.Protocol.Console (error, info, log, warn)
-import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidOpenDocument, onDidSaveDocument)
-import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, publishDiagnostics, sendCleanBegin, sendCleanEnd, sendDiagnosticsBegin, sendDiagnosticsEnd)
+import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidCloseDocument, onDidSaveDocument)
+import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, sendCleanBegin, sendCleanEnd)
 import LanguageServer.Protocol.Setup (InitParams(..), getConfiguration, initConnection, initDocumentStore)
-import LanguageServer.Protocol.TextDocument (getText, getUri, getVersion)
-import LanguageServer.Protocol.Types (Connection, Diagnostic, DocumentStore, DocumentUri(..), Settings, TextDocumentIdentifier(..))
-import LanguageServer.Protocol.Uri (filenameToUri, uriToFilename)
+import LanguageServer.Protocol.TextDocument (getText)
+import LanguageServer.Protocol.Types (Connection, DocumentStore, DocumentUri, Settings, TextDocumentIdentifier(..))
+import LanguageServer.Protocol.Uri (uriToFilename)
 import LanguageServer.Protocol.Window (createWorkDoneProgress, showError, showWarningWithActions, workBegin, workDone)
 import LanguageServer.Protocol.Workspace (codeLensRefresh)
 import Node.Encoding as Encoding
 import Node.FS.Sync as FSSync
 import Node.Path (resolve)
 import Node.Process as Process
-import PscIde.Command (RebuildError(..))
-import PureScript.CST as CST
 
 defaultServerState :: ServerState
 defaultServerState =
@@ -76,14 +77,39 @@ defaultServerState =
     , deactivate: pure unit
     , root: Nothing
     , conn: Nothing
-    , runningRebuild: Nothing
     , modules: initialModulesState
     , modulesFile: Nothing
-    , buildQueue: Object.empty
-    , diagnostics: Object.empty
+    --
+    , runningRebuild: Nothing
+    --
+    , fastRebuildQueue: Map.empty
+    , diagnosticsQueue: Map.empty
+    , fullBuildWaiting: Nothing
+    , rebuildRunning: Nothing
+    --
+    , savedCacheDb: Nothing
+    , revertCacheDbTimeout: Nothing
+    --
+    , diagnostics: Map.empty
     , clientCapabilities: Nothing
     , parsedModules: Map.empty
     }
+
+modifyState ::
+  Ref ServerState -> (ServerStateRec -> ServerStateRec) -> Effect ServerState
+modifyState state mod =
+  Ref.modify (over ServerState mod) state
+
+modifyState_ ::
+  Ref ServerState -> (ServerStateRec -> ServerStateRec) -> Effect Unit
+modifyState_ state mod =
+  void $ modifyState state mod
+
+readState ::
+  ∀ a.
+  Ref ServerState -> (ServerStateRec -> a) -> Effect a
+readState state get =
+  get <$> un ServerState <$> Ref.read state
 
 type CmdLineArguments
   = { config :: Maybe String
@@ -125,9 +151,8 @@ updateModules state documents uri =
               path <- liftEffect $ uriToFilename uri
               modules <- getModulesForFileTemp port path text
               liftEffect
-                $ Ref.modify
-                    (over ServerState (_ { modules = modules, modulesFile = Just uri }))
-                    state
+                $ modifyState state
+                    _ { modules = modules, modulesFile = Just uri }
         _ -> pure Nothing
 
 mkRunHandler ::
@@ -163,10 +188,10 @@ muteReexportsWarn logFn con str =
   else
     logFn con str
 
-mkLogError ::
+mkNotify ::
   Maybe String -> Ref ServerState -> Notify
-mkLogError logFile state l s = do
-  (_.conn <$> unwrap <$> Ref.read state)
+mkNotify logFile state l s = do
+  readState state _.conn
     >>= maybe (pure unit)
         ( flip
             case l of
@@ -183,43 +208,19 @@ mkLogError logFile state l s = do
 
 -- | Stops IDE server
 mkStopPscIdeServer :: Ref ServerState -> Notify -> Aff Unit
-mkStopPscIdeServer state logError = do
+mkStopPscIdeServer state notify = do
   quit <- liftEffect (_.deactivate <$> unwrap <$> Ref.read state)
   quit
   liftEffect do
     Ref.modify_
       (over ServerState $ _ { port = Nothing, deactivate = pure unit, modules = initialModulesState, runningRebuild = Nothing })
       state
-    logError Success "Stopped IDE server"
+    notify Success "Stopped IDE server"
 
 -- | Reads workspace root from state
-getWorkspaceRoot :: Ref ServerState -> Effect String
-getWorkspaceRoot state = do
-  root <- (_.root <<< unwrap) <$> Ref.read state
-  maybe Process.cwd pure root
-
--- | Read port from state
-getPort :: Ref ServerState -> Effect (Maybe Int)
-getPort state = do
-  (_.port <<< unwrap) <$> Ref.read state
-
--- | Builds documents in queue (which where opened on server startup)
-buildDocumentsInQueue ::
-  Ref Foreign ->
-  Connection ->
-  Ref ServerState ->
-  Notify ->
-  Effect Unit
-buildDocumentsInQueue config conn state logError = do
-  queue <- (_.buildQueue <<< unwrap) <$> Ref.read state
-  let docs = Object.values $ queue
-  void
-    $ launchAffLog logError
-    $ sequence_
-    $ map (rebuildAndSendDiagnostics config conn state logError) docs
-
-buildWarningDialog :: Connection -> Ref ServerState -> DocumentStore -> Foreign -> (ErrorLevel -> String -> Effect Unit) -> String -> Aff Unit
-buildWarningDialog conn state documents settings logError msg = do
+buildWarningDialog ::
+  Ref Foreign -> Connection -> Ref ServerState -> (ErrorLevel -> String -> Effect Unit) -> String -> Aff Unit
+buildWarningDialog config conn state notify msg = do
   let buildOption = "Build project"
   action <-
     showWarningWithActions conn
@@ -229,33 +230,32 @@ buildWarningDialog conn state documents settings logError msg = do
       [ buildOption ]
   when (action == Just buildOption) do
     liftEffect $ info conn $ "Building by request from warning dialog"
-    s <- liftEffect $ Ref.read state
-    buildProject conn state logError documents settings s []
+    --Build.buildProject config conn state notify true documents []
+    liftEffect $ Build.requestFullBuild config conn state notify
 
 -- | Tries to start IDE server at workspace root
-mkStartPscIdeServer :: Ref Foreign -> Connection -> Ref ServerState -> DocumentStore -> Notify -> Aff Unit
-mkStartPscIdeServer config conn state documents logError = do
-  let workspaceRoot = getWorkspaceRoot state
-  liftEffect $ logError Info "Starting IDE server"
+mkStartPscIdeServer :: Ref Foreign -> Connection -> Ref ServerState -> Notify -> Aff Unit
+mkStartPscIdeServer config conn state notify = do
+  liftEffect $ notify Info "Starting IDE server"
   progressReporter <- createWorkDoneProgress conn
   liftEffect $ workBegin progressReporter { title: "Starting PureScript IDE server" }
-  rootPath <- liftEffect workspaceRoot
+  rootPath <- liftEffect $ Build.getWorkspaceRoot state
   settings <- liftEffect $ Ref.read config
-  startRes <- Server.startServer' settings rootPath logError logError
-  Server.retry logError 6 case startRes of
+  startRes <- Server.startServer' settings rootPath notify notify
+  Server.retry notify 6 case startRes of
     { port: Just port, quit } -> do
       Server.loadAll port
         >>= case _ of
             Left msg
               | String.contains (Pattern "Version mismatch for the externs") msg -> do
                 liftEffect $ info conn $ "Error loading modules: " <> msg
-                buildWarningDialog conn state documents settings logError
+                buildWarningDialog config conn state notify
                   $ msg
                   <> ". Ensure project is built with the same purs version as the IDE server is using"
 
             Left msg ->
               liftEffect
-                $ logError Info
+                $ notify Info
                 $ "Non-fatal error loading modules: "
                 <> msg
             _ -> pure unit
@@ -268,25 +268,23 @@ mkStartPscIdeServer config conn state documents logError = do
           codeLensRefresh conn
     _ -> pure unit
   liftEffect $ workDone progressReporter
-  liftEffect $ buildDocumentsInQueue config conn state logError
+  liftEffect $ Build.checkBuildTasks config conn state notify
 
 connect :: Ref ServerState -> Effect Connection
 connect state =
-  initConnection commands \({ params: InitParams { rootPath, rootUri, capabilities }, conn }) -> do
+  initConnection
+    commands \({ params: InitParams { rootPath, rootUri, capabilities }, conn }) -> do
     Process.argv >>= \args -> log conn $ "Starting with args: " <> show args
     root <- case toMaybe rootUri, toMaybe rootPath of
       Just uri, _ -> Just <$> uriToFilename uri
       _, Just path -> pure $ Just path
       Nothing, Nothing -> pure Nothing
     workingRoot <- maybe Process.cwd pure root
-    Ref.modify_
-      ( over ServerState
-          $ _
-              { root = Just workingRoot
-              , clientCapabilities = Just capabilities
-              }
-      )
-      state
+    modifyState_ state
+      _
+        { root = Just workingRoot
+        , clientCapabilities = Just capabilities
+        }
     ( \(Tuple dir root') ->
         log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root')
     )
@@ -295,59 +293,9 @@ connect state =
       <*> pure workingRoot
     Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
 
--- | Starts full build
-buildProject ::
-  Connection ->
-  Ref ServerState ->
-  Notify ->
-  DocumentStore -> Foreign -> ServerState -> Array Foreign -> Aff Unit
-buildProject conn state logError docs c s arguments = do
-  let workspaceRoot = getWorkspaceRoot state
-  progressReporter <- createWorkDoneProgress conn
-  liftEffect do
-    workBegin progressReporter { title: "Building PureScript" }
-    sendDiagnosticsBegin conn
-  fullBuild logError docs c s arguments
-    >>= case _ of
-        Right { pscErrors, diagnostics } ->
-          liftEffect do
-            log conn $ "Built with " <> (show $ length pscErrors) <> " issues"
-            pscErrorsMap <-
-              collectByFirst
-                <$> traverse
-                    ( \e@(RebuildError { filename }) -> do
-                        projectRoot <- workspaceRoot
-                        filename' <- traverse (resolve [ projectRoot ]) filename
-                        uri <- maybe (pure Nothing) (\f -> Just <$> un DocumentUri <$> filenameToUri f) filename'
-                        pure $ Tuple uri e
-                    )
-                    pscErrors
-            prevErrors <- _.diagnostics <$> un ServerState <$> Ref.read state
-            let
-              nonErrorFiles :: Array String
-              nonErrorFiles = Object.keys prevErrors \\ Object.keys pscErrorsMap
-            log conn $ "Removing old diagnostics for: " <> show nonErrorFiles
-            for_ (map DocumentUri nonErrorFiles) \uri -> publishDiagnostics conn { uri, diagnostics: [] }
-            Ref.write (over ServerState (_ { diagnostics = pscErrorsMap }) s) state
-            for_ (Object.toUnfoldable diagnostics :: Array (Tuple String (Array Diagnostic))) \(Tuple filename fileDiagnostics) -> do
-              uri <- filenameToUri filename
-              log conn $ "Publishing diagnostics for: " <> show uri <> " (" <> show filename <> ")"
-              publishDiagnostics conn { uri, diagnostics: fileDiagnostics }
-        Left err ->
-          liftEffect do
-            error conn err
-            showError conn err
-  liftEffect do
-    sendDiagnosticsEnd conn
-    workDone progressReporter
-
 -- | Deletes output from previous build
-cleanProject ::
-  Connection ->
-  Ref ServerState ->
-  Notify ->
-  DocumentStore -> Foreign -> ServerState -> Array Foreign -> Aff Unit
-cleanProject conn _ _ _ config _ _ = do
+cleanProject :: Connection -> Foreign -> Aff Unit
+cleanProject conn config = do
   liftEffect $ sendCleanBegin conn
   liftEffect $ info conn "Started cleaning compiled output"
   clean config
@@ -368,22 +316,17 @@ autoStartPcsIdeServer ::
   Connection ->
   Ref ServerState ->
   Notify ->
-  DocumentStore ->
   Aff Unit
-autoStartPcsIdeServer config conn state logError documents = do
-  let workspaceRoot = getWorkspaceRoot state
-  let launchAff = void <<< launchAffLog logError
-  let startPscIdeServer = mkStartPscIdeServer config conn state documents logError
+autoStartPcsIdeServer config conn state notify = do
+  let workspaceRoot = Build.getWorkspaceRoot state
+  let launchAff = void <<< launchAffLog notify
+  let startPscIdeServer = mkStartPscIdeServer config conn state notify
   let resolvePath p = workspaceRoot >>= \root -> resolve [ root ] p
   -- Ensure we only run once
   c <- liftEffect $ Ref.read config
   when (Config.autoStartPscIde c)
     $ do
         startPscIdeServer
-        outputDir <-
-          liftEffect
-            $ resolvePath
-            $ Config.effectiveOutputDirectory c
         hasPackageFile <- liftEffect $ 
           or
             <$> traverse (FSSync.exists <=< resolvePath)
@@ -396,23 +339,16 @@ autoStartPcsIdeServer config conn state logError documents = do
                     <> "(has bower.json/psc-package.json/spago.dhall/flake.nix/shell.nix)."
                     <> "The PureScript project should be opened as a root workspace folder."
                 )
+        outputDir <- liftEffect $ Build.getOutputDir config state
         exists <- liftEffect $ FSSync.exists outputDir
         unless exists
           $ liftEffect
           $ launchAff do
               let message = "Output directory does not exist at '" <> outputDir <> "'"
               liftEffect $ info conn message
-              buildWarningDialog conn state documents c logError
+              buildWarningDialog config conn state notify
                 $ message
                 <> ". Ensure project is built, or check configuration of output directory and build command."
-
--- | Checks if file uri path belongs to installed libraries
-isLibSourceFile :: String -> Boolean
-isLibSourceFile path =
-  or
-    $ [ ".spago", "bower_components" ]
-    <#> (flip contains) path
-    <<< Pattern
 
 -- | Puts event handlers
 handleEvents ::
@@ -420,18 +356,17 @@ handleEvents ::
   Connection ->
   Ref ServerState ->
   DocumentStore -> Notify -> Effect Unit
-handleEvents config conn state documents logError = do
+handleEvents config conn state documents notify = do
   let
     runHandler = mkRunHandler config state documents
-    stopPscIdeServer = mkStopPscIdeServer state logError
-    launchAff = void <<< launchAffLog logError
+    stopPscIdeServer = mkStopPscIdeServer state notify
   onCompletion conn
     $ runHandler
-        "onCompletion" getTextDocUri (getCompletions logError documents)
+        "onCompletion" getTextDocUri (getCompletions notify documents)
   -- Handles go to definition
   onDefinition conn
     $ runHandler
-        "onDefinition" getTextDocUri (getDefinition logError documents)
+        "onDefinition" getTextDocUri (getDefinition notify documents)
   onDocumentSymbol conn
     $ runHandler
         "onDocumentSymbol" getTextDocUri getDocumentSymbols
@@ -440,10 +375,10 @@ handleEvents config conn state documents logError = do
         "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
   onFoldingRanges conn
     $ runHandler
-        "onFoldingRanges" getTextDocUri (getFoldingRanges logError documents)
+        "onFoldingRanges" getTextDocUri (getFoldingRanges notify documents)
   onDocumentFormatting conn
     $ runHandler
-        "onDocumentFormatting" getTextDocUri (getFormattedDocument logError documents)
+        "onDocumentFormatting" getTextDocUri (getFormattedDocument notify documents)
   onReferences conn
     $ runHandler
         "onReferences" getTextDocUri (getReferences documents)
@@ -455,66 +390,33 @@ handleEvents config conn state documents logError = do
         "onCodeAction" getTextDocUri (getActions documents)
   onCodeLens conn
     $ runHandler
-        "onCodeLens" getTextDocUri (getCodeLenses logError state documents)
+        "onCodeLens" getTextDocUri (getCodeLenses notify state documents)
   onShutdown conn $ Promise.fromAff stopPscIdeServer
+  --
   onDidChangeWatchedFiles
     conn
-    $ launchAff
+    $ launchAff_
     <<< handleDidChangeWatchedFiles config conn state documents
+  --
   onDidChangeContent documents
     $ \{ document } -> do
-        v <- getVersion document
-        text <- getText document
-        let res = CST.parseModule text
-        -- logError Info $ "Change at " <> show v <> " on " <> show (getUri document)
-        Ref.modify_
-          ( over ServerState
-              ( \s ->
-                  s
-                    { modulesFile = Nothing
-                    , parsedModules = Map.insert (getUri document) { version: v, parsed: res } s.parsedModules
-                    }
-              )
-          )
-          state
-  -- On document opened rebuild it,
-  -- or place it in a queue if no IDE server started
-  onDidOpenDocument documents \{ document } -> do
-    let
-      uri = un DocumentUri $ getUri document
-      enqueue =
-        Ref.modify_
-          ( over ServerState
-              ( \st ->
-                  st
-                    { buildQueue = Object.insert uri document (st.buildQueue)
-                    }
-              )
-          )
-          state
-    c <- liftEffect $ Ref.read config
-    when (Config.buildOpenedFiles c && not (isLibSourceFile uri))
-      $ getPort state
-      >>= maybe
-          enqueue
-          (\_ -> launchRebuildAndSendDiagnostics config conn state logError document)
-  onDidSaveDocument documents \{ document } -> do
-    c <- liftEffect $ Ref.read config
-    if Config.fullBuildOnSave c then do
-      s <- liftEffect $ Ref.read state
-      launchAff
-        $ buildProject conn state logError documents c s []
-    else
-      launchRebuildAndSendDiagnostics config conn state logError document
+        Build.handleDocumentChange config conn state notify document
+  --
+  onDidSaveDocument documents
+    $ \{ document } -> do
+        Build.handleDocumentSave config conn state notify document
+  --
+  onDidCloseDocument documents
+    $ \{ document } -> do
+        Build.handleDocumentClose config conn state notify document
 
 handleConfig ::
   Ref Foreign ->
   Connection ->
   Ref ServerState ->
-  DocumentStore ->
   Maybe Foreign -> Notify -> Aff Unit
-handleConfig config conn state documents cmdLineConfig logError = do
-  let launchAff = void <<< launchAffLog logError
+handleConfig config conn state cmdLineConfig notify = do
+  let launchAff = void <<< launchAffLog notify
   gotConfig :: AVar Unit <- AVar.empty
   let
     setConfig :: String -> Foreign -> Aff Unit
@@ -534,7 +436,7 @@ handleConfig config conn state documents cmdLineConfig logError = do
     forkAff do
       -- Ensure we only run once
       AVar.read gotConfig
-      autoStartPcsIdeServer config conn state logError documents
+      autoStartPcsIdeServer config conn state notify
   -- 1. Config on command line - go immediately
   maybe (pure unit) (setConfig "command line") cmdLineConfig
   delay (Milliseconds 50.0)
@@ -552,7 +454,7 @@ handleConfig config conn state documents cmdLineConfig logError = do
         delay (Milliseconds 200.0)
         got2 <- AVar.isFilled <$> AVar.status gotConfig
         unless got2 do
-          liftEffect $ logError Warning "Proceeding with no config received"
+          liftEffect $ notify Warning "Proceeding with no config received"
           void $ AVar.tryPut unit gotConfig
 
 -- | Registers commands handlers
@@ -563,12 +465,12 @@ handleCommands ::
   DocumentStore ->
   Notify ->
   Effect Unit
-handleCommands config conn state documents logError = do
+handleCommands config conn state documents notify = do
   let
-    onBuild = buildProject conn state logError
-    onClean = cleanProject conn state logError
-    stopPscIdeServer = mkStopPscIdeServer state logError
-    startPscIdeServer = mkStartPscIdeServer config conn state documents logError
+    onBuild _ _ _ _ = liftEffect $ Build.requestFullBuild config conn state notify
+    onClean _ c _ _ = cleanProject conn c
+    stopPscIdeServer = mkStopPscIdeServer state notify
+    startPscIdeServer = mkStartPscIdeServer config conn state notify
     restartPscIdeServer = do
       apathize stopPscIdeServer
       startPscIdeServer
@@ -579,7 +481,7 @@ handleCommands config conn state documents logError = do
       try (h d c s a)
         >>= case _ of
             Left err -> do
-              liftEffect $ logError Error $ show err
+              liftEffect $ notify Error $ show err
               pure noResult
             Right _ -> pure noResult
     simpleHandler h _ _ _ _ = h $> noResult
@@ -589,22 +491,22 @@ handleCommands config conn state documents logError = do
       Object.fromFoldable
         $ first cmdName
         <$>
-          [ Tuple caseSplitCmd $ voidHandler caseSplit
-          , Tuple addClauseCmd $ voidHandler addClause
-          , Tuple replaceSuggestionCmd $ voidHandler onReplaceSuggestion
-          , Tuple replaceAllSuggestionsCmd $ voidHandler onReplaceAllSuggestions
-          , Tuple buildCmd $ voidHandler onBuild
-          , Tuple cleanCmd $ voidHandler onClean
-          , Tuple addCompletionImportCmd $ addCompletionImport logError
-          , Tuple addModuleImportCmd $ voidHandler $ addModuleImport' logError
-          , Tuple sortImportsCmd $ reformatImports logError
-          , Tuple startPscIdeCmd $ simpleHandler startPscIdeServer
-          , Tuple stopPscIdeCmd $ simpleHandler stopPscIdeServer
-          , Tuple restartPscIdeCmd $ simpleHandler restartPscIdeServer
-          , Tuple getAvailableModulesCmd $ getAllModules logError
-          , Tuple searchCmd $ search
-          , Tuple fixTypoCmd $ fixTypo logError
-          , Tuple typedHoleExplicitCmd $ voidHandler $ fillTypedHole logError
+          [ caseSplitCmd /\ voidHandler caseSplit
+          , addClauseCmd /\ voidHandler addClause
+          , replaceSuggestionCmd /\ voidHandler onReplaceSuggestion
+          , replaceAllSuggestionsCmd /\ voidHandler onReplaceAllSuggestions
+          , buildCmd /\ voidHandler onBuild
+          , cleanCmd /\ voidHandler onClean
+          , addCompletionImportCmd /\ addCompletionImport notify
+          , addModuleImportCmd /\ voidHandler (addModuleImport' notify)
+          , sortImportsCmd /\ reformatImports notify
+          , startPscIdeCmd /\ simpleHandler startPscIdeServer
+          , stopPscIdeCmd /\ simpleHandler stopPscIdeServer
+          , restartPscIdeCmd /\ simpleHandler restartPscIdeServer
+          , getAvailableModulesCmd /\ getAllModules notify
+          , searchCmd /\ search
+          , fixTypoCmd /\ fixTypo notify
+          , typedHoleExplicitCmd /\ voidHandler (fillTypedHole notify)
           ]
   onExecuteCommand conn
     $ \{ command, arguments } ->
@@ -649,9 +551,9 @@ main' { filename: logFile, config: cmdLineConfig } = do
   config <- Ref.new (unsafeToForeign {})
   conn <- connect state
   documents <- initDocumentStore conn
-  let logError = mkLogError logFile state
-  handleEvents config conn state documents logError
-  handleCommands config conn state documents logError
-  void $ launchAffLog logError $ handleConfig config conn state documents cmdLineConfig logError
+  let notify = mkNotify logFile state
+  handleEvents config conn state documents notify
+  handleCommands config conn state documents notify
+  void $ launchAffLog notify $ handleConfig config conn state cmdLineConfig notify
   plsVersion <- version
   log conn $ "PureScript Language Server started (" <> plsVersion <> ")"

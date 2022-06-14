@@ -11,6 +11,7 @@ import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.String (Pattern(Pattern), indexOf, joinWith, split)
 import Data.String as String
 import Data.Traversable (traverse_)
+import Debug (spy)
 import Effect (Effect)
 import Effect.Aff (Aff, error, makeAff)
 import Effect.Class (liftEffect)
@@ -61,7 +62,7 @@ spawn { command: Command cmd args, directory, useNpmDir } = do
       pure { env: Just $ Object.insert (getPathProp env) (either identity identity pathVar) env, path: either (const Nothing) Just pathVar }
     else
       pure { env: Nothing, path: Nothing }
-  
+
   cmd' <- (fromMaybe cmd <<< Array.head) <$> whichSync { path, pathExt: Nothing } cmd
   CP.spawn cmd' args (CP.defaultSpawnOptions { cwd = Just directory, env = env })
 
@@ -132,9 +133,9 @@ build logCb buildOptions@{ command: Command cmd args } = do
               )
         pure mempty
 
-rebuild :: Int -> String -> Maybe (Array CodegenTarget) -> Aff BuildResult
-rebuild port file targets = do
-  res <- P.rebuild port file (Just file) targets
+rebuild :: Int -> String -> Maybe String -> Maybe (Array CodegenTarget) -> Aff BuildResult
+rebuild port file actualFile targets = do
+  res <- P.rebuild port file actualFile targets
   either
     (throwError <<< error)
     (pure <<< onResult)
