@@ -54,6 +54,7 @@ import LanguageServer.Protocol.Uri (filenameToUri, uriToFilename)
 import LanguageServer.Protocol.Window (createWorkDoneProgress, showError, workBegin, workDone)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
+import Node.FS.Sync as FSSync
 import Node.Path (resolve)
 import Node.Process as Process
 import PscIde.Command (RebuildError(..))
@@ -270,7 +271,7 @@ handleDocumentClose _ conn state notify document = do
       }
   {- Remove diagnostics from the editor if the file was deleted. -}
   launchAff_ do
-    exists <- FS.exists filename
+    exists <- liftEffect $ FSSync.exists filename
     unless exists do
       liftEffect
         $ publishDiagnostics conn
@@ -492,10 +493,10 @@ getForeignExt ext =
 getDestFiles :: String -> ForeignExt -> Aff DestFiles
 getDestFiles filename (ForeignExt foreignExt) = do
   tmpDir <- liftEffect $ getOsTmpDir
-  foreignFile <-
+  foreignFile <- liftEffect
     case foreignPath of
       Just fp ->
-        FS.exists fp
+        FSSync.exists fp
           <#> \exists -> if exists then Just fp else Nothing
       _ -> pure Nothing
   pure
@@ -625,7 +626,7 @@ getDiagnosticsOnType document cfg state moduleName = do
               { org: getPath "externs.cbor"
               , saved: getPath "externs.saved.cbor"
               }
-          exists <- FS.exists externs.org
+          exists <- liftEffect $ FSSync.exists externs.org
           if exists then do
             Promise.toAffE
               $ copyFile externs.org externs.saved

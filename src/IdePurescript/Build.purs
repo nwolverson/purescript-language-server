@@ -11,7 +11,6 @@ import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.String (Pattern(Pattern), indexOf, joinWith, split)
 import Data.String as String
 import Data.Traversable (traverse_)
-import Debug (spy)
 import Effect (Effect)
 import Effect.Aff (Aff, error, makeAff)
 import Effect.Class (liftEffect)

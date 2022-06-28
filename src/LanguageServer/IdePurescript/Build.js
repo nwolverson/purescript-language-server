@@ -2,15 +2,15 @@ export function parseShellQuote (str) {
   return require("shell-quote").parse(str);
 }
 
-exports.getOsTmpDir = function () {
+export function getOsTmpDir() {
   return require("os").tmpdir();
 };
 
-exports.getHash = function (str) {
+export function getHash(str) {
   return require("crypto").createHash("sha256").update(str).digest("hex");
 };
 
-exports.copyFile = (src) => (dest) => {
+export const copyFile = (src) => (dest) => {
   return () => {
     return require("fs").promises.copyFile(src, dest);
   };
