@@ -199,6 +199,7 @@ formatter =
   getString "formatter" ""
     >>> case _ of
         "none" -> NoFormatter
+        "" -> NoFormatter
         "purty" -> Purty
         "purs-tidy" -> PursTidy
         "pose" -> Pose
