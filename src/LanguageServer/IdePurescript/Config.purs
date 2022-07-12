@@ -198,12 +198,10 @@ formatter :: ConfigFn Formatter
 formatter =
   getString "formatter" ""
     >>> case _ of
-        "none" -> NoFormatter
-        "" -> NoFormatter
         "purty" -> Purty
         "purs-tidy" -> PursTidy
         "pose" -> Pose
-        _ -> Purty
+        "" -> NoFormatter
 
 codegenTargets :: ConfigFn (Maybe (Array CodegenTarget))
 codegenTargets =
