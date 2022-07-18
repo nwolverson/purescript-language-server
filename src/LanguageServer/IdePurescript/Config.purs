@@ -200,6 +200,7 @@ formatter =
     >>> case _ of
         "purty" -> Purty
         "purs-tidy" -> PursTidy
+        "tidy" -> PursTidy
         "pose" -> Pose
         "" -> NoFormatter
 
