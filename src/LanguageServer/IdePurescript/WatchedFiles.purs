@@ -8,6 +8,7 @@ import Prelude
 import Data.Array ((!!), (:))
 import Data.Array as Array
 import Data.Foldable (for_)
+import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Nullable as Nullable
 import Data.String as String
@@ -19,6 +20,7 @@ import Foreign (Foreign)
 import IdePurescript.Tokens (startsWithCapitalLetter)
 import LanguageServer.IdePurescript.Assist (lineRange')
 import LanguageServer.IdePurescript.Config as Config
+import LanguageServer.IdePurescript.FileTypes as FileTypes
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (DidChangeWatchedFilesParams, applyEdit)
@@ -31,11 +33,34 @@ handleDidChangeWatchedFiles ∷
   Connection ->
   Ref ServerState -> DocumentStore -> DidChangeWatchedFilesParams -> Aff Unit
 handleDidChangeWatchedFiles configRef conn stateRef documents { changes } = do
-  for_ changes \(FileEvent { uri, "type": fileChangeTypeCode }) -> do
-    case fromFileChangeTypeCode fileChangeTypeCode of
-      Just CreatedChangeType -> do
-        handleFileCreated configRef conn stateRef documents uri
-      _ -> pure unit
+  for_ changes \(FileEvent { uri, "type": fileChangeTypeCode }) ->
+    case FileTypes.uriToRelevantFileType uri of
+      FileTypes.PureScriptFile -> case fromFileChangeTypeCode fileChangeTypeCode of
+        Just CreatedChangeType -> handleFileCreated configRef conn stateRef documents uri
+        _ -> pure unit
+      FileTypes.JavaScriptFile -> ifJsFileEvaluatePsFfi stateRef documents uri 
+      FileTypes.UnsupportedFile -> pure unit
+
+
+
+-- | JS files may in PureScript project may be used for FFI
+-- | When a JS file change is passed, check for an associated PS file and queue a fast rebuild
+ifJsFileEvaluatePsFfi :: Ref ServerState -> DocumentStore -> DocumentUri -> Aff Unit
+ifJsFileEvaluatePsFfi serverStateRef documentStore documentUri =
+  case FileTypes.jsUriToMayPsUri documentUri of
+    Nothing -> pure unit
+    Just psUri -> liftEffect do
+      -- try to get from document store
+      -- case if found, add to the serverState fast build
+      mayDoc <- Nullable.toMaybe <$> getDocument documentStore psUri
+      case mayDoc of
+        Nothing -> pure unit
+        Just doc -> queueForFastBuild serverStateRef psUri doc
+    where
+      queueForFastBuild ssRef docUri textDocument = (flip Ref.modify_)
+        ssRef
+        \(ServerState ss) -> ServerState ss{fastRebuildQueue=Map.insert docUri textDocument ss.fastRebuildQueue}
+
 
 handleFileCreated ∷
   Ref Foreign -> Connection -> Ref ServerState -> DocumentStore -> DocumentUri -> Aff Unit
@@ -61,7 +86,9 @@ insertModuleHeader configRef connection stateRef documents uri = do
 
 inferModuleName ∷ DocumentUri -> Maybe String
 inferModuleName (DocumentUri uri) = ado
-  nameWithoutExtension <- String.stripSuffix (String.Pattern ".purs") uri
+  nameWithoutExtension <- case String.stripSuffix (String.Pattern ".purs") uri of
+    Nothing -> String.stripSuffix (String.Pattern ".js") uri
+    Just x -> Just x
   in moduleNameFromFolderStructure nameWithoutExtension
 
 -- | Guesses the module name from the folder structure

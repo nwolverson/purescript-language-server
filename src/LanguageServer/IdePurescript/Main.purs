@@ -12,7 +12,7 @@ import Data.Array as Array
 import Data.Either (Either(..), either)
 import Data.Foldable (or)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
+import Data.Maybe (Maybe(..), isNothing, maybe, maybe', fromMaybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toMaybe, toNullable)
 import Data.Nullable as Nullable
@@ -23,11 +23,12 @@ import Data.Traversable (for, traverse)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, launchAff_, try)
+import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, launchAff_, try, throwError)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Class (liftEffect)
 import Effect.Console as Console
+import Effect.Exception as Effect.Exception
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Foreign (Foreign, unsafeToForeign)
@@ -45,6 +46,7 @@ import LanguageServer.IdePurescript.CodeLenses as CodeLenses
 import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cleanCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, sortImportsCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
 import LanguageServer.IdePurescript.Completion (getCompletions)
 import LanguageServer.IdePurescript.Config as Config
+import LanguageServer.IdePurescript.FileTypes as FileTypes
 import LanguageServer.IdePurescript.FoldingRanges (getFoldingRanges)
 import LanguageServer.IdePurescript.Formatting (getFormattedDocument)
 import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules, reformatImports)
@@ -165,12 +167,22 @@ mkRunHandler ::
   (Settings -> ServerState -> b -> Aff a) ->
   b ->
   Effect (Promise a)
-mkRunHandler config state documents _handlerName docUri f b =
+mkRunHandler config state documents _handlerName mayGetDocUri f b =
   Promise.fromAff do
-    c <- liftEffect $ Ref.read config
-    ms <- maybe (pure Nothing) (updateModules state documents) (docUri b)
-    s <- maybe' (\_ -> liftEffect $ Ref.read state) pure ms
-    f c s b
+    -- Should not allow any js files through
+    let mayUri = do
+                uri <- mayGetDocUri b
+                case FileTypes.uriToRelevantFileType uri of
+                  FileTypes.JavaScriptFile -> Nothing
+                  _ -> pure uri
+
+    case mayUri of
+      Nothing -> throwError $ Effect.Exception.error "JavaScript handlers not supported"
+      Just _ -> do
+        c <- liftEffect $ Ref.read config
+        ms <- maybe (pure Nothing) (updateModules state documents) mayUri
+        s <- maybe' (\_ -> liftEffect $ Ref.read state) pure ms
+        f c s b
 
 -- | Extracts document uri value
 getTextDocUri ::

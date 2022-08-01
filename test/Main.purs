@@ -8,6 +8,7 @@ import Data.Nullable (null, toMaybe)
 import Data.Nullable as Nullable
 import Effect (Effect)
 import IdePurescript.Tokens (identifierAtPoint)
+import LanguageServer.IdePurescript.FileTypes (RelevantFileType(..), uriToRelevantFileType, jsUriToMayPsUri)
 import LanguageServer.Protocol.Text (makeMinimalWorkspaceEdit)
 import LanguageServer.Protocol.Types (DocumentUri(..), Position(..), Range(..), TextDocumentEdit(..), TextEdit(..), WorkspaceEdit(..), ClientCapabilities)
 import Test.Unit (suite, test)
@@ -89,3 +90,18 @@ main =
         let result = identifierAtPoint str 3
         Assert.equal (result <#> _.word) (Just """/\""")
         Assert.equal (result <#> _.range) (Just { left: 3, right: 5 })
+    suite "file handling" do
+          test "Determine file type" do
+            let f x y = Assert.equal x $ uriToRelevantFileType $ DocumentUri y
+            f PureScriptFile "foo/bar/baz.purs"
+            f PureScriptFile "./foo.purs"
+            f PureScriptFile "foo.purs"
+            f JavaScriptFile "foo.js"
+            f UnsupportedFile "foo.xyz"
+          test "convert js uri to ps uri" do
+            let mmUnwrap (DocumentUri x) = x
+            let f x y = Assert.equal (Just x) $ mmUnwrap <$> jsUriToMayPsUri (DocumentUri y)
+            f "foo/bar/baz.purs" "foo/bar/baz.js"
+            f "./foo.purs" "./foo.js"
+            f "foo.purs" "foo.js"
+    
