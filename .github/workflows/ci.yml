@@ -13,7 +13,7 @@ jobs:
 
       - uses: nwolverson/setup-purescript@30d9b862f160b3a09a21a6457d6bc0d1ac9e92f3
         with:
-          purescript: "0.14.4"
+          purescript: "0.15.2"
           spago: "latest"
 
       # - uses: actions/setup-node@v1
