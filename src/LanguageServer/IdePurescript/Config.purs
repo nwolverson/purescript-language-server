@@ -203,6 +203,7 @@ formatter =
         "tidy" -> PursTidy
         "pose" -> Pose
         "" -> NoFormatter
+        _ -> NoFormatter
 
 codegenTargets :: ConfigFn (Maybe (Array CodegenTarget))
 codegenTargets =
