@@ -103,7 +103,7 @@ Run `:CocConfig` and add `"purescript"` in the `"languageserver"` section as fol
         "purescript": {
           "addSpagoSources": true,
           "addNpmPath": true, // Set to true if using a local purty install for formatting
-          "formatter": "purs-tidy" // Default: purty. Set to none to disable.
+          "formatter": "purs-tidy"
           // etc
         }
       }
