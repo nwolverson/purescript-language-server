@@ -1,4 +1,4 @@
-import { createConnection, TextDocuments, TextDocumentSyncKind, CodeActionKind } from "vscode-languageserver/node";
+import { createConnection, TextDocuments, CodeActionKind } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 export var initConnection = function (commands) {
     return function (cb) {
@@ -14,7 +14,9 @@ export var initConnection = function (commands) {
                 return {
                     capabilities: {
                         // Tell the client that the server works in FULL text document sync mode
-                        textDocumentSync: TextDocumentSyncKind.Full,
+                        textDocumentSync: {
+                            save: { includeText: false }
+                        },
                         // Tell the client that the server support code complete
                         completionProvider: {
                             resolveProvider: false,
