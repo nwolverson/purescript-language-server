@@ -4,7 +4,8 @@ import {
   InitializeParams,
   TextDocuments,
   CodeActionKind,
-  LSPObject
+  LSPObject,
+  TextDocumentSyncKind
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
@@ -26,7 +27,9 @@ export const initConnection =
         capabilities: {
           // Tell the client that the server works in FULL text document sync mode
           textDocumentSync: {
-            save: { includeText: false }
+            save: { includeText: false },
+            change: TextDocumentSyncKind.Incremental,
+            openClose: true,
           },
           // Tell the client that the server support code complete
           completionProvider: {
