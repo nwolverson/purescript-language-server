@@ -55,7 +55,14 @@ PureScript compiler version support is as follows:
 
 ### Formatting provider
 
-The `purescript-language-server` comes with built-in support for [purty](https://gitlab.com/joneshf/purty) for formatting PureScript code. `purty` itself is not bundled with `purescript-language-server`, so you must either install it globally (e.g. `npm install -g purty`), or locally in your project (e.g. `npm install --save-dev purty`). When a formatting operation is requested via a language server command, `purescript-language-server` will attempt to find `purty` in your `$PATH`. If you're using a local `purty` install, you can configure the language server to include your local `npm` install path (i.e. `./node_modules/.bin`) using the `purescript.addNpmPath` setting. See below for information on configuring the language server for different editors.
+The `purescript-language-server` comes with support for formatting PureScript code via several external tools, exposed as a standard LSP formatting provider. When a formatting operation is requested, `purescript-language-server` will attempt to find the configured tool via its standard name in your `$PATH` (or the local `npm` install path if `purescript.addNpmPath` is set).
+
+The formatting tool is selected via `purescript.formatter`, with the following options
+
+  * No formatter - simply leave the setting unset or empty (default)
+  * [`purs-tidy`](https://github.com/natefaubion/purescript-tidy) (or simply `tidy`). If you do not have any existing preferences this would be the suggested pick.
+  * [`pose`](https://github.com/rowtype-yoga/pose)
+  * [`purty`](https://gitlab.com/joneshf/purty) 
 
 ### VSCode 
 
