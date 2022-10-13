@@ -330,7 +330,7 @@ autoStartPcsIdeServer config conn state notify = do
         hasPackageFile <- liftEffect $ 
           or
             <$> traverse (FSSync.exists <=< resolvePath)
-                [ "bower.json", "psc-package.json", "spago.dhall", "flake.nix", "shell.nix" ]
+                [ "bower.json", "psc-package.json", "spago.dhall", "spago.yaml", "flake.nix", "shell.nix" ]
         envIdeSources <- Server.getEnvPursIdeSources
         when (not hasPackageFile && isNothing envIdeSources) do
           liftEffect
