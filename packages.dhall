@@ -42,3 +42,8 @@ in  upstream
         "https://github.com/rowtype-yoga/purescript-untagged-union.git"
     , version = "ed8262a966e15e751322c327e2759a9b9c0ef3f3"
     }
+
+  with literals.repo = "https://github.com/ilyakooo0/purescript-literals.git"
+  with literals.version = "6875fb28026595cfb780318305a77e79b098bb01"
+  
+

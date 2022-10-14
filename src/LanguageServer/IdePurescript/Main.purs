@@ -67,10 +67,12 @@ import LanguageServer.Protocol.Types (Connection, DocumentStore, DocumentUri, Se
 import LanguageServer.Protocol.Uri (uriToFilename)
 import LanguageServer.Protocol.Window (createWorkDoneProgress, showError, showWarningWithActions, workBegin, workDone)
 import LanguageServer.Protocol.Workspace (codeLensRefresh)
+import Literals.Null (null)
 import Node.Encoding as Encoding
 import Node.FS.Sync as FSSync
 import Node.Path (resolve)
 import Node.Process as Process
+import Unsafe.Coerce (unsafeCoerce)
 
 defaultServerState :: ServerState
 defaultServerState =
@@ -167,17 +169,22 @@ mkRunHandler ::
   (Settings -> ServerState -> b -> Aff a) ->
   b ->
   Effect (Promise a)
-mkRunHandler config state documents _handlerName mayGetDocUri f b =
+mkRunHandler config state documents _handlerName maybeGetDocUri f b =
   Promise.fromAff do
     -- Should not allow any js files through
     let mayUri = do
-                uri <- mayGetDocUri b
+                uri <- maybeGetDocUri b
                 case FileTypes.uriToRelevantFileType uri of
                   FileTypes.JavaScriptFile -> Nothing
                   _ -> pure uri
 
     case mayUri of
-      Nothing -> throwError $ Effect.Exception.error "JavaScript handlers not supported"
+      Nothing -> 
+        -- TODO :(
+        -- Returning null here rather than throwing an exception which will show up in output. Likely null is actually
+        -- valid return from all handlers and types can be adjusted; alternatively perhaps these handlers can only be registered
+        -- for .purs while getting changes for others.
+        pure $ unsafeCoerce null
       Just _ -> do
         c <- liftEffect $ Ref.read config
         ms <- maybe (pure Nothing) (updateModules state documents) mayUri
@@ -567,4 +574,4 @@ main' { filename: logFile, config: cmdLineConfig } = do
   handleCommands config conn state documents notify
   void $ launchAffLog notify $ handleConfig config conn state cmdLineConfig notify
   plsVersion <- version
-  log conn $ "PureScript Language Server started (" <> plsVersion <> ")"
+  log conn $ "PureScript Language Server started (" <> plsVersion <> ") 123"
