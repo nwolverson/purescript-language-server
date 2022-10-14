@@ -22,12 +22,14 @@ You can edit this file as you like.
   , "exceptions"
   , "foldable-traversable"
   , "foreign"
+  , "foreign-generic"
   , "foreign-object"
   , "integers"
   , "js-date"
   , "js-timers"
   , "language-cst-parser"
   , "lists"
+  , "literals"
   , "maybe"
   , "newtype"
   , "node-buffer"
@@ -53,8 +55,8 @@ You can edit this file as you like.
   , "transformers"
   , "tuples"
   , "unsafe-coerce"
+  , "untagged-union"
   , "uuid"
-  , "foreign-generic"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

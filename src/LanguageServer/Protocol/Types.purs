@@ -16,6 +16,7 @@ import Foreign.Index ((!))
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Unsafe.Coerce (unsafeCoerce)
+import Untagged.Union (UndefinedOr)
 
 foreign import data Connection :: Type
 foreign import data DocumentStore :: Type
@@ -249,7 +250,10 @@ symbolKindToInt = case _ of
   ArraySymbolKind -> 18
 
 newtype Hover
-  = Hover { contents :: MarkupContent, range :: Nullable Range }
+  = Hover
+      { contents :: MarkupContent 
+      , range :: UndefinedOr Range
+      }
 
 newtype Command
   = Command { title :: String, command :: String, arguments :: Nullable (Array Foreign) }

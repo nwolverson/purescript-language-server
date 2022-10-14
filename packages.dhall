@@ -1,16 +1,15 @@
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.15.2-20220531/packages.dhall sha256:278d3608439187e51136251ebf12fabda62d41ceb4bec9769312a08b56f853e3
+      https://github.com/purescript/package-sets/releases/download/psc-0.15.2-20220706/packages.dhall
+        sha256:7a24ebdbacb2bfa27b2fc6ce3da96f048093d64e54369965a2a7b5d9892b6031
 
 in  upstream
-
-with 
-      uuid = 
-      { dependencies = [ "effect", "maybe", "foreign-generic", "console", "spec" ]
-      , repo = "https://github.com/megamaddu/purescript-uuid.git"
-      , version = "7bb5a90c9b11f6a33ac7610608a650e4d58aeac9"
-      }
-with foreign-generic =
-      { dependencies =
+  with uuid =
+    { dependencies = [ "effect", "maybe", "foreign-generic", "console", "spec" ]
+    , repo = "https://github.com/megamaddu/purescript-uuid.git"
+    , version = "7bb5a90c9b11f6a33ac7610608a650e4d58aeac9"
+    }
+  with foreign-generic =
+    { dependencies =
       [ "effect"
       , "exceptions"
       , "foreign"
@@ -19,6 +18,27 @@ with foreign-generic =
       , "ordered-collections"
       , "record"
       ]
-      , repo = "https://github.com/working-group-purescript-es/purescript-foreign-generic.git"
-      , version = "53410dd57e9b350d6c233f48f7aa46317c4faa21"
-      }
+    , repo =
+        "https://github.com/working-group-purescript-es/purescript-foreign-generic.git"
+    , version = "53410dd57e9b350d6c233f48f7aa46317c4faa21"
+    }
+
+  with untagged-union =
+    { dependencies =
+      [ "assert"
+  , "console"
+  , "effect"
+  , "either"
+  , "foreign"
+  , "foreign-object"
+  , "literals"
+  , "maybe"
+  , "newtype"
+  , "prelude"
+  , "tuples"
+  , "unsafe-coerce"
+      ]
+    , repo =
+        "https://github.com/rowtype-yoga/purescript-untagged-union.git"
+    , version = "ed8262a966e15e751322c327e2759a9b9c0ef3f3"
+    }

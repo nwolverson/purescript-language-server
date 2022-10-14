@@ -21,7 +21,9 @@ import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (TextDocumentPositionParams)
 import LanguageServer.Protocol.TextDocument (getTextAtRange)
 import LanguageServer.Protocol.Types (DocumentStore, Hover(Hover), Position(Position), Range(Range), Settings, TextDocumentIdentifier(TextDocumentIdentifier), markupContent)
+import Literals.Undefined (undefined)
 import PscIde.Command as C
+import Untagged.Union (asOneOf)
 
 getTooltips :: DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams -> Aff (Nullable Hover)
 getTooltips docs _ state ({ textDocument, position }) = toNullable <$> do
@@ -45,7 +47,7 @@ getTooltips docs _ state ({ textDocument, position }) = toNullable <$> do
                         Just
                           $ Hover
                               { contents: markupContent head
-                              , range: toNullable $ Just $ wordRange position range { right = left + String.length q }
+                              , range: asOneOf $ wordRange position range { right = left + String.length q }
                               }
                       _ -> Nothing
             _ -> do
@@ -58,7 +60,7 @@ getTooltips docs _ state ({ textDocument, position }) = toNullable <$> do
     Hover
       { contents:
           markupContent $ typeStr <> "\n" <> (fromMaybe "" documentation)
-      , range: toNullable $ Nothing
+      , range: asOneOf undefined
       }
     where
     typeStr = "```purescript\n" <> compactTypeStr <> (if showExpanded then "\n" <> expandedTypeStr else "") <> "\n```"
