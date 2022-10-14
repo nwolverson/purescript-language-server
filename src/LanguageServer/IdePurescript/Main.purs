@@ -12,7 +12,7 @@ import Data.Array as Array
 import Data.Either (Either(..), either)
 import Data.Foldable (or)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), isNothing, maybe, maybe', fromMaybe)
+import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (toMaybe, toNullable)
 import Data.Nullable as Nullable
@@ -375,7 +375,6 @@ handleEvents config conn state documents notify = do
   onCompletion conn
     $ runHandler
         "onCompletion" getTextDocUri (getCompletions notify documents)
-  -- Handles go to definition
   onDefinition conn
     $ runHandler
         "onDefinition" getTextDocUri (getDefinition notify documents)
@@ -412,15 +411,15 @@ handleEvents config conn state documents notify = do
   --
   onDidChangeContent documents
     $ \{ document } -> do
-        Build.handleDocumentChange config conn state notify document
+        Build.handleDocumentChange config conn state notify document documents
   --
   onDidSaveDocument documents
     $ \{ document } -> do
-        Build.handleDocumentSave config conn state notify document
+        Build.handleDocumentSave config conn state notify document documents
   --
   onDidCloseDocument documents
     $ \{ document } -> do
-        Build.handleDocumentClose config conn state notify document
+        Build.handleDocumentClose config conn state notify document documents
 
 handleConfig ::
   Ref Foreign ->

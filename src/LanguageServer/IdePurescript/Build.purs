@@ -10,7 +10,6 @@ module LanguageServer.IdePurescript.Build
   ) where
 
 import Prelude
-
 import Control.Monad.Except (catchError)
 import Control.Parallel (parSequence_)
 import Control.Promise (Promise)
@@ -27,6 +26,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe, isJust, isNothing)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (notNull, toNullable)
+import Data.Nullable as Nullable
 import Data.Set as Set
 import Data.String as String
 import Data.Time.Duration (Milliseconds(..))
@@ -48,12 +48,12 @@ import LanguageServer.IdePurescript.FileTypes as FileTypes
 import LanguageServer.IdePurescript.Server (loadAll)
 import LanguageServer.IdePurescript.Types (DiagnosticState, RebuildRunning(..), ServerState(..), ServerStateRec)
 import LanguageServer.Protocol.Console (error, log)
+import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (publishDiagnostics, sendDiagnosticsBegin, sendDiagnosticsEnd)
 import LanguageServer.Protocol.TextDocument (TextDocument, getText, getUri, getVersion)
-import LanguageServer.Protocol.Types (Connection, Diagnostic(Diagnostic), DocumentUri, Position(Position), Range(Range), Settings)
+import LanguageServer.Protocol.Types (Connection, Diagnostic(Diagnostic), DocumentStore, DocumentUri, Position(Position), Range(Range), Settings)
 import LanguageServer.Protocol.Uri (filenameToUri, uriToFilename)
 import LanguageServer.Protocol.Window (createWorkDoneProgress, showError, workBegin, workDone)
-import LanguageServer.Protocol.DocumentStore (getDocument)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
 import Node.FS.Sync as FSSync
@@ -211,8 +211,9 @@ handleDocumentChange ::
   Ref ServerState ->
   Notify ->
   TextDocument ->
+  DocumentStore ->
   Effect Unit
-handleDocumentChange config conn state notify document = do
+handleDocumentChange config conn state notify document documents = do
   case FileTypes.uriToRelevantFileType $ getUri document of
     FileTypes.JavaScriptFile -> pure unit
     _ -> do
@@ -233,7 +234,7 @@ handleDocumentChange config conn state notify document = do
             _ ->
               Config.diagnosticsOnType cfg
       when doHandle do
-        addToDiagnosticsQueue state document
+        addToDiagnosticsQueue state document documents
         checkBuildTasks config conn state notify
 
 {-| Document save handler. -}
@@ -243,11 +244,12 @@ handleDocumentSave ::
   Ref ServerState ->
   Notify ->
   TextDocument ->
+  DocumentStore ->
   Effect Unit
-handleDocumentSave config conn state notify document = do
+handleDocumentSave config conn state notify document documents = do
   cfg <- Ref.read config
   when (Config.fastRebuild cfg)
-    $ addToFastRebuildQueue state document
+    $ addToFastRebuildQueue state document documents
   when (Config.fullBuildOnSave cfg)
     $ modifyState_ state
         _
@@ -264,8 +266,9 @@ handleDocumentClose ::
   Ref ServerState ->
   Notify ->
   TextDocument ->
+  DocumentStore ->
   Effect Unit
-handleDocumentClose _ conn state notify document = do
+handleDocumentClose _ conn state notify document _documents = do
   filename <- uriToFilename uri
   notify Info $ "Handling document close event: " <> show filename
   _ <- removeDocumentFromQueues state document
@@ -303,36 +306,32 @@ modifyState_ ::
 modifyState_ state mod =
   void $ modifyState state mod
 
-enqueue :: _ -> Ref ServerState -> TextDocument -> Effect Unit
-enqueue serverStateOver stateRef originalDocument = do
+enqueue :: _ -> Ref ServerState -> TextDocument -> DocumentStore -> Effect Unit
+enqueue serverStateOver stateRef originalDocument documents = do
   let unprocessedUri = getUri originalDocument
   mayFileData <- case FileTypes.uriToRelevantFileType unprocessedUri of
-        FileTypes.PureScriptFile -> pure $ Just {uri:unprocessedUri, document:originalDocument}
-        FileTypes.JavaScriptFile ->
-          case FileTypes.jsUriToMayPsUri unprocessedUri of
-            Nothing -> pure Nothing
-            Just uri -> do
-              ss <- Ref.read stateRef
-              let mayDocument = FileTypes.tryGetDocument ss uri
-              pure $ (\document -> {uri, document}) <$> mayDocument
-        FileTypes.UnsupportedFile -> pure Nothing
-
+    FileTypes.PureScriptFile -> pure $ Just { uri: unprocessedUri, document: originalDocument }
+    FileTypes.JavaScriptFile ->
+      case FileTypes.jsUriToMayPsUri unprocessedUri of
+        Nothing -> pure Nothing
+        Just uri -> do
+          maybeDoc <- Nullable.toMaybe <$> getDocument documents uri
+          pure $ { uri, document: _ } <$> maybeDoc
+    FileTypes.UnsupportedFile -> pure Nothing
   case mayFileData of
     Nothing -> doNothing
     Just x -> enqueue' x
   where
-    doNothing = pure unit
-    enqueue' {uri, document} = modifyState_ stateRef \s -> serverStateOver (Map.insert uri document) s
+  doNothing = pure unit
+  enqueue' { uri, document } = modifyState_ stateRef \s -> serverStateOver (Map.insert uri document) s
 
+addToFastRebuildQueue :: Ref ServerState -> TextDocument -> DocumentStore -> Effect Unit
+addToFastRebuildQueue =
+  enqueue \f s -> s { fastRebuildQueue = f s.fastRebuildQueue }
 
-addToFastRebuildQueue :: Ref ServerState -> TextDocument -> Effect Unit
-addToFastRebuildQueue = enqueue
-  \f s -> s{fastRebuildQueue = f s.fastRebuildQueue}
-
-addToDiagnosticsQueue :: Ref ServerState -> TextDocument -> Effect Unit
-addToDiagnosticsQueue = enqueue
-  \f s -> s{diagnosticsQueue = f s.diagnosticsQueue}
-
+addToDiagnosticsQueue :: Ref ServerState -> TextDocument -> DocumentStore -> Effect Unit
+addToDiagnosticsQueue =
+  enqueue \f s -> s { diagnosticsQueue = f s.diagnosticsQueue }
 
 finishFastRebuildRunning :: Map DocumentUri TextDocument -> ServerStateRec -> ServerStateRec
 finishFastRebuildRunning docs st =
@@ -347,7 +346,6 @@ finishFastRebuildRunning docs st =
           st { rebuildRunning = Just $ FastRebuild left }
     _ ->
       st
-
 
 finishDiagnosticsRunning :: Map DocumentUri TextDocument -> ServerStateRec -> ServerStateRec
 finishDiagnosticsRunning docs st =
@@ -516,12 +514,13 @@ getForeignExt ext =
 getDestFiles :: String -> ForeignExt -> Aff DestFiles
 getDestFiles filename (ForeignExt foreignExt) = do
   tmpDir <- liftEffect $ getOsTmpDir
-  foreignFile <- liftEffect
-    case foreignPath of
-      Just fp ->
-        FSSync.exists fp
-          <#> \exists -> if exists then Just fp else Nothing
-      _ -> pure Nothing
+  foreignFile <-
+    liftEffect
+      case foreignPath of
+        Just fp ->
+          FSSync.exists fp
+            <#> \exists -> if exists then Just fp else Nothing
+        _ -> pure Nothing
   pure
     { source:
         { org: filename

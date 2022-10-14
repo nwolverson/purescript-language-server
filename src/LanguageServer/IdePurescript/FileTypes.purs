@@ -1,15 +1,15 @@
-module LanguageServer.IdePurescript.FileTypes where
+module LanguageServer.IdePurescript.FileTypes
+  ( RelevantFileType(..)
+  , jsUriToMayPsUri
+  , uriExtensionIs
+  , uriToRelevantFileType
+  )
+  where
 
 import Prelude
-
-import Control.Alternative ((<|>))
-import Data.Map as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe)
 import Data.String as String
-
-import LanguageServer.IdePurescript.Types (ServerState(..), ServerStateRec)
-import LanguageServer.Protocol.TextDocument (TextDocument, getText, getUri, getVersion)
-import LanguageServer.Protocol.Types (DocumentStore, DocumentUri(..))
+import LanguageServer.Protocol.Types (DocumentUri(..))
 
 -- | Type representing files passsed by the IDE
 data RelevantFileType
@@ -23,28 +23,23 @@ instance Show RelevantFileType where
   show JavaScriptFile = "JavaScriptFile"
   show UnsupportedFile = "UnsupportedFile"
 
+uriToRelevantFileType ∷ DocumentUri → RelevantFileType
 uriToRelevantFileType uri = f
   where
-    extIs = uriExtensionIs uri
-    f
-      | extIs "purs" = PureScriptFile
-      | extIs "js" = JavaScriptFile
-      | otherwise = UnsupportedFile
+  extIs = uriExtensionIs uri
+  f
+    | extIs "purs" = PureScriptFile
+    | extIs "js" = JavaScriptFile
+    | otherwise = UnsupportedFile
 
+uriExtensionIs ∷ DocumentUri → String → Boolean
 uriExtensionIs (DocumentUri uri) ext = ext' == after
   where
-    ext' = "." <> ext
-    {after} = String.splitAt (String.length uri - String.length ext') uri
+  ext' = "." <> ext
+  { after } = String.splitAt (String.length uri - String.length ext') uri
 
+jsUriToMayPsUri ∷ DocumentUri → Maybe DocumentUri
 jsUriToMayPsUri (DocumentUri str) =
   (String.stripSuffix (String.Pattern ".js") str)
-  <#> (_ <> ".purs")
-  <#> DocumentUri
-
-
-tryGetDocument :: ServerState -> DocumentUri -> Maybe TextDocument
-tryGetDocument (ServerState ssr) uri =
-    -- TODO: find out from maintainers if this fallback ordering is correct
-    (Map.lookup uri ssr.fastRebuildQueue)
-    <|> (Map.lookup uri ssr.diagnosticsQueue)
-    <|> (_.document <$> Map.lookup uri ssr.parsedModules)
+    <#> (_ <> ".purs")
+    <#> DocumentUri
