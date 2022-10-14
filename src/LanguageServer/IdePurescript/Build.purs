@@ -44,6 +44,7 @@ import IdePurescript.Build (Command(Command), build, rebuild)
 import IdePurescript.PscErrors (PscResult(..))
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.IdePurescript.Config as Config
+import LanguageServer.IdePurescript.FileTypes as FileTypes
 import LanguageServer.IdePurescript.Server (loadAll)
 import LanguageServer.IdePurescript.Types (DiagnosticState, RebuildRunning(..), ServerState(..), ServerStateRec)
 import LanguageServer.Protocol.Console (error, log)
@@ -52,6 +53,7 @@ import LanguageServer.Protocol.TextDocument (TextDocument, getText, getUri, getV
 import LanguageServer.Protocol.Types (Connection, Diagnostic(Diagnostic), DocumentUri, Position(Position), Range(Range), Settings)
 import LanguageServer.Protocol.Uri (filenameToUri, uriToFilename)
 import LanguageServer.Protocol.Window (createWorkDoneProgress, showError, workBegin, workDone)
+import LanguageServer.Protocol.DocumentStore (getDocument)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
 import Node.FS.Sync as FSSync
@@ -211,25 +213,28 @@ handleDocumentChange ::
   TextDocument ->
   Effect Unit
 handleDocumentChange config conn state notify document = do
-  _ <- parseModuleDocument state document
-  cfg <- Ref.read config
-  version <- getVersion document
-  let
-    isLibSource = isLibSourceFile $ unwrap $ getUri document
-    doHandle =
-      case version of
-        1.0 ->
-          Config.diagnosticsOnOpen cfg
-            && ( Config.revertExternsAndCacheDb cfg
-                  || Config.noFsDiagnostics cfg
-                  {- exclude rebuild for just opened library modules -}
-                  || not isLibSource
-              )
-        _ ->
-          Config.diagnosticsOnType cfg
-  when doHandle do
-    addToDiagnosticsQueue state document
-    checkBuildTasks config conn state notify
+  case FileTypes.uriToRelevantFileType $ getUri document of
+    FileTypes.JavaScriptFile -> pure unit
+    _ -> do
+      _ <- parseModuleDocument state document
+      cfg <- Ref.read config
+      version <- getVersion document
+      let
+        isLibSource = isLibSourceFile $ unwrap $ getUri document
+        doHandle =
+          case version of
+            1.0 ->
+              Config.diagnosticsOnOpen cfg
+                && ( Config.revertExternsAndCacheDb cfg
+                      || Config.noFsDiagnostics cfg
+                      {- exclude rebuild for just opened library modules -}
+                      || not isLibSource
+                  )
+            _ ->
+              Config.diagnosticsOnType cfg
+      when doHandle do
+        addToDiagnosticsQueue state document
+        checkBuildTasks config conn state notify
 
 {-| Document save handler. -}
 handleDocumentSave ::
@@ -298,12 +303,36 @@ modifyState_ ::
 modifyState_ state mod =
   void $ modifyState state mod
 
+enqueue :: _ -> Ref ServerState -> TextDocument -> Effect Unit
+enqueue serverStateOver stateRef originalDocument = do
+  let unprocessedUri = getUri originalDocument
+  mayFileData <- case FileTypes.uriToRelevantFileType unprocessedUri of
+        FileTypes.PureScriptFile -> pure $ Just {uri:unprocessedUri, document:originalDocument}
+        FileTypes.JavaScriptFile ->
+          case FileTypes.jsUriToMayPsUri unprocessedUri of
+            Nothing -> pure Nothing
+            Just uri -> do
+              ss <- Ref.read stateRef
+              let mayDocument = FileTypes.tryGetDocument ss uri
+              pure $ (\document -> {uri, document}) <$> mayDocument
+        FileTypes.UnsupportedFile -> pure Nothing
+
+  case mayFileData of
+    Nothing -> doNothing
+    Just x -> enqueue' x
+  where
+    doNothing = pure unit
+    enqueue' {uri, document} = modifyState_ stateRef \s -> serverStateOver (Map.insert uri document) s
+
+
 addToFastRebuildQueue :: Ref ServerState -> TextDocument -> Effect Unit
-addToFastRebuildQueue state document =
-  modifyState_ state \s ->
-    s
-      { fastRebuildQueue = Map.insert (getUri document) document s.fastRebuildQueue
-      }
+addToFastRebuildQueue = enqueue
+  \f s -> s{fastRebuildQueue = f s.fastRebuildQueue}
+
+addToDiagnosticsQueue :: Ref ServerState -> TextDocument -> Effect Unit
+addToDiagnosticsQueue = enqueue
+  \f s -> s{diagnosticsQueue = f s.diagnosticsQueue}
+
 
 finishFastRebuildRunning :: Map DocumentUri TextDocument -> ServerStateRec -> ServerStateRec
 finishFastRebuildRunning docs st =
@@ -319,12 +348,6 @@ finishFastRebuildRunning docs st =
     _ ->
       st
 
-addToDiagnosticsQueue :: Ref ServerState -> TextDocument -> Effect Unit
-addToDiagnosticsQueue state document =
-  modifyState_ state \s ->
-    s
-      { diagnosticsQueue = Map.insert (getUri document) document s.diagnosticsQueue
-      }
 
 finishDiagnosticsRunning :: Map DocumentUri TextDocument -> ServerStateRec -> ServerStateRec
 finishDiagnosticsRunning docs st =
