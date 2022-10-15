@@ -11,13 +11,12 @@ import Prelude
 import Data.Map (Map)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
-import Data.String as String
 import Effect.Aff (Aff, Fiber)
 import Effect.Timer (TimeoutId)
 import Foreign (Foreign)
 import IdePurescript.Modules (State) as Modules
 import LanguageServer.Protocol.TextDocument (TextDocument)
-import LanguageServer.Protocol.Types (ClientCapabilities, Connection, Diagnostic, DocumentStore, DocumentUri(..), Settings)
+import LanguageServer.Protocol.Types (ClientCapabilities, Connection, Diagnostic, DocumentStore, DocumentUri, Settings)
 import PscIde.Command (RebuildError)
 import PureScript.CST (RecoveredParserResult)
 import PureScript.CST.Types (Module)

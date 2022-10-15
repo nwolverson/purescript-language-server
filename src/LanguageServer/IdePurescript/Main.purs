@@ -23,12 +23,11 @@ import Data.Traversable (for, traverse)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
-import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, launchAff_, try, throwError)
+import Effect.Aff (Aff, Milliseconds(..), apathize, attempt, delay, forkAff, launchAff_, try)
 import Effect.Aff.AVar (AVar)
 import Effect.Aff.AVar as AVar
 import Effect.Class (liftEffect)
 import Effect.Console as Console
-import Effect.Exception as Effect.Exception
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Foreign (Foreign, unsafeToForeign)
@@ -574,4 +573,4 @@ main' { filename: logFile, config: cmdLineConfig } = do
   handleCommands config conn state documents notify
   void $ launchAffLog notify $ handleConfig config conn state cmdLineConfig notify
   plsVersion <- version
-  log conn $ "PureScript Language Server started (" <> plsVersion <> ") 123"
+  log conn $ "PureScript Language Server started (" <> plsVersion <> ")"
