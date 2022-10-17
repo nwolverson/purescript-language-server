@@ -1,5 +1,32 @@
 # Changelog
 
+### 0.17.0
+
+- Diagnostics on type courtesy of @wclr.
+  - Work ongoing on this area, in particular compiler changes, but I've been running with this for probably months now and it's pretty cool even now.
+- Rebuilding on FFI file change (#181, @aranchelk)
+  - This requires that the LSP client sends file changes for `.js` files now
+- Default formatter is now none, formatter options have changed  (#180, @andys8)
+- Detect new-style spago workspaces (#188, @f-f)
+- Update the textDocumentSync capability to spec v3 (#182, @dariooddenino)
+- Bundling changes (esmodules/build setup related, could potentially break something)
+
+### 0.16.6
+
+- Fix spawning formatters on windows (#160)
+
+### 0.16.5
+
+- Internal changes
+
+### 0.16.4
+
+- Over-eager suppression of X vs X(..) completion choice (#174)
+
+### 0.16.3
+
+-  Fix crash when adding some files due to module-header insertion 
+
 ### 0.16.2
 
 - Insert module header into empty .purs files automatically (#169, @i-am-the-slime)
