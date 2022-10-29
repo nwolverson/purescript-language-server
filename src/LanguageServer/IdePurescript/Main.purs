@@ -171,22 +171,16 @@ mkRunHandler ::
 mkRunHandler config state documents _handlerName maybeGetDocUri f b =
   Promise.fromAff do
     -- Should not allow any js files through
-    let mayUri = do
-                uri <- maybeGetDocUri b
-                case FileTypes.uriToRelevantFileType uri of
-                  FileTypes.JavaScriptFile -> Nothing
-                  _ -> pure uri
-
-    case mayUri of
-      Nothing -> 
+    case maybeGetDocUri b of
+      Just uri | FileTypes.JavaScriptFile <- FileTypes.uriToRelevantFileType uri ->
         -- TODO :(
         -- Returning null here rather than throwing an exception which will show up in output. Likely null is actually
         -- valid return from all handlers and types can be adjusted; alternatively perhaps these handlers can only be registered
         -- for .purs while getting changes for others.
         pure $ unsafeCoerce null
-      Just _ -> do
+      maybeUri -> do
         c <- liftEffect $ Ref.read config
-        ms <- maybe (pure Nothing) (updateModules state documents) mayUri
+        ms <- maybe (pure Nothing) (updateModules state documents) maybeUri
         s <- maybe' (\_ -> liftEffect $ Ref.read state) pure ms
         f c s b
 
