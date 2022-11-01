@@ -1,12 +1,15 @@
 module IdePurescript.PscIdeServer
-  ( startServer
+  ( ErrorLevel(..)
+  , Notify(..)
+  , Port
+  , ServerStartResult(..)
+  , Version(..)
+  , parseVersion
+  , startServer
   , startServer'
   , stopServer
-  , ServerStartResult(..)
-  , Port
-  , ErrorLevel(..)
-  , Notify(..)
-  ) where
+  )
+  where
 
 import Prelude
 
@@ -89,7 +92,7 @@ startServer' ::
   Boolean ->
   Notify ->
   Notify ->
-  Aff { quit :: Aff Unit, port :: Maybe Int }
+  Aff { quit :: Aff Unit, port :: Maybe Int, purs :: Maybe Executable }
 startServer' settings@({ exe: server }) path addNpmBin cb logCb = do
   pathVar <- liftEffect $ getPathVar addNpmBin path
   serverBins <- findBins pathVar server
@@ -108,19 +111,20 @@ startServer' settings@({ exe: server }) path addNpmBin cb logCb = do
         $ "Couldn't find IDE server, looked for: "
             <> server
             <> " using PATH env variable."
-      pure { quit: pure unit, port: Nothing }
-    Just srvExec@(Executable bin _version) -> do
+      pure { quit: pure unit, port: Nothing, purs: Nothing }
+    Just purs@(Executable bin _version) -> do
       liftEffect
         $ logCb Info
         $ "Using found IDE server bin (npm-bin: "
             <> show addNpmBin
             <> "): "
-            <> printSrvExec srvExec
+            <> printSrvExec purs
       res <- startServer logCb (settings { exe = bin }) path
-      let noRes = { quit: pure unit, port: Nothing }
+      let noRes = { quit: pure unit, port: Nothing, purs: Just purs }
       liftEffect
         $ case res of
-            CorrectPath usedPort -> { quit: pure unit, port: Just usedPort } <$
+            -- Unfortunately don't have the purs version here, with any luck it's the same as the one we found in path
+            CorrectPath usedPort -> { quit: pure unit, port: Just usedPort, purs: Just purs } <$
               cb Info
                 ( "Found existing IDE server with correct path on port " <> show
                     usedPort
@@ -142,6 +146,7 @@ startServer' settings@({ exe: server }) path addNpmBin cb logCb = do
               pure
                 { quit: stopServer usedPort path cp
                 , port: Just usedPort
+                , purs: Just purs
                 }
             Closed -> noRes <$ cb Info "IDE server exited with success code"
             StartError err -> noRes <$

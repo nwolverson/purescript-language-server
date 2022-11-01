@@ -1,5 +1,9 @@
 # Changelog
 
+### 0.17.1
+
+- Fix workspace symbol provider
+
 ### 0.17.0
 
 - Diagnostics on type courtesy of @wclr.

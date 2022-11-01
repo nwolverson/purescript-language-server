@@ -10,7 +10,7 @@ import Effect (Effect)
 import Effect.Aff (Aff, Fiber, runAff)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import PureScript.CST (RecoveredParserResult(..))
-import PureScript.CST.Range (class RangeOf)
+import PureScript.CST.Range (class RangeOf, class TokensOf)
 import PureScript.CST.Types (Module)
 
 launchAffLog :: forall a. Notify -> Aff a -> Effect (Fiber Unit)
@@ -20,7 +20,7 @@ launchAffLog notify =
 maybeParseResult ::
   forall a.
   a ->
-  (forall b. RangeOf b => Module b -> a) ->
+  (forall b. RangeOf b => TokensOf b => Module b -> a) ->
   RecoveredParserResult Module ->
   a
 maybeParseResult default f =

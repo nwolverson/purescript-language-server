@@ -79,6 +79,7 @@ defaultServerState =
     { port: Nothing
     , deactivate: pure unit
     , root: Nothing
+    , purs: Nothing
     , conn: Nothing
     , modules: initialModulesState
     , modulesFile: Nothing
@@ -275,7 +276,7 @@ mkStartPscIdeServer config conn state notify = do
   settings <- liftEffect $ Ref.read config
   startRes <- Server.startServer' settings rootPath notify notify
   Server.retry notify 6 case startRes of
-    { port: Just port, quit } -> do
+    { port: Just port, quit, purs } -> do
       Server.loadAll port
         >>= case _ of
           Left msg
@@ -446,9 +447,7 @@ handleEvents config conn state documents notify = do
         (getReferences documents)
   onHover conn
     $ runHandler
-        "onHover"
-        getTextDocUri
-        (getTooltips documents)
+        "onHover" getTextDocUri (getTooltips notify documents)
   onCodeAction conn
     $ runHandler
         "onCodeAction"

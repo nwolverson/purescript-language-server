@@ -56,7 +56,7 @@ startServer' ::
   String ->
   Notify ->
   Notify ->
-  Aff { port :: Maybe Int, quit :: Aff Unit }
+  Aff { port :: Maybe Int, quit :: Aff Unit, purs :: Maybe Executable }
 startServer' settings root cb logCb = do
   envIdeSources <- getEnvPursIdeSources
   packageGlobs <- case envIdeSources of

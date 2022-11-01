@@ -1,20 +1,22 @@
 module IdePurescript.PscIde
-  ( getCompletion
-  , getCompletion'
-  , typesInModule
-  , cwd
-  , loadDeps
-  , getType
-  , eitherToErr
-  , getPursuitModuleCompletion
-  , getPursuitCompletion
-  , getAvailableModules
-  , getLoadedModules
+  ( ModuleSearchResult
   , SearchResult
-  , ModuleSearchResult
-  , getTypeInfo
+  , cwd
+  , eitherToErr
+  , getAvailableModules
+  , getCompletion
+  , getCompletion'
+  , getLoadedModules
   , getModuleInfo
-  ) where
+  , getPursuitCompletion
+  , getPursuitModuleCompletion
+  , getType
+  , getTypeInfo
+  , getTypeInfoWithImportFilter
+  , loadDeps
+  , typesInModule
+  )
+  where
 
 import Prelude
 
@@ -91,6 +93,19 @@ getTypeInfo
   where
   moduleFilters =
     [ C.ModuleFilter $ maybe unqualModules getQualifiedModule modulePrefix ]
+
+-- new version of getTypeInfo for newer `purs`
+getTypeInfoWithImportFilter ::
+  Int ->
+  String ->
+  Maybe String ->
+  Maybe String ->
+  (Array String) ->
+  Aff (Maybe C.TypeInfo)
+getTypeInfoWithImportFilter port text currentModule qualifier importLines =
+  result head $ P.type' port text moduleFilters currentModule
+  where
+  moduleFilters = [ C.DependencyFilter qualifier importLines ]
 
 getModuleInfo :: Int -> String -> Aff (Maybe C.TypeInfo)
 getModuleInfo port text =
