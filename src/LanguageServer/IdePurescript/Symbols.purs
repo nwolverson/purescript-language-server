@@ -4,11 +4,9 @@ module LanguageServer.IdePurescript.Symbols
   , getDocumentSymbols
   , getSymbols
   , getWorkspaceSymbols
-  )
-  where
+  ) where
 
 import Prelude
-
 import Control.Alt ((<|>))
 import Control.Apply (lift2)
 import Data.Array (catMaybes, foldr, singleton, (:))
@@ -63,26 +61,28 @@ getDefinition ::
   ServerState ->
   TextDocumentPositionParams ->
   Aff (Nullable GotoDefinitionResult)
-getDefinition _notify docs _ state@(ServerState { clientCapabilities: Just clientCapabilities, parsedModules }) ({ textDocument, position }) = toNullable <$> do
-  let uri = _.uri $ un TextDocumentIdentifier textDocument
-  maybeDoc <- liftEffect $ getDocument docs uri
-  case Nullable.toMaybe maybeDoc of 
-    Nothing -> pure Nothing
-    Just doc -> do 
-      text <- liftEffect $ getTextAtRange doc (mkLineRange position)
-      let { port, modules, root } = un ServerState $ state
-      case port, root, identifierAtPoint text (_.character $ un Position position) of
-        Just port', Just root', Just identRes@{ range, qualifier, word } -> do
-          localDefn uri word
-            >>= case _ of
-                Just res | isNothing qualifier -> pure $ Just res
-                _ -> do
-                  info <- lift2 (<|>) (moduleInfo port' identRes range) (typeInfo port' modules identRes)
-                  for info \{ typePos: Command.TypePosition { name, start }, originRange } -> do
-                    defnUri <- liftEffect $ filenameToUri =<< resolve [ root' ] name
-                    let startRange = Range { start: convPosition start, end: convPosition start }
-                    pure $ mkResult defnUri originRange startRange
-        _, _, _ -> pure  Nothing
+getDefinition _notify docs _ state@(ServerState { clientCapabilities: Just clientCapabilities, parsedModules }) ({ textDocument, position }) =
+  toNullable
+    <$> do
+        let uri = _.uri $ un TextDocumentIdentifier textDocument
+        maybeDoc <- liftEffect $ getDocument docs uri
+        case Nullable.toMaybe maybeDoc of
+          Nothing -> pure Nothing
+          Just doc -> do
+            text <- liftEffect $ getTextAtRange doc (mkLineRange position)
+            let { port, modules, root } = un ServerState $ state
+            case port, root, identifierAtPoint text (_.character $ un Position position) of
+              Just port', Just root', Just identRes@{ range, qualifier, word } -> do
+                localDefn uri word
+                  >>= case _ of
+                      Just res | isNothing qualifier -> pure $ Just res
+                      _ -> do
+                        info <- lift2 (<|>) (moduleInfo port' identRes range) (typeInfo port' modules identRes)
+                        for info \{ typePos: Command.TypePosition { name, start }, originRange } -> do
+                          defnUri <- liftEffect $ filenameToUri =<< resolve [ root' ] name
+                          let startRange = Range { start: convPosition start, end: convPosition start }
+                          pure $ mkResult defnUri originRange startRange
+              _, _, _ -> pure Nothing
   where
   localDefn uri ident = case _.parsed <$> Map.lookup uri parsedModules of
     Just (ParseSucceeded parsedModule) -> getLocalDefinitions uri position ident parsedModule
@@ -160,9 +160,9 @@ instance rangeOfDoStatementsScope :: RangeOf err => RangeOf (DoStatementsScope e
   rangeOf (DoStatementsScope stmts) = foldl1 (\a b -> { start: a.start, end: b.end }) $ either rangeOf rangeOf <$> stmts
 
 getLocalDefinitions :: ∀ err. RangeOf err => DocumentUri -> Position -> String -> CST.Module err -> Aff (Maybe GotoDefinitionResult)
-getLocalDefinitions uri position ident =
+getLocalDefinitions uri position ident mod =
   toRes
-    <<< ( CSTTraversals.foldMapModule
+    $ ( CSTTraversals.foldMapModule
           $ CSTTraversals.defaultMonoidalVisitor
               { onExpr =
                 \e -> case e of
@@ -173,11 +173,26 @@ getLocalDefinitions uri position ident =
                   ExprAdo { statements, result } -> _.res $ foldr onStmt { scope: [ Left result ], res: Set.empty } statements
                   _ -> Set.empty
               , onDecl =
-                \d -> case d of
-                  DeclValue { binders } -> foldMap (onBinder d) binders
-                  _ -> Set.empty
+                \d ->
+                  let
+                    onMod x token = guard' (x == ident) (\_ -> Set.singleton { ident: token.range, scope: rangeOf mod })
+                  in
+                    case d of
+                      DeclValue { name: CST.Name { name: CST.Ident x, token }, binders } ->
+                        onMod x token <> foldMap (onBinder d) binders
+                      DeclData { name: CST.Name { token, name: CST.Proper name } } _ -> onMod name token
+                      DeclNewtype { name: CST.Name { token, name: CST.Proper name } } _ _ _ -> onMod name token
+                      DeclClass { name: CST.Name { token, name: CST.Proper name } } _ -> onMod name token
+                      DeclType { name: CST.Name { token, name: CST.Proper name } } _ _ -> onMod name token
+                      DeclFixity { operator: CST.FixityValue _ _ (CST.Name { token, name: CST.Operator name }) } -> onMod name token
+                      DeclFixity { operator: CST.FixityType _ _ _ (CST.Name { token, name: CST.Operator name }) } -> onMod name token
+                      DeclForeign _ _ (CST.ForeignValue (CST.Labeled { label: CST.Name { token, name: CST.Ident name } })) -> onMod name token
+                      DeclForeign _ _ (CST.ForeignData _ (CST.Labeled { label: CST.Name { token, name: CST.Proper name } })) -> onMod name token
+                      DeclForeign _ _ (CST.ForeignKind _ (CST.Name { token, name: CST.Proper name })) -> onMod name token
+                      _ -> Set.empty
               }
       )
+        mod
   where
 
   onLetBind :: forall e. RangeOf e => e -> LetBinding err -> Set IdentRange
