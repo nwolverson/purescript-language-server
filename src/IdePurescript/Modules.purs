@@ -39,6 +39,7 @@ import Effect.Class (liftEffect)
 import Foreign.Object as Object
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import IdePurescript.Regex (replace', match', test')
+import IdePurescript.Tokens (startsWithCapitalLetter)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
 import Node.Path (sep)
@@ -119,7 +120,20 @@ getUnqualActiveModules :: State -> Maybe String -> Array String
 getUnqualActiveModules state ident = getModules include state
   where
   include (Module { qualifier: Just _ }) = false
-  include (Module { importType: Explicit idents }) = maybe false (\x -> x `elem` idents || ("(" <> x <> ")") `elem` idents) ident
+  include (Module { importType: Explicit idents }) =
+    maybe false
+      ( \x -> x `elem` idents
+          || ("(" <> x <> ")") `elem` idents
+          || -- Include there's a constructor import like `Maybe(..)`
+            ( startsWithCapitalLetter x
+                -- Unfortunately PSC-IDE strips the (..) part in the "identifier"
+                -- so for now we have to include any module with an identifier
+                -- that starts with a capital letter, ideally we only included
+                -- constructor imports of the form `Whatever(..)`
+                && any startsWithCapitalLetter idents
+            )
+      )
+      ident
   include (Module { importType: Implicit }) = true
   include (Module { importType: Hiding idents }) = maybe true (_ `notElem` idents) ident
 

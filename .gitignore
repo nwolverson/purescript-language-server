@@ -1,6 +1,7 @@
 bower_components/
 node_modules/
 output/
+output-es/
 bundle.js*
 server.js*
 .psc*
