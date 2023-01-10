@@ -92,6 +92,10 @@ nvim_lsp.purescriptls.setup {
 }
 ```
 
+### Vim/LSP
+
+Auto configuration with [vim-lsp-settings](https://github.com/mattn/vim-lsp-settings)
+
 ### Vim/CoC
 
 Configuration with [coc.nvim](https://github.com/neoclide/coc.nvim/wiki/Language-servers#purescript)
