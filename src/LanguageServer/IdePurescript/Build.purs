@@ -10,6 +10,7 @@ module LanguageServer.IdePurescript.Build
   ) where
 
 import Prelude
+
 import Control.Monad.Except (catchError)
 import Control.Parallel (parSequence_)
 import Control.Promise (Promise)
@@ -23,7 +24,7 @@ import Data.Int (toNumber)
 import Data.JSDate as JSDate
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, maybe, isJust, isNothing)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing, maybe)
 import Data.Newtype (over, un, unwrap)
 import Data.Nullable (notNull, toNullable)
 import Data.Nullable as Nullable
@@ -145,7 +146,8 @@ checkBuildTasks config conn state notify = do
       else do
         modifyState_ state \s ->
           s
-            { rebuildRunning = Just $ DiagnosticsRebuild (Map.union docs running)
+            { rebuildRunning = Just $ DiagnosticsRebuild
+                (Map.union docs running)
             , diagnosticsQueue = Map.difference s.diagnosticsQueue docs
             }
         launchAff_ do
@@ -156,7 +158,8 @@ checkBuildTasks config conn state notify = do
           liftEffect do
             modifyState_ state (finishDiagnosticsRunning docs)
             {- revert cache-db if nothing happens after a timeout -}
-            revertCacheDbAfterTimeout conn state (Config.cacheDbRevertTimeout cfg)
+            revertCacheDbAfterTimeout conn state
+              (Config.cacheDbRevertTimeout cfg)
             runAgain unit
 
   runFastRebuilds st running =
@@ -201,8 +204,8 @@ isLibSourceFile :: String -> Boolean
 isLibSourceFile path =
   or
     $ [ ".spago", "bower_components" ]
-    <#> (flip String.contains) path
-    <<< String.Pattern
+        <#> (flip String.contains) path
+          <<< String.Pattern
 
 {-| Document content change handler. -}
 handleDocumentChange ::
@@ -226,7 +229,8 @@ handleDocumentChange config conn state notify document documents = do
           case version of
             1.0 ->
               Config.diagnosticsOnOpen cfg
-                && ( Config.revertExternsAndCacheDb cfg
+                &&
+                  ( Config.revertExternsAndCacheDb cfg
                       || Config.noFsDiagnostics cfg
                       {- exclude rebuild for just opened library modules -}
                       || not isLibSource
@@ -254,9 +258,9 @@ handleDocumentSave config conn state notify document documents = do
     $ modifyState_ state
         _
           { fullBuildWaiting =
-            Just
-              { progress: Config.fullBuildOnSaveProgress cfg
-              }
+              Just
+                { progress: Config.fullBuildOnSaveProgress cfg
+                }
           }
   checkBuildTasks config conn state notify
 
@@ -291,8 +295,10 @@ handleDocumentClose _ conn state notify document _documents = do
 
 -- STATE HELPERS
 readState ::
-  ∀ a.
-  Ref ServerState -> (ServerStateRec -> a) -> Effect a
+  forall a.
+  Ref ServerState ->
+  (ServerStateRec -> a) ->
+  Effect a
 readState state get =
   get <$> un ServerState <$> Ref.read state
 
@@ -310,7 +316,8 @@ enqueue :: _ -> Ref ServerState -> TextDocument -> DocumentStore -> Effect Unit
 enqueue serverStateOver stateRef originalDocument documents = do
   let unprocessedUri = getUri originalDocument
   mayFileData <- case FileTypes.uriToRelevantFileType unprocessedUri of
-    FileTypes.PureScriptFile -> pure $ Just { uri: unprocessedUri, document: originalDocument }
+    FileTypes.PureScriptFile -> pure $ Just
+      { uri: unprocessedUri, document: originalDocument }
     FileTypes.JavaScriptFile ->
       case FileTypes.jsUriToMayPsUri unprocessedUri of
         Nothing -> pure Nothing
@@ -323,17 +330,22 @@ enqueue serverStateOver stateRef originalDocument documents = do
     Just x -> enqueue' x
   where
   doNothing = pure unit
-  enqueue' { uri, document } = modifyState_ stateRef \s -> serverStateOver (Map.insert uri document) s
+  enqueue' { uri, document } = modifyState_ stateRef \s -> serverStateOver
+    (Map.insert uri document)
+    s
 
-addToFastRebuildQueue :: Ref ServerState -> TextDocument -> DocumentStore -> Effect Unit
+addToFastRebuildQueue ::
+  Ref ServerState -> TextDocument -> DocumentStore -> Effect Unit
 addToFastRebuildQueue =
   enqueue \f s -> s { fastRebuildQueue = f s.fastRebuildQueue }
 
-addToDiagnosticsQueue :: Ref ServerState -> TextDocument -> DocumentStore -> Effect Unit
+addToDiagnosticsQueue ::
+  Ref ServerState -> TextDocument -> DocumentStore -> Effect Unit
 addToDiagnosticsQueue =
   enqueue \f s -> s { diagnosticsQueue = f s.diagnosticsQueue }
 
-finishFastRebuildRunning :: Map DocumentUri TextDocument -> ServerStateRec -> ServerStateRec
+finishFastRebuildRunning ::
+  Map DocumentUri TextDocument -> ServerStateRec -> ServerStateRec
 finishFastRebuildRunning docs st =
   case st.rebuildRunning of
     Just (FastRebuild running) ->
@@ -347,7 +359,8 @@ finishFastRebuildRunning docs st =
     _ ->
       st
 
-finishDiagnosticsRunning :: Map DocumentUri TextDocument -> ServerStateRec -> ServerStateRec
+finishDiagnosticsRunning ::
+  Map DocumentUri TextDocument -> ServerStateRec -> ServerStateRec
 finishDiagnosticsRunning docs st =
   case st.rebuildRunning of
     Just (DiagnosticsRebuild running) ->
@@ -381,15 +394,15 @@ saveCacheDb config conn state = do
     cacheDbPath <-
       liftEffect
         $ getOutputDir config state
-        <#> \output -> output <> "/" <> "cache-db.json"
+            <#> \output -> output <> "/" <> "cache-db.json"
     cacheDb <- do
       attempt do
         _ <- FS.stat cacheDbPath
         FS.readTextFile UTF8 cacheDbPath
           <#> \source ->
-              { path: cacheDbPath
-              , source
-              }
+            { path: cacheDbPath
+            , source
+            }
     liftEffect
       $ modifyState_ state
           _
@@ -406,8 +419,9 @@ revertCacheDb conn state = do
       flip catchError
         ( \err ->
             liftEffect $ log conn $ show err
-        ) do
-        FS.writeTextFile UTF8 cacheDbPath source
+        )
+        do
+          FS.writeTextFile UTF8 cacheDbPath source
       liftEffect
         $ modifyState_ state
             _ { savedCacheDb = Nothing }
@@ -434,15 +448,16 @@ revertCacheDbAfterTimeout conn state timeout = do
       _ { revertCacheDbTimeout = Just id }
 
 -- DIAGNOSTICS STUFF
-type DiagnosticResult
-  = { pscErrors :: Array RebuildError
-    , diagnostics :: Map DocumentUri (Array Diagnostic)
-    }
+type DiagnosticResult =
+  { pscErrors :: Array RebuildError
+  , diagnostics :: Map DocumentUri (Array Diagnostic)
+  }
 
 emptyDiagnostics :: DiagnosticResult
 emptyDiagnostics = { pscErrors: [], diagnostics: Map.empty }
 
-collectByFirst :: forall a. Array (Maybe DocumentUri /\ a) -> Map DocumentUri (Array a)
+collectByFirst ::
+  forall a. Array (Maybe DocumentUri /\ a) -> Map DocumentUri (Array a)
 collectByFirst x = Map.fromFoldableWith (<>) $ mapMaybe f x
   where
   f (Just a /\ b) = Just (a /\ [ b ])
@@ -472,19 +487,21 @@ convertDiagnostics projectRoot settings (PscResult { warnings, errors }) =
       , end: Position { line: 1, character: 1 }
       }
 
-  convertDiagnostic isError
+  convertDiagnostic
+    isError
     (RebuildError { errorCode, position, message, filename }) = do
     uri <- traverse (resolve [ projectRoot ] >>> (=<<) filenameToUri) filename
     pure
       $ uri
-      /\ ( Diagnostic
-            { range: maybe dummyRange positionToRange position
-            , severity: toNullable $ Just $ if isError then 1 else 2
-            , code: toNullable $ Just $ errorCode
-            , source: toNullable $ Just "PureScript"
-            , message
-            }
-        )
+          /\
+            ( Diagnostic
+                { range: maybe dummyRange positionToRange position
+                , severity: toNullable $ Just $ if isError then 1 else 2
+                , code: toNullable $ Just $ errorCode
+                , source: toNullable $ Just "PureScript"
+                , message
+                }
+            )
 
 getDiagnostics :: DocumentUri -> Settings -> ServerState -> Aff DiagnosticResult
 getDiagnostics uri settings state = do
@@ -496,20 +513,17 @@ getDiagnostics uri settings state = do
       liftEffect $ convertDiagnostics root settings errors
     _ -> pure emptyDiagnostics
 
-type DestPair
-  = { org :: String, tmp :: String }
+type DestPair = { org :: String, tmp :: String }
 
-type DestFiles
-  = { source :: DestPair, foreign :: Maybe DestPair }
+type DestFiles = { source :: DestPair, foreign :: Maybe DestPair }
 
-newtype ForeignExt
-  = ForeignExt String
+newtype ForeignExt = ForeignExt String
 
 getForeignExt :: String -> ForeignExt
 getForeignExt ext =
   ForeignExt
     $ "."
-    <> fromMaybe ext (String.stripPrefix (String.Pattern ".") ext)
+        <> fromMaybe ext (String.stripPrefix (String.Pattern ".") ext)
 
 getDestFiles :: String -> ForeignExt -> Aff DestFiles
 getDestFiles filename (ForeignExt foreignExt) = do
@@ -529,9 +543,9 @@ getDestFiles filename (ForeignExt foreignExt) = do
     , foreign:
         foreignFile
           <#> \org ->
-              { org
-              , tmp: tmpDir <> "/" <> hash <> foreignExt
-              }
+            { org
+            , tmp: tmpDir <> "/" <> hash <> foreignExt
+            }
     }
   where
   hash = (getHash filename)
@@ -565,7 +579,11 @@ Currently the problem with ide rebuild:
 
 -}
 getDiagnosticsOnType ::
-  TextDocument -> Settings -> ServerState -> (Maybe ModuleName) -> Aff DiagnosticResult
+  TextDocument ->
+  Settings ->
+  ServerState ->
+  (Maybe ModuleName) ->
+  Aff DiagnosticResult
 getDiagnosticsOnType document cfg state moduleName = do
   let
     targets =
@@ -594,7 +612,8 @@ getDiagnosticsOnType document cfg state moduleName = do
       {- clean up tmp files -}
       parSequence_
         [ void $ attempt $ FS.unlink files.source.tmp
-        , maybe (pure unit) (void <<< attempt <<< FS.unlink) (files.foreign <#> _.tmp)
+        , maybe (pure unit) (void <<< attempt <<< FS.unlink)
+            (files.foreign <#> _.tmp)
         , if (hasSevereErrors errors) then
             pure unit
           else
@@ -665,7 +684,8 @@ unwrapModuleName r =
     _ ->
       Nothing
 
-getNoFsDiagnostics :: TextDocument -> Settings -> ServerState -> Aff DiagnosticResult
+getNoFsDiagnostics ::
+  TextDocument -> Settings -> ServerState -> Aff DiagnosticResult
 getNoFsDiagnostics document settings state = do
   --let targets = Just []
   -- need to send default targets to enable foreign check
@@ -675,7 +695,8 @@ getNoFsDiagnostics document settings state = do
     ServerState { port: Just port, root: Just root } -> do
       filename <- liftEffect $ uriToFilename uri
       currentText <- liftEffect $ getText document
-      { errors } <- rebuild port ("data:" <> currentText) (Just filename) targets
+      { errors } <- rebuild port ("data:" <> currentText) (Just filename)
+        targets
       liftEffect $ convertDiagnostics root settings errors
     _ -> pure emptyDiagnostics
 
@@ -696,35 +717,37 @@ fullBuild ::
 fullBuild logCb settings state = do
   let command = parseShellQuote $ Config.buildCommand settings
   case state, uncons command of
-    ServerState { port: maybePort, root: Just directory }, Just { head: cmd, tail: args } -> do
+    ServerState { port: maybePort, root: Just directory },
+    Just { head: cmd, tail: args } -> do
       build logCb
         { command: Command cmd args
         , directory
         , useNpmDir: Config.addNpmPath settings
         }
         >>= either (pure <<< Left) \{ errors } -> do
-            liftEffect $ logCb Info "Build complete"
-            case maybePort of
-              Nothing ->
-                liftEffect
-                  $ logCb Error
-                  $ "Couldn't reload modules, no ide server port"
+          liftEffect $ logCb Info "Build complete"
+          case maybePort of
+            Nothing ->
+              liftEffect
+                $ logCb Error
+                $ "Couldn't reload modules, no ide server port"
 
-              Just port -> do
-                pure unit
-                attempt (loadAll port)
-                  >>= case _ of
-                      Left e ->
-                        liftEffect $ logCb Error $ "Error reloading modules: " <> show e
+            Just port -> do
+              pure unit
+              attempt (loadAll port)
+                >>= case _ of
+                  Left e ->
+                    liftEffect $ logCb Error $ "Error reloading modules: " <>
+                      show e
 
-                      Right (Left msg) ->
-                        liftEffect
-                          $ logCb Error
-                          $ "Error message from IDE server reloading modules: "
+                  Right (Left msg) ->
+                    liftEffect
+                      $ logCb Error
+                      $ "Error message from IDE server reloading modules: "
                           <> msg
-                      _ ->
-                        liftEffect $ logCb Info "Reloaded modules"
-            liftEffect $ Right <$> convertDiagnostics directory settings errors
+                  _ ->
+                    liftEffect $ logCb Info "Reloaded modules"
+          liftEffect $ Right <$> convertDiagnostics directory settings errors
 
     _, Nothing ->
       pure $ Left "Error parsing build command"
@@ -732,9 +755,9 @@ fullBuild logCb settings state = do
       pure
         $ Left
         $ "Error running build: port="
-        <> show port
-        <> ", root="
-        <> show root
+            <> show port
+            <> ", root="
+            <> show root
 
 -- | Builds module and provides diagnostics
 rebuildWithDiagnostics ::
@@ -746,7 +769,12 @@ rebuildWithDiagnostics ::
   TextDocument ->
   Aff Unit
 rebuildWithDiagnostics
-  config conn state notify noCodegen document = do
+  config
+  conn
+  state
+  notify
+  noCodegen
+  document = do
   let uri = getUri document
   c <- liftEffect $ Ref.read config
   s <- liftEffect $ Ref.read state
@@ -771,9 +799,10 @@ rebuildWithDiagnostics
     endTime <- JSDate.now <#> JSDate.toDateTime
     notify Info
       $ "Getting diagnostics took: "
-      <> ( show
-            $ (DT.diff <$> endTime <*> startTime :: Maybe Milliseconds)
-        )
+          <>
+            ( show
+                $ (DT.diff <$> endTime <*> startTime :: Maybe Milliseconds)
+            )
   liftEffect do
     let fileDiagnostics = fromMaybe [] $ Map.lookup uri diagnostics
     filename <- uriToFilename uri
@@ -782,13 +811,13 @@ rebuildWithDiagnostics
         $ (Set.toUnfoldable $ Map.keys diagnostics :: Array _)
     notify Info
       $ "Built with "
-      <> show (Array.length fileDiagnostics)
-      <> "/"
-      <> show (Array.length pscErrors)
-      <> " issues for file: "
-      <> show filename
-      <> ", all diagnostic files: "
-      <> show allFiles
+          <> show (Array.length fileDiagnostics)
+          <> "/"
+          <> show (Array.length pscErrors)
+          <> " issues for file: "
+          <> show filename
+          <> ", all diagnostic files: "
+          <> show allFiles
     let nonFileDiagnostics = Map.delete uri diagnostics
     when (Map.size nonFileDiagnostics > 0) do
       notify Info $ "Unmatched diagnostics: " <> show nonFileDiagnostics
@@ -796,10 +825,13 @@ rebuildWithDiagnostics
       ( \s1 ->
           s1
             { diagnostics =
-              Map.insert
-                uri
-                { errors: pscErrors, diagnostics: fileDiagnostics, onType: true }
-                (s1.diagnostics)
+                Map.insert
+                  uri
+                  { errors: pscErrors
+                  , diagnostics: fileDiagnostics
+                  , onType: true
+                  }
+                  (s1.diagnostics)
             , modulesFile = Nothing -- Force reload of modules on next request
             }
       )
@@ -822,8 +854,9 @@ parseModuleDocument state document = do
         s
           { modulesFile = Nothing
           , parsedModules =
-            Map.insert (getUri document)
-              { version: v, parsed: res, document } s.parsedModules
+              Map.insert (getUri document)
+                { version: v, parsed: res, document }
+                s.parsedModules
           }
     )
   pure res
@@ -861,92 +894,95 @@ fullBuildWithDiagnostics config conn state notify withProgress = do
   liftEffect do
     fromMaybe (pure unit)
       $ progressReporter
-      <#> flip workBegin { title: "Building PureScript" }
+          <#> flip workBegin { title: "Building PureScript" }
     sendDiagnosticsBegin conn
   st <- liftEffect $ Ref.read state
   cfg <- liftEffect $ Ref.read config
   fullBuild notify cfg st
     >>= case _ of
-        Right { pscErrors, diagnostics } ->
-          liftEffect do
-            log conn $ "Built with " <> (show $ Array.length pscErrors) <> " issues"
-            pscErrorsMap <-
-              collectByFirst
-                <$> traverse
-                    ( \err@(RebuildError { filename }) -> do
-                        projectRoot <- workspaceRoot
-                        uri <-
-                          traverse
-                            (resolve [ projectRoot ] >>> (=<<) filenameToUri) filename
-                        pure $ Tuple uri err
-                    )
-                    pscErrors
-            let
-              newDiagState =
-                Map.mapMaybeWithKey
-                  ( \file errors ->
-                      Just
-                        { errors
-                        , diagnostics:
-                            fromMaybe [] $ Map.lookup file diagnostics
-                        , onType: false
-                        }
-                  )
-                  pscErrorsMap
-            prevDiag <- readState state _.diagnostics
-            let actualDiag = updateDiagnostics prevDiag newDiagState
-            let
-              nonErrorFiles :: Array DocumentUri
-              nonErrorFiles =
-                Set.toUnfoldable
-                  $ Map.keys
-                  --$ Map.difference prevErrors pscErrorsMap
-                  $ Map.difference prevDiag actualDiag
-            nonErrorFilesNames <- traverse uriToFilename nonErrorFiles
-            log conn $ "Removing old diagnostics for: " <> show nonErrorFilesNames
-            for_ nonErrorFiles \uri ->
-              publishDiagnostics conn
-                { uri
-                , diagnostics: []
-                }
-            modifyState_ state _ { diagnostics = actualDiag }
-            for_ (Map.toUnfoldable diagnostics :: Array _) \(uri /\ fileDiagnostics) -> do
+      Right { pscErrors, diagnostics } ->
+        liftEffect do
+          log conn $ "Built with " <> (show $ Array.length pscErrors) <>
+            " issues"
+          pscErrorsMap <-
+            collectByFirst
+              <$> traverse
+                ( \err@(RebuildError { filename }) -> do
+                    projectRoot <- workspaceRoot
+                    uri <-
+                      traverse
+                        (resolve [ projectRoot ] >>> (=<<) filenameToUri)
+                        filename
+                    pure $ Tuple uri err
+                )
+                pscErrors
+          let
+            newDiagState =
+              Map.mapMaybeWithKey
+                ( \file errors ->
+                    Just
+                      { errors
+                      , diagnostics:
+                          fromMaybe [] $ Map.lookup file diagnostics
+                      , onType: false
+                      }
+                )
+                pscErrorsMap
+          prevDiag <- readState state _.diagnostics
+          let actualDiag = updateDiagnostics prevDiag newDiagState
+          let
+            nonErrorFiles :: Array DocumentUri
+            nonErrorFiles =
+              Set.toUnfoldable
+                $ Map.keys
+                --$ Map.difference prevErrors pscErrorsMap
+                $ Map.difference prevDiag actualDiag
+          nonErrorFilesNames <- traverse uriToFilename nonErrorFiles
+          log conn $ "Removing old diagnostics for: " <> show nonErrorFilesNames
+          for_ nonErrorFiles \uri ->
+            publishDiagnostics conn
+              { uri
+              , diagnostics: []
+              }
+          modifyState_ state _ { diagnostics = actualDiag }
+          for_ (Map.toUnfoldable diagnostics :: Array _)
+            \(uri /\ fileDiagnostics) -> do
               filename <- uriToFilename uri
               log conn $ "Publishing diagnostics for: " <> show filename
               publishDiagnostics conn
                 { uri
                 , diagnostics: fileDiagnostics
                 }
-            {- after full build purs-ide reloads state from the disk
+          {- after full build purs-ide reloads state from the disk
 
-            -}
-            -- when (Config.noFsDiagnostics cfg) do
-            --   parsedModules <- readState state _.parsedModules
-            --   for_ (parsedModules) \{ document } ->
-            --     addToDiagnosticsQueue state document
-            {- show error dialog if there where errors during full build -}
-            errorFiles <-
-              traverse uriToFilename
-                $ Set.toUnfoldable
-                $ Map.keys
-                $ Map.filter
-                    ( isJust
-                        <<< Array.find
-                            (\(Diagnostic d) -> d.severity == notNull 1)
-                    )
-                    diagnostics
-            case errorFiles of
-              [] -> pure unit
-              files ->
-                showError conn
-                  $ "Build failed with errors in files: "
-                  <> String.joinWith ", " files
-        Left err ->
-          liftEffect do
-            error conn err
-            showError conn err
+          -}
+          -- when (Config.noFsDiagnostics cfg) do
+          --   parsedModules <- readState state _.parsedModules
+          --   for_ (parsedModules) \{ document } ->
+          --     addToDiagnosticsQueue state document
+          {- show error dialog if there where errors during full build -}
+          errorFiles <-
+            traverse uriToFilename
+              $ Set.toUnfoldable
+              $ Map.keys
+              $ Map.filter
+                  ( isJust
+                      <<< Array.find
+                        (\(Diagnostic d) -> d.severity == notNull 1)
+                  )
+                  diagnostics
+          case errorFiles of
+            [] -> pure unit
+            files ->
+              showError conn
+                $ "Build failed with errors in files: "
+                    <> String.joinWith ", " files
+      Left err ->
+        liftEffect do
+          error conn err
+          showError conn err
   liftEffect do
     sendDiagnosticsEnd conn
     fromMaybe (pure unit)
       $ progressReporter
-      <#> workDone
+          <#> workDone

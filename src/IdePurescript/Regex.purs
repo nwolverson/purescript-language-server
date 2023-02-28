@@ -1,6 +1,7 @@
 module IdePurescript.Regex where
 
 import Prelude
+
 import Data.Array.NonEmpty as NEA
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))

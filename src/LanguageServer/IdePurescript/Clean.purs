@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Clean
   ( clean
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -23,17 +22,20 @@ clean settings = do
     outputDir = effectiveOutputDirectory settings
   attempedStats <- attempt $ FS.stat outputDir
   case attempedStats of
-    Left err -> pure $ Left $ "Could not find directory to clean. " <> message err
+    Left err -> pure $ Left $ "Could not find directory to clean. " <> message
+      err
     Right stats -> case isDirectory stats of
       false -> pure $ Left $ "Target \"" <> outputDir <> "\" is not a directory"
       true -> do
         msg <- (processDir false) outputDir
         case length msg of
-          0 -> pure $ Right $ "Nothing to clean in directory \"" <> outputDir <> "\""
-          _ -> pure $ Right $ msg <> "Successfully cleaned directory \"" <> outputDir <> "\""
+          0 -> pure $ Right $ "Nothing to clean in directory \"" <> outputDir <>
+            "\""
+          _ -> pure $ Right $ msg <> "Successfully cleaned directory \""
+            <> outputDir
+            <> "\""
 
-type Processor
-  = Boolean -> Path.FilePath -> Aff String
+type Processor = Boolean -> Path.FilePath -> Aff String
 
 processDir :: Processor
 processDir markedForRemoval path = do
@@ -74,17 +76,20 @@ filesToRemove :: Array Path.FilePath
 filesToRemove = [ "cache-db.json" ]
 
 maybeRemovableFile :: Path.FilePath -> Maybe Path.FilePath
-maybeRemovableFile filePath = find (\x -> x == (Path.basename filePath)) filesToRemove
+maybeRemovableFile filePath = find (\x -> x == (Path.basename filePath))
+  filesToRemove
 
 directoryRemovalMarker :: Path.FilePath
 directoryRemovalMarker = "externs.cbor"
 
 maybeRemovableContents :: Array Path.FilePath -> Maybe (Array Path.FilePath)
-maybeRemovableContents dirContents = case find (\x -> x == directoryRemovalMarker) dirContents of
-  Nothing -> Nothing
-  _ -> Just dirContents
+maybeRemovableContents dirContents =
+  case find (\x -> x == directoryRemovalMarker) dirContents of
+    Nothing -> Nothing
+    _ -> Just dirContents
 
-removeDirectory :: Processor -> Path.FilePath -> Array Path.FilePath -> Aff String
+removeDirectory ::
+  Processor -> Path.FilePath -> Array Path.FilePath -> Aff String
 removeDirectory processor dirPath contentFullPaths = do
   let
     dirRemovalMsg :: String

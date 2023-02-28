@@ -1,4 +1,4 @@
-import { createConnection, TextDocuments, CodeActionKind, TextDocumentSyncKind } from "vscode-languageserver/node";
+import { createConnection, TextDocuments, CodeActionKind, TextDocumentSyncKind, } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 export var initConnection = function (commands) {
     return function (cb) {

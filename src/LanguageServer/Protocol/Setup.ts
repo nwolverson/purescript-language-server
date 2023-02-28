@@ -5,7 +5,7 @@ import {
   TextDocuments,
   CodeActionKind,
   LSPObject,
-  TextDocumentSyncKind
+  TextDocumentSyncKind,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
@@ -17,7 +17,7 @@ export const initConnection =
     conn.listen();
 
     conn.onInitialize((params) => {
-      conn.console.info(JSON.stringify(params));
+      // conn.console.info(JSON.stringify(params));
       cb({
         params,
         conn,

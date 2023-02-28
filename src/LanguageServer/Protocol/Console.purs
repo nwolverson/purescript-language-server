@@ -1,6 +1,7 @@
 module LanguageServer.Protocol.Console where
 
 import Prelude
+
 import Effect (Effect)
 import LanguageServer.Protocol.Types (Connection)
 

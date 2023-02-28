@@ -6,8 +6,7 @@ module LanguageServer.IdePurescript.Imports
   , getAllModules
   , reformatImports
   , showNS
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -36,39 +35,64 @@ import LanguageServer.Protocol.Uri (uriToFilename)
 import LanguageServer.Protocol.Window as Window
 import PscIde.Command as C
 
-addCompletionImport :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
+addCompletionImport ::
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  Array Foreign ->
+  Aff Foreign
 addCompletionImport = addCompletionImport' mempty
 
-addCompletionImport' :: WorkspaceEdit -> Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
-addCompletionImport' existingEdit log docs config state@(ServerState { conn }) args = do
+addCompletionImport' ::
+  WorkspaceEdit ->
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  Array Foreign ->
+  Aff Foreign
+addCompletionImport'
+  existingEdit
+  log
+  docs
+  config
+  state@(ServerState { conn })
+  args = do
   let shouldAddImport = autocompleteAddImport config
   case conn, (runExcept <<< readString) <$> args, shouldAddImport of
-    Just conn', [ Right identifier, mod, qual, Right uriRaw, Right ns ], true -> do
-      let uri = DocumentUri uriRaw
-      maybeDoc <- liftEffect $ getDocument docs uri
-      case Nullable.toMaybe maybeDoc of
-        Nothing -> pure $ unsafeToForeign $ toNullable Nothing
-        Just doc -> do
-          { text, version } <- liftEffect $ getTextAtVersion doc
-          edit <- addCompletionImportEdit log docs config state { identifier, mod: hush mod, qual: hush qual, uri } doc version text (parseNS ns)
-          case edit of
-            Right edits -> do
-              void $ applyEdit conn' (fold $ existingEdit : edits)
-              pure $ unsafeToForeign $ toNullable Nothing
-            Left res -> do
-              void $ applyEdit conn' existingEdit
-              pure res
+    Just conn', [ Right identifier, mod, qual, Right uriRaw, Right ns ], true ->
+      do
+        let uri = DocumentUri uriRaw
+        maybeDoc <- liftEffect $ getDocument docs uri
+        case Nullable.toMaybe maybeDoc of
+          Nothing -> pure $ unsafeToForeign $ toNullable Nothing
+          Just doc -> do
+            { text, version } <- liftEffect $ getTextAtVersion doc
+            edit <- addCompletionImportEdit log docs config state
+              { identifier, mod: hush mod, qual: hush qual, uri }
+              doc
+              version
+              text
+              (parseNS ns)
+            case edit of
+              Right edits -> do
+                void $ applyEdit conn' (fold $ existingEdit : edits)
+                pure $ unsafeToForeign $ toNullable Nothing
+              Left res -> do
+                void $ applyEdit conn' existingEdit
+                pure res
     Just conn', _, _ -> do
       void $ applyEdit conn' existingEdit
       pure $ unsafeToForeign $ toNullable Nothing
     _, _, _ -> pure $ unsafeToForeign $ toNullable Nothing
 
-type CompletionImportArgs
-  = { identifier :: String
-    , mod :: Maybe String
-    , qual :: Maybe String
-    , uri :: DocumentUri
-    }
+type CompletionImportArgs =
+  { identifier :: String
+  , mod :: Maybe String
+  , qual :: Maybe String
+  , uri :: DocumentUri
+  }
 
 parseNS :: String -> Maybe C.Namespace
 parseNS "NSValue" = Just C.NSValue
@@ -92,7 +116,16 @@ addCompletionImportEdit ::
   String ->
   Maybe C.Namespace ->
   Aff (Either Foreign (Array WorkspaceEdit))
-addCompletionImportEdit log _ config (ServerState { port, modules, conn, clientCapabilities }) { identifier, mod, qual, uri } _ version text ns = do
+addCompletionImportEdit
+  log
+  _
+  config
+  (ServerState { port, modules, conn, clientCapabilities })
+  { identifier, mod, qual, uri }
+  _
+  version
+  text
+  ns = do
   let prelude = preludeModule config
   case port of
     Just port' -> do
@@ -100,15 +133,20 @@ addCompletionImportEdit log _ config (ServerState { port, modules, conn, clientC
         case mod, qual of
           Just mod', Just qual'
             | noModule (isSameQualified mod' qual') -> do
-              addQualifiedImport modules port' (un DocumentUri uri) text mod' qual'
+                addQualifiedImport modules port' (un DocumentUri uri) text mod'
+                  qual'
           Just mod', Nothing
             | mod' == prelude && noModule (isSameUnqualified prelude) -> do
-              addModuleImport modules port' (un DocumentUri uri) text mod'
+                addModuleImport modules port' (un DocumentUri uri) text mod'
           mod', qual' ->
-            addExplicitImport modules port' (un DocumentUri uri) text mod' qual' identifier ns
+            addExplicitImport modules port' (un DocumentUri uri) text mod' qual'
+              identifier
+              ns
       case result of
         UpdatedImports newText -> do
-          let edit = makeMinimalWorkspaceEdit clientCapabilities uri version text newText
+          let
+            edit = makeMinimalWorkspaceEdit clientCapabilities uri version text
+              newText
           pure $ Right $ maybe [] singleton edit
         AmbiguousImport imps ->
           liftEffect do
@@ -116,10 +154,13 @@ addCompletionImportEdit log _ config (ServerState { port, modules, conn, clientC
               $ for_ conn
                   ( _
                       `Window.showError`
-                        ("Could not import " <> text <> " because there is more than one option")
+                        ( "Could not import " <> text <>
+                            " because there is more than one option"
+                        )
                   )
             log Warning "Found ambiguous imports"
-            pure $ Left $ unsafeToForeign $ (\(C.TypeInfo { module' }) -> module') <$> imps
+            pure $ Left $ unsafeToForeign $
+              (\(C.TypeInfo { module' }) -> module') <$> imps
         -- UnnecessaryImport is not unusual - e.g. already existing import will hit this case
         -- And so will things that are implicitly imported because they live under Prim
         -- - e.g. Array or String
@@ -127,7 +168,10 @@ addCompletionImportEdit log _ config (ServerState { port, modules, conn, clientC
           pure $ Right []
         -- Failed imports are now rare and will display an error
         FailedImport msg -> do
-          liftEffect $ for_ conn (_ `Window.showError` ("Failed to import: `" <> identifier <> "`. Error: " <> msg))
+          liftEffect $ for_ conn
+            ( _ `Window.showError`
+                ("Failed to import: `" <> identifier <> "`. Error: " <> msg)
+            )
           pure $ Right []
     _ -> pure $ Right []
 
@@ -135,14 +179,21 @@ addCompletionImportEdit log _ config (ServerState { port, modules, conn, clientC
 
   noModule f = all (not f <<< unwrap) modules.modules
   isSameQualified mod' qual' = case _ of
-    { moduleName: mod'', qualifier: Just qual'' } -> mod' == mod'' && qual' == qual''
+    { moduleName: mod'', qualifier: Just qual'' } -> mod' == mod'' && qual' ==
+      qual''
     _ -> false
 
   isSameUnqualified mod' = case _ of
     { moduleName, qualifier: Nothing } -> mod' == moduleName
     _ -> false
 
-addModuleImport' :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
+addModuleImport' ::
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  Array Foreign ->
+  Aff Foreign
 addModuleImport' log docs config state args = do
   let ServerState { port, modules, conn, clientCapabilities } = state
   case port, (runExcept <<< readString) <$> args of
@@ -150,7 +201,7 @@ addModuleImport' log docs config state args = do
       maybeDoc <- liftEffect $ getDocument docs (DocumentUri uri)
       case Nullable.toMaybe maybeDoc of
         Nothing -> pure successResult
-        Just doc -> do 
+        Just doc -> do
           { text, version } <- liftEffect $ getTextAtVersion doc
           fileName <- liftEffect $ uriToFilename $ DocumentUri uri
           edit <- case qual' of
@@ -166,10 +217,16 @@ addModuleImport' log docs config state args = do
                 text
                 Nothing
             Left _ -> do
-              { result: res } <- addModuleImport modules port' fileName text mod'
+              { result: res } <- addModuleImport modules port' fileName text
+                mod'
               case res of
                 UpdatedImports result -> do
-                  pure $ Right $ fromFoldable $ makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
+                  pure $ Right $ fromFoldable $ makeMinimalWorkspaceEdit
+                    clientCapabilities
+                    (DocumentUri uri)
+                    version
+                    text
+                    result
                 _ -> pure $ Right []
           case conn, edit of
             Just conn', Right edits -> do
@@ -184,7 +241,13 @@ addModuleImport' log docs config state args = do
   where
   successResult = unsafeToForeign $ toNullable Nothing
 
-getAllModules :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
+getAllModules ::
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  Array Foreign ->
+  Aff Foreign
 getAllModules log _ _ state _ =
   case state of
     ServerState { port: Just port } ->
@@ -193,7 +256,13 @@ getAllModules log _ _ state _ =
       liftEffect $ log Error "Fail case"
       pure $ unsafeToForeign []
 
-reformatImports :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
+reformatImports ::
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  Array Foreign ->
+  Aff Foreign
 reformatImports log docs _ state args = do
   let ServerState { port, modules, conn, clientCapabilities } = state
   case port, (runExcept <<< readString) <$> args of
@@ -207,7 +276,12 @@ reformatImports log docs _ state args = do
           res <- reformatModuleImports log modules port' fileName text
           case res of
             Just { result } -> do
-              let edit = makeMinimalWorkspaceEdit clientCapabilities (DocumentUri uri) version text result
+              let
+                edit = makeMinimalWorkspaceEdit clientCapabilities
+                  (DocumentUri uri)
+                  version
+                  text
+                  result
               case conn, edit of
                 Just conn', Just edit' -> void $ applyEdit conn' edit'
                 _, _ -> pure unit

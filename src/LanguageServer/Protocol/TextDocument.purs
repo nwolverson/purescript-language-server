@@ -1,6 +1,7 @@
 module LanguageServer.Protocol.TextDocument where
 
 import Prelude
+
 import Effect (Effect)
 import LanguageServer.Protocol.Types (DocumentUri, Position, Range)
 

@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.Completion
   ( getCompletions
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -33,7 +32,13 @@ import LanguageServer.Protocol.TextDocument (getTextAtRange)
 import LanguageServer.Protocol.Types (CompletionItem(..), CompletionItemLabelDetails(..), CompletionItemList(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, markupContent)
 import LanguageServer.Protocol.Types as LS
 
-getCompletions :: Notify -> DocumentStore -> Settings -> ServerState -> TextDocumentPositionParams -> Aff CompletionItemList
+getCompletions ::
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  TextDocumentPositionParams ->
+  Aff CompletionItemList
 getCompletions notify docs settings state ({ textDocument, position }) = do
   let uri = _.uri $ un TextDocumentIdentifier textDocument
   doc <- liftEffect $ getDocument docs uri
@@ -50,7 +55,12 @@ getCompletions notify docs settings state ({ textDocument, position }) = do
             getLoadedModules port'
           else
             pure $ getUnqualActiveModules modules Nothing
-        let qualifiers = mapMaybe (\(Modules.Module { moduleName, qualifier }) -> { moduleName, qualifier: _ } <$> qualifier) modules.modules
+        let
+          qualifiers = mapMaybe
+            ( \(Modules.Module { moduleName, qualifier }) ->
+                { moduleName, qualifier: _ } <$> qualifier
+            )
+            modules.modules
         { results, isIncomplete } <-
           getSuggestions notify port'
             { line
@@ -67,7 +77,8 @@ getCompletions notify docs settings state ({ textDocument, position }) = do
             , groupCompletions: Config.autocompleteGrouped settings
             , preferredModules: Config.importsPreferredModules settings
             }
-        pure $ CompletionItemList { items: convert uri <$> results, isIncomplete }
+        pure $ CompletionItemList
+          { items: convert uri <$> results, isIncomplete }
       _ -> pure $ result []
 
   where
@@ -94,7 +105,8 @@ getCompletions notify docs settings state ({ textDocument, position }) = do
     TextEdit
       { range:
           Range
-            { start: position # over Position (\pos -> pos { character = pos.character - length prefix })
+            { start: position # over Position
+                (\pos -> pos { character = pos.character - length prefix })
             , end: position
             }
       , newText
@@ -114,60 +126,100 @@ getCompletions notify docs settings state ({ textDocument, position }) = do
               { textEdit = toNullable $ Just $ edit text prefix
               }
           )
-  convert uri sugg@(IdentSuggestion { origMod, exportMod, identifier, qualifier, suggestType, prefix, valueType, documentation, namespace }) =
+  convert
+    uri
+    sugg@
+      ( IdentSuggestion
+          { origMod
+          , exportMod
+          , identifier
+          , qualifier
+          , suggestType
+          , prefix
+          , valueType
+          , documentation
+          , namespace
+          }
+      ) =
     completionItem identifier (convertSuggest suggestType)
       # over CompletionItem
           ( _
               { detail = toNullable $ Just valueType
               -- Should probably only fill this in based on support but this should be backwards compatible
-              , labelDetails = toNullable $ Just $ CompletionItemLabelDetails { detail: toNullable $ Just $ " " <> valueType, description: toNullable $ Just exportMod }
-              , documentation = toNullable $ Just $ markupContent $ (fromMaybe "" documentation) <> exportText
-              , command = toNullable $ Just $ addCompletionImport identifier (Just exportMod) qualifier uri (maybe "" showNS namespace)
+              , labelDetails = toNullable $ Just $ CompletionItemLabelDetails
+                  { detail: toNullable $ Just $ " " <> valueType
+                  , description: toNullable $ Just exportMod
+                  }
+              , documentation = toNullable $ Just $ markupContent $
+                  (fromMaybe "" documentation) <> exportText
+              , command = toNullable $ Just $ addCompletionImport identifier
+                  (Just exportMod)
+                  qualifier
+                  uri
+                  (maybe "" showNS namespace)
               , textEdit = toNullable $ Just $ edit identifier prefix
               , sortText = toNullable $ Just $ rankText <> "." <> identifier
               }
           )
     where
-    exportText = "\n*From: " <> (if exportMod == origMod then origMod else exportMod <> " (re-exported from " <> origMod <> ")") <> "*"
-    rankText = SuggestionRank.toString $ unwrap rankSuggestion { state: (unwrap state).modules, suggestion: sugg }
+    exportText = "\n*From: "
+      <>
+        ( if exportMod == origMod then origMod
+          else exportMod <> " (re-exported from " <> origMod <> ")"
+        )
+      <> "*"
+    rankText = SuggestionRank.toString $ unwrap rankSuggestion
+      { state: (unwrap state).modules, suggestion: sugg }
 
 rankSuggestion :: Ranking { state :: State, suggestion :: SuggestionResult }
 rankSuggestion =
   flip cmapRanking rankUnknownQualified case _ of
-    { state, suggestion: IdentSuggestion { qualifier: Just qualifier, exportMod } }
-      | Arr.null (getQualModule qualifier state) -> Just { state, qualifier, mod: exportMod }
+    { state
+    , suggestion: IdentSuggestion { qualifier: Just qualifier, exportMod }
+    }
+      | Arr.null (getQualModule qualifier state) -> Just
+          { state, qualifier, mod: exportMod }
     _ -> Nothing
 
-rankUnknownQualified :: Ranking { state :: State, qualifier :: String, mod :: String }
+rankUnknownQualified ::
+  Ranking { state :: State, qualifier :: String, mod :: String }
 rankUnknownQualified =
   rankQualifiedWithType
     <> rankQualifiedWithSegment
     <> rankQualifiedWithAbv
     <> rankQualifiedWithConcat
 
-rankQualifiedWithType :: Ranking { state :: State, qualifier :: String, mod :: String }
+rankQualifiedWithType ::
+  Ranking { state :: State, qualifier :: String, mod :: String }
 rankQualifiedWithType =
   Ranking \opts ->
     case getModuleFromUnknownQualifier opts.qualifier opts.state of
       Just mod | getModuleName mod == opts.mod -> top
       _ -> bottom
 
-rankQualifiedWithSegment :: Ranking { state :: State, qualifier :: String, mod :: String }
+rankQualifiedWithSegment ::
+  Ranking { state :: State, qualifier :: String, mod :: String }
 rankQualifiedWithSegment =
   Ranking \opts ->
     let
       segments = split (Pattern ".") opts.mod
     in
-      segments # foldMapWithIndex (\ix segment -> unwrap rankSegmentPrefix { len: Arr.length segments, ix, segment, prefix: opts.qualifier })
+      segments # foldMapWithIndex
+        ( \ix segment -> unwrap rankSegmentPrefix
+            { len: Arr.length segments, ix, segment, prefix: opts.qualifier }
+        )
 
-rankSegmentPrefix :: Ranking { len :: Int, ix :: Int, segment :: String, prefix :: String }
+rankSegmentPrefix ::
+  Ranking { len :: Int, ix :: Int, segment :: String, prefix :: String }
 rankSegmentPrefix =
   Ranking \{ len, ix, segment, prefix } ->
     case indexOf (Pattern prefix) segment of
-      Just 0 -> SuggestionRank.fromInt $ (1 + ix) * (1 + (length segment - length prefix)) + (len - ix)
+      Just 0 -> SuggestionRank.fromInt $
+        (1 + ix) * (1 + (length segment - length prefix)) + (len - ix)
       _ -> bottom
 
-rankQualifiedWithAbv :: Ranking { state :: State, qualifier :: String, mod :: String }
+rankQualifiedWithAbv ::
+  Ranking { state :: State, qualifier :: String, mod :: String }
 rankQualifiedWithAbv =
   flip cmapRanking rankModuleAbv \opts ->
     if toUpper opts.qualifier == opts.qualifier then
@@ -188,14 +240,19 @@ rankModuleAbv =
     in
       Just { sub: abv, str: modAbv }
 
-rankQualifiedWithConcat :: Ranking { state :: State, qualifier :: String, mod :: String }
+rankQualifiedWithConcat ::
+  Ranking { state :: State, qualifier :: String, mod :: String }
 rankQualifiedWithConcat =
   flip cmapRanking rankSub \opts ->
-    Just { sub: opts.qualifier, str: replaceAll (Pattern ".") (Replacement "") opts.mod }
+    Just
+      { sub: opts.qualifier
+      , str: replaceAll (Pattern ".") (Replacement "") opts.mod
+      }
 
 rankSub :: Ranking { sub :: String, str :: String }
 rankSub =
   Ranking \{ sub, str } ->
     case indexOf (Pattern sub) str of
-      Just ix -> SuggestionRank.fromInt ((1 + ix) * (1 + length sub - (length str + ix)))
+      Just ix -> SuggestionRank.fromInt
+        ((1 + ix) * (1 + length sub - (length str + ix)))
       Nothing -> bottom

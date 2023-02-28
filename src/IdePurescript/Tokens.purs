@@ -1,6 +1,7 @@
 module IdePurescript.Tokens where
 
 import Prelude
+
 import Data.Either (Either)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
@@ -12,8 +13,7 @@ import PureScript.CST.Lexer as CST.Lexer
 import PureScript.CST.TokenStream as TokenStream
 import PureScript.CST.Types (ModuleName(..), Token(..))
 
-type WordRange
-  = { left :: Int, right :: Int }
+type WordRange = { left :: Int, right :: Int }
 
 -- Regexes still used by Completion
 modulePart :: String
@@ -28,11 +28,22 @@ moduleRegex = regex (modulePrefix <> "?" <> identPart <> "?$") noFlags
   modulePrefix :: String
   modulePrefix = "(?:^|[^A-Za-z_.])(?:" <> modulePart <> """\.)"""
 
-identifierAtPoint :: String -> Int -> Maybe { word :: String, range :: WordRange, qualifier :: Maybe String }
+identifierAtPoint ::
+  String ->
+  Int ->
+  Maybe { word :: String, range :: WordRange, qualifier :: Maybe String }
 identifierAtPoint line column =
   go $ TokenStream.step $ CST.Lexer.lex line
   where
-  go (TokenStream.TokenCons { range: { start: { column: startCol }, end: { column: endCol } }, value } _ str _) =
+  go
+    ( TokenStream.TokenCons
+        { range: { start: { column: startCol }, end: { column: endCol } }
+        , value
+        }
+        _
+        str
+        _
+    ) =
     if column < startCol then
       Nothing
     else if column >= endCol then

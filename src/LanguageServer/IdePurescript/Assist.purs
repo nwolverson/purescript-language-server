@@ -8,8 +8,7 @@ module LanguageServer.IdePurescript.Assist
   , fixTypo
   , fixTypoActions
   , lineRange'
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -53,54 +52,72 @@ lineRange pos =
     , end: pos # over Position (_ { character = (top :: Int) })
     }
 
-caseSplit :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
+caseSplit ::
+  DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 caseSplit docs _ state args = do
   let ServerState { port, conn, clientCapabilities } = state
   case port, conn, args of
     Just port', Just conn', [ argUri, argLine, argChar, argType ]
       | Right uri <- runExcept $ readString argUri
-      , Right line <- runExcept $ readInt argLine -- TODO: Can this be a Position?
+      , Right line <-
+          runExcept $ readInt argLine -- TODO: Can this be a Position?
       , Right char <- runExcept $ readInt argChar
       , Right tyStr <- runExcept $ readString argType -> do
-        doc <- liftEffect $ getDocument docs (DocumentUri uri)
-        for_ (Nullable.toMaybe doc) \doc -> do
-          lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
-          version <- liftEffect $ getVersion doc
-          case identifierAtPoint lineText char of
-            Just { range: { left, right } } -> do
-              lines <- eitherToErr $ P.caseSplit port' lineText left right false tyStr
-              let edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version (lineRange' line char) $ intercalate "\n" $ map trim lines
-              void $ applyEdit conn' edit
-            _ -> do
-              liftEffect $ log conn' "fail identifier"
+          doc <- liftEffect $ getDocument docs (DocumentUri uri)
+          for_ (Nullable.toMaybe doc) \doc -> do
+            lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
+            version <- liftEffect $ getVersion doc
+            case identifierAtPoint lineText char of
+              Just { range: { left, right } } -> do
+                lines <- eitherToErr $ P.caseSplit port' lineText left right
+                  false
+                  tyStr
+                let
+                  edit =
+                    makeWorkspaceEdit clientCapabilities (DocumentUri uri)
+                      version
+                      (lineRange' line char) $ intercalate "\n" $ map trim lines
+                void $ applyEdit conn' edit
+              _ -> do
+                liftEffect $ log conn' "fail identifier"
     _, Just conn', [ argUri, argLine, argChar, argType ] ->
-      liftEffect $ log conn' $ show [ show $ runExcept $ readString argUri, show $ runExcept $ readInt argLine, show $ runExcept $ readInt argChar, show $ runExcept $ readString argType ]
+      liftEffect $ log conn' $ show
+        [ show $ runExcept $ readString argUri
+        , show $ runExcept $ readInt argLine
+        , show $ runExcept $ readInt argChar
+        , show $ runExcept $ readString argType
+        ]
     _, _, _ -> do
       liftEffect $ maybe (pure unit) (flip log "fail match") conn
       pure unit
 
-addClause :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
+addClause ::
+  DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
 addClause docs _ state args = do
   let ServerState { port, conn, clientCapabilities } = state
   case port, conn, args of
     Just port', Just conn', [ argUri, argLine, argChar ]
       | Right uri <- runExcept $ readString argUri
-      , Right line <- runExcept $ readInt argLine -- TODO: Can this be a Position?
+      , Right line <-
+          runExcept $ readInt argLine -- TODO: Can this be a Position?
       , Right char <- runExcept $ readInt argChar -> do
-        doc <- liftEffect $ getDocument docs (DocumentUri uri)
-        for_ (Nullable.toMaybe doc) \doc -> do
-          lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
-          version <- liftEffect $ getVersion doc
-          case identifierAtPoint lineText char of
-            Just _ -> do
-              lines <- eitherToErr $ P.addClause port' lineText false
-              let edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version (lineRange' line char) $ intercalate "\n" $ map trim lines
-              void $ applyEdit conn' edit
-            _ -> pure unit
+          doc <- liftEffect $ getDocument docs (DocumentUri uri)
+          for_ (Nullable.toMaybe doc) \doc -> do
+            lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
+            version <- liftEffect $ getVersion doc
+            case identifierAtPoint lineText char of
+              Just _ -> do
+                lines <- eitherToErr $ P.addClause port' lineText false
+                let
+                  edit =
+                    makeWorkspaceEdit clientCapabilities (DocumentUri uri)
+                      version
+                      (lineRange' line char) $ intercalate "\n" $ map trim lines
+                void $ applyEdit conn' edit
+              _ -> pure unit
     _, _, _ -> pure unit
 
-newtype TypoResult
-  = TypoResult
+newtype TypoResult = TypoResult
   { identifier :: String
   , mod :: String
   , declarationType :: String
@@ -108,7 +125,8 @@ newtype TypoResult
   }
 
 encodeTypoResult :: TypoResult -> Foreign
-encodeTypoResult (TypoResult res) = unsafeToForeign (res { qualifier = Nullable.toNullable $ res.qualifier })
+encodeTypoResult (TypoResult res) = unsafeToForeign
+  (res { qualifier = Nullable.toNullable $ res.qualifier })
 
 decodeTypoResult :: Foreign -> F TypoResult
 decodeTypoResult obj = do
@@ -120,7 +138,14 @@ decodeTypoResult obj = do
   qualifier <- obj ! "qualifier" >>= readNullOrUndefined readString
   pure $ TypoResult { identifier, qualifier, mod, declarationType }
 
-fixTypoActions :: DocumentStore -> Settings -> ServerState -> DocumentUri -> Int -> Int -> Aff (Array Command)
+fixTypoActions ::
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  DocumentUri ->
+  Int ->
+  Int ->
+  Aff (Array Command)
 fixTypoActions docs _ (ServerState { port, conn, modules }) docUri line char =
   case port, conn of
     Just port', Just _ -> do
@@ -129,25 +154,43 @@ fixTypoActions docs _ (ServerState { port, conn, modules }) docUri line char =
         lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
         case identifierAtPoint lineText char of
           Just { word, qualifier } -> do
-            res <- suggestTypos port' word 2 modules.main defaultCompletionOptions
+            res <- suggestTypos port' word 2 modules.main
+              defaultCompletionOptions
             pure
               $ case res of
                   Left _ -> []
                   Right infos ->
                     infos
                       # simplifyImportChoice identity
-                      <#> ( \(TypeInfo { type', identifier, module', declarationType }) ->
-                            Commands.fixTypo' 
-                              (
-                                let decTypeString = renderDeclarationType type' identifier declarationType
+                      <#>
+                        ( \( TypeInfo
+                               { type', identifier, module', declarationType }
+                           ) ->
+                            Commands.fixTypo'
+                              ( let
+                                  decTypeString = renderDeclarationType type'
+                                    identifier
+                                    declarationType
                                 in
-                                if identifier == word then
-                                  "Import" <> decTypeString <> identifier <> " (" <> module' <> ")"
-                                else
-                                  "Replace with " <> identifier <> " (" <> module' <> ")"
+                                  if identifier == word then
+                                    "Import" <> decTypeString <> identifier
+                                      <> " (" <> module' <> ")"
+                                  else
+                                    "Replace with " <> identifier
+                                      <> " (" <> module' <> ")"
                               )
-                              docUri line char
-                              (encodeTypoResult $ TypoResult { identifier, qualifier, mod: module', declarationType: maybe "" declarationTypeToString declarationType })
+                              docUri
+                              line
+                              char
+                              ( encodeTypoResult $ TypoResult
+                                  { identifier
+                                  , qualifier
+                                  , mod: module'
+                                  , declarationType: maybe ""
+                                      declarationTypeToString
+                                      declarationType
+                                  }
+                              )
                         )
                       # take 10
           Nothing -> pure []
@@ -170,38 +213,76 @@ fixTypoActions docs _ (ServerState { port, conn, modules }) docUri line char =
       else
         " value: "
 
-fixTypo :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
-fixTypo log docs settings state@(ServerState { port, conn, clientCapabilities }) args = do
+fixTypo ::
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  Array Foreign ->
+  Aff Foreign
+fixTypo
+  log
+  docs
+  settings
+  state@(ServerState { port, conn, clientCapabilities })
+  args = do
   unsafeToForeign
     <$> case port, conn, args !! 0, args !! 1, args !! 2 of
         Just _, Just _, Just argUri, Just argLine, Just argChar
           | Right uri <- runExcept $ readString argUri
-          , Right line <- runExcept $ readInt argLine -- TODO: Can this be a Position?
+          , Right line <-
+              runExcept $ readInt argLine -- TODO: Can this be a Position?
           , Right char <- runExcept $ readInt argChar -> do
-            doc <- liftEffect $ getDocument docs (DocumentUri uri)
-            for_ (Nullable.toMaybe doc) \doc -> do
-              lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
-              version <- liftEffect $ getVersion doc
-              case identifierAtPoint lineText char, (runExcept <<< decodeTypoResult) <$> args !! 3 of
-                Just { range }, Just (Right (TypoResult { identifier, qualifier, mod, declarationType })) -> do
-                  void $ replace uri version line range identifier qualifier mod declarationType
-                _, _ -> pure unit
+              doc <- liftEffect $ getDocument docs (DocumentUri uri)
+              for_ (Nullable.toMaybe doc) \doc -> do
+                lineText <- liftEffect $ getTextAtRange doc (lineRange' line char)
+                version <- liftEffect $ getVersion doc
+                case
+                  identifierAtPoint lineText char,
+                  (runExcept <<< decodeTypoResult) <$> args !! 3
+                  of
+                  Just { range },
+                  Just
+                    ( Right
+                        ( TypoResult
+                            { identifier, qualifier, mod, declarationType }
+                        )
+                    ) -> do
+                    void $ replace uri version line range identifier qualifier mod
+                      declarationType
+                  _, _ -> pure unit
         _, _, _, _, _ -> pure unit
 
   where
-  replace uri version line { left, right } word qualifier mod declarationType = do
-    let
-      range =
-        Range
-          { start: Position { line, character: left }
-          , end: Position { line, character: right }
-          }
-      edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range $ maybe "" (_ <> ".") qualifier <> word
-      -- TODO suggestion type
-      namespace = declarationTypeToNamespace =<< declarationTypeFromString declarationType
-    addCompletionImport' edit log docs settings state [ unsafeToForeign word, unsafeToForeign mod, unsafeToForeign $ Nullable.toNullable qualifier, unsafeToForeign uri, unsafeToForeign (maybe "" showNS namespace) ]
+  replace uri version line { left, right } word qualifier mod declarationType =
+    do
+      let
+        range =
+          Range
+            { start: Position { line, character: left }
+            , end: Position { line, character: right }
+            }
+        edit =
+          makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range $
+            maybe "" (_ <> ".") qualifier <> word
+        -- TODO suggestion type
+        namespace = declarationTypeToNamespace =<< declarationTypeFromString
+          declarationType
+      addCompletionImport' edit log docs settings state
+        [ unsafeToForeign word
+        , unsafeToForeign mod
+        , unsafeToForeign $ Nullable.toNullable qualifier
+        , unsafeToForeign uri
+        , unsafeToForeign (maybe "" showNS namespace)
+        ]
 
-fillTypedHole :: Notify -> DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Unit
+fillTypedHole ::
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  Array Foreign ->
+  Aff Unit
 fillTypedHole logFn docs settings state args = do
   let ServerState { port, conn, clientCapabilities } = state
   case port, conn, args of
@@ -209,22 +290,38 @@ fillTypedHole logFn docs settings state args = do
       | Right range <- runExcept $ readRange range'
       , Right uri <- runExcept $ readString argUri
       , TypeInfo { identifier, module': mod } <- readTypeInfo argChoice -> do
-        doc <- liftEffect $ getDocument docs (DocumentUri uri)
-        for_ (Nullable.toMaybe doc) \doc -> do
-          { text, version } <- liftEffect $ getTextAtVersion doc
-          let edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri) version range identifier
-          edit' <-
-            either (const []) identity
-              <$> addCompletionImportEdit logFn docs settings state
-                  { identifier, mod: Just mod, qual: Nothing, uri: DocumentUri uri }
-                  doc version text Nothing
-          let edit2 = edit <> fold edit'
-          applyRes <- applyEdit conn' $ edit2 -- edit <> fold edit'
-          liftEffect $ log conn' $ "Applied: " <> show applyRes
-          -- -- Seems that even after waiting for the edit response, changes will be lost 
-          -- delay $ Milliseconds 300.0
-          _ <- addCompletionImport logFn docs settings state [ unsafeToForeign identifier, unsafeToForeign mod, unsafeToForeign Nothing, unsafeToForeign uri ]
-          pure unit
+          doc <- liftEffect $ getDocument docs (DocumentUri uri)
+          for_ (Nullable.toMaybe doc) \doc -> do
+            { text, version } <- liftEffect $ getTextAtVersion doc
+            let
+              edit = makeWorkspaceEdit clientCapabilities (DocumentUri uri)
+                version
+                range
+                identifier
+            edit' <-
+              either (const []) identity
+                <$> addCompletionImportEdit logFn docs settings state
+                    { identifier
+                    , mod: Just mod
+                    , qual: Nothing
+                    , uri: DocumentUri uri
+                    }
+                    doc
+                    version
+                    text
+                    Nothing
+            let edit2 = edit <> fold edit'
+            applyRes <- applyEdit conn' $ edit2 -- edit <> fold edit'
+            liftEffect $ log conn' $ "Applied: " <> show applyRes
+            -- -- Seems that even after waiting for the edit response, changes will be lost
+            -- delay $ Milliseconds 300.0
+            _ <- addCompletionImport logFn docs settings state
+              [ unsafeToForeign identifier
+              , unsafeToForeign mod
+              , unsafeToForeign Nothing
+              , unsafeToForeign uri
+              ]
+            pure unit
     _, _, _ -> do
       liftEffect $ maybe (pure unit) (flip log "fail match") conn
       pure unit

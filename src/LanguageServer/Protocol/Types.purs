@@ -21,36 +21,38 @@ import Untagged.Union (UndefinedOr)
 foreign import data Connection :: Type
 foreign import data DocumentStore :: Type
 
-type MarkedString
-  = { language :: String, value :: String }
+type MarkedString = { language :: String, value :: String }
 
 markedString :: String -> MarkedString
 markedString s = { language: "purescript", value: s }
 
-type MarkupContent
-  = { kind :: String, value :: String }
+type MarkupContent = { kind :: String, value :: String }
 
 markupContent :: String -> MarkupContent
 markupContent s = { kind: "markdown", value: s }
 
 derive instance newtypeDocumentUri :: Newtype DocumentUri _
 
-newtype DocumentUri
-  = DocumentUri String
+newtype DocumentUri = DocumentUri String
+
 instance showDocumentUri :: Show DocumentUri where
   show (DocumentUri uri) = "DocumentUri " <> show uri
 
 derive newtype instance eqDocumentUri :: Eq DocumentUri
 derive newtype instance Ord DocumentUri
 
-newtype Position
-  = Position { line :: Int, character :: Int }
+newtype Position = Position { line :: Int, character :: Int }
 
 instance eqPosition :: Eq Position where
-  eq (Position { line, character }) (Position { line: line', character: character' }) = line == line' && character == character'
+  eq
+    (Position { line, character })
+    (Position { line: line', character: character' }) = line == line' &&
+    character == character'
 
 instance positionOrd :: Ord Position where
-  compare (Position { line: line, character: character }) (Position { line: line', character: character' })
+  compare
+    (Position { line: line, character: character })
+    (Position { line: line', character: character' })
     | line < line' = LT
     | line == line' && character < character' = LT
     | line == line' && character == character' = EQ
@@ -59,16 +61,19 @@ instance positionOrd :: Ord Position where
 derive instance newtypePosition :: Newtype Position _
 
 instance showPosition :: Show Position where
-  show (Position { line, character }) = "Position(" <> show line <> "," <> show character <> ")"
+  show (Position { line, character }) = "Position(" <> show line <> ","
+    <> show character
+    <> ")"
 
-newtype Range
-  = Range { start :: Position, end :: Position }
+newtype Range = Range { start :: Position, end :: Position }
 
 instance eqRange :: Eq Range where
-  eq (Range { start, end }) (Range { start: start', end: end' }) = start == start' && end == end'
+  eq (Range { start, end }) (Range { start: start', end: end' }) =
+    start == start' && end == end'
 
 instance ordRange :: Ord Range where
-  compare (Range { start, end }) (Range { start: start', end: end' }) = compare start start' <> compare end end'
+  compare (Range { start, end }) (Range { start: start', end: end' }) =
+    compare start start' <> compare end end'
 
 instance showRange :: Show Range where
   show (Range { start, end }) = "Range(" <> show start <> "," <> show end <> ")"
@@ -86,38 +91,39 @@ readRange r = do
     character <- p ! "character" >>= readInt
     pure $ Position { line, character }
 
-newtype Location
-  = Location { uri :: DocumentUri, range :: Range }
+newtype Location = Location { uri :: DocumentUri, range :: Range }
 
 derive instance newtypeLocation :: Newtype Location _
 
-newtype LocationLink
-  = LocationLink { originSelectionRange :: Nullable Range, targetUri :: DocumentUri, targetRange :: Range, targetSelectionRange :: Range }
+newtype LocationLink = LocationLink
+  { originSelectionRange :: Nullable Range
+  , targetUri :: DocumentUri
+  , targetRange :: Range
+  , targetSelectionRange :: Range
+  }
 
 foreign import data GotoDefinitionResult :: Type
 
 gotoDefinitionResult :: Either Location LocationLink -> GotoDefinitionResult
 gotoDefinitionResult = either unsafeCoerce unsafeCoerce
 
-newtype Diagnostic
-  = Diagnostic
+newtype Diagnostic = Diagnostic
   { range :: Range
   , severity :: Nullable Int -- 1 (Error) - 4 (Hint)
   , code :: Nullable String -- String | Int
   , source :: Nullable String
   , message :: String
   }
+
 derive instance newtypeDiagnostic :: Newtype Diagnostic _
 derive newtype instance showDiagnostic :: Show Diagnostic
 
-newtype CompletionItemLabelDetails
-  = CompletionItemLabelDetails
+newtype CompletionItemLabelDetails = CompletionItemLabelDetails
   { detail :: Nullable String
   , description :: Nullable String
   }
 
-newtype CompletionItem
-  = CompletionItem
+newtype CompletionItem = CompletionItem
   { label :: String
   , kind :: Nullable Int
   , detail :: Nullable String
@@ -170,7 +176,8 @@ defaultCompletionItem label =
     }
 
 completionItem :: String -> CompletionItemKind -> CompletionItem
-completionItem label k = defaultCompletionItem label # over CompletionItem (_ { kind = toNullable $ Just $ completionItemKindToInt k })
+completionItem label k = defaultCompletionItem label # over CompletionItem
+  (_ { kind = toNullable $ Just $ completionItemKindToInt k })
 
 completionItemKindToInt :: CompletionItemKind -> Int
 completionItemKindToInt = case _ of
@@ -193,15 +200,14 @@ completionItemKindToInt = case _ of
   File -> 17
   Reference -> 18
 
-newtype CompletionItemList
-  = CompletionItemList
+newtype CompletionItemList = CompletionItemList
   { isIncomplete :: Boolean
   , items :: Array CompletionItem
   }
+
 derive instance newtypeCompletionList :: Newtype CompletionItemList _
 
-newtype SymbolInformation
-  = SymbolInformation
+newtype SymbolInformation = SymbolInformation
   { name :: String
   , kind :: Int
   , location :: Location
@@ -249,19 +255,17 @@ symbolKindToInt = case _ of
   BooleanSymbolKind -> 17
   ArraySymbolKind -> 18
 
-newtype Hover
-  = Hover
-      { contents :: MarkupContent 
-      , range :: UndefinedOr Range
-      }
+newtype Hover = Hover
+  { contents :: MarkupContent
+  , range :: UndefinedOr Range
+  }
 
-newtype Command
-  = Command { title :: String, command :: String, arguments :: Nullable (Array Foreign) }
+newtype Command = Command
+  { title :: String, command :: String, arguments :: Nullable (Array Foreign) }
 
 derive instance newtypeCommand :: Newtype Command _
 
-newtype CodeAction
-  = CodeAction
+newtype CodeAction = CodeAction
   { title :: String
   , kind :: CodeActionKind
   , isPreferred :: Boolean
@@ -274,57 +278,74 @@ foreign import data CodeActionResult :: Type
 codeActionResult :: Either CodeAction Command -> CodeActionResult
 codeActionResult = either unsafeCoerce unsafeCoerce
 
-newtype TextEdit
-  = TextEdit { range :: Range, newText :: String }
+newtype TextEdit = TextEdit { range :: Range, newText :: String }
 
 derive instance newtypeTextEdit :: Newtype TextEdit _
 
 instance eqTextEdit :: Eq TextEdit where
-  eq (TextEdit { range, newText }) (TextEdit { range: range', newText: newText' }) = range == range' && newText == newText'
+  eq
+    (TextEdit { range, newText })
+    (TextEdit { range: range', newText: newText' }) = range == range' && newText
+    == newText'
 
 instance showTextEdit :: Show TextEdit where
-  show (TextEdit { range, newText }) = ("TextEdit(" <> show range <> ", " <> show newText <> ")")
+  show (TextEdit { range, newText }) =
+    ("TextEdit(" <> show range <> ", " <> show newText <> ")")
 
-newtype WorkspaceEdit
-  = WorkspaceEdit
+newtype WorkspaceEdit = WorkspaceEdit
   { documentChanges :: Nullable (Array TextDocumentEdit)
   , changes :: Nullable (Object (Array TextEdit))
   }
 
 instance semigroupWorkspaceEdit :: Semigroup WorkspaceEdit where
-  append (WorkspaceEdit { documentChanges, changes }) (WorkspaceEdit { documentChanges: documentChanges', changes: changes' }) =
+  append
+    (WorkspaceEdit { documentChanges, changes })
+    (WorkspaceEdit { documentChanges: documentChanges', changes: changes' }) =
     WorkspaceEdit
       { documentChanges:
           toNullable
-            $ case isNothing (toMaybe documentChanges), isNothing (toMaybe documentChanges') of
+            $
+              case
+                isNothing (toMaybe documentChanges),
+                isNothing (toMaybe documentChanges')
+                of
                 true, true -> Nothing
                 _, _ ->
                   Just
                     $ map (foldl1 combine)
                     $ map toNonEmpty
                     $ groupBy (\d1 d2 -> docId d1 == docId d2)
-                        (fromNullableArray documentChanges <> fromNullableArray documentChanges')
+                        ( fromNullableArray documentChanges <> fromNullableArray
+                            documentChanges'
+                        )
       , changes:
           toNullable
             $ case isNothing (toMaybe changes), isNothing (toMaybe changes') of
                 true, true -> Nothing
                 _, _ ->
-                  Just $ Object.fromFoldableWith (<>) (goStrMap changes <> goStrMap changes')
+                  Just $ Object.fromFoldableWith (<>)
+                    (goStrMap changes <> goStrMap changes')
       }
     where
-    combine (TextDocumentEdit { textDocument, edits }) (TextDocumentEdit { edits: edits' }) =
+    combine
+      (TextDocumentEdit { textDocument, edits })
+      (TextDocumentEdit { edits: edits' }) =
       TextDocumentEdit { textDocument, edits: edits <> edits' }
     docId (TextDocumentEdit { textDocument }) = textDocument
+
     fromNullableArray :: forall a. Nullable (Array a) -> Array a
     fromNullableArray a = fromMaybe [] $ toMaybe a
+
     goStrMap :: forall a. Nullable (Object a) -> Array (Tuple String a)
     goStrMap a = Object.toUnfoldable $ fromMaybe Object.empty $ toMaybe a
 
 instance monoidWorkspaceEdit :: Monoid WorkspaceEdit where
-  mempty = WorkspaceEdit { documentChanges: toNullable Nothing, changes: toNullable Nothing }
+  mempty = WorkspaceEdit
+    { documentChanges: toNullable Nothing, changes: toNullable Nothing }
 
 -- | Create workspace edit, supporting both documentChanges and older changes property for v2 clients
-workspaceEdit :: Maybe ClientCapabilities -> Array TextDocumentEdit -> WorkspaceEdit
+workspaceEdit ::
+  Maybe ClientCapabilities -> Array TextDocumentEdit -> WorkspaceEdit
 workspaceEdit capabilities edits =
   WorkspaceEdit
     { documentChanges:
@@ -332,46 +353,54 @@ workspaceEdit capabilities edits =
           $ if useDocumentChanges then Just edits else Nothing
     , changes:
         toNullable
-          $ if useDocumentChanges then
+          $
+            if useDocumentChanges then
               Nothing
             else
               Just
                 $ Object.fromFoldable
-                $ map (\(h :| t) -> Tuple (uri h) (concat $ edit h : map edit t))
+                $ map
+                    (\(h :| t) -> Tuple (uri h) (concat $ edit h : map edit t))
                 $ map toNonEmpty
                 $ groupBy (\a b -> uri a == uri b)
                 $ sortWith uri edits
     }
   where
   useDocumentChanges = supportsDocumentChanges capabilities
-  uri (TextDocumentEdit { textDocument: OptionalVersionedTextDocumentIdentifier { uri: DocumentUri uri' } }) = uri'
+  uri
+    ( TextDocumentEdit
+        { textDocument: OptionalVersionedTextDocumentIdentifier
+            { uri: DocumentUri uri' }
+        }
+    ) = uri'
   edit (TextDocumentEdit { edits: edits' }) = edits'
 
 supportsDocumentChanges :: Maybe ClientCapabilities -> Boolean
 supportsDocumentChanges Nothing = false
-supportsDocumentChanges (Just { workspace }) = fromMaybe false $ toMaybe workspace >>= (_.workspaceEdit >>> toMaybe) >>= (_.documentChanges >>> toMaybe)
+supportsDocumentChanges (Just { workspace }) = fromMaybe false $
+  toMaybe workspace >>= (_.workspaceEdit >>> toMaybe) >>=
+    (_.documentChanges >>> toMaybe)
 
-newtype TextDocumentEdit
-  = TextDocumentEdit { textDocument :: OptionalVersionedTextDocumentIdentifier, edits :: Array TextEdit }
+newtype TextDocumentEdit = TextDocumentEdit
+  { textDocument :: OptionalVersionedTextDocumentIdentifier
+  , edits :: Array TextEdit
+  }
 
-newtype TextDocumentIdentifier
-  = TextDocumentIdentifier { uri :: DocumentUri }
+newtype TextDocumentIdentifier = TextDocumentIdentifier { uri :: DocumentUri }
 
 derive instance Newtype TextDocumentIdentifier _
 derive instance Eq TextDocumentIdentifier
 
-newtype OptionalVersionedTextDocumentIdentifier
-  = OptionalVersionedTextDocumentIdentifier { uri :: DocumentUri, version :: Nullable Number }
+newtype OptionalVersionedTextDocumentIdentifier =
+  OptionalVersionedTextDocumentIdentifier
+    { uri :: DocumentUri, version :: Nullable Number }
 
 derive instance Newtype OptionalVersionedTextDocumentIdentifier _
 derive instance Eq OptionalVersionedTextDocumentIdentifier
 
+type Settings = Foreign
 
-
-type Settings
-  = Foreign
-newtype FileChangeTypeCode
-  = FileChangeTypeCode Int
+newtype FileChangeTypeCode = FileChangeTypeCode Int
 
 data FileChangeType
   = CreatedChangeType
@@ -391,18 +420,16 @@ intToFileChangeType = case _ of
   3 -> Just DeletedChangeType
   _ -> Nothing
 
-fromFileChangeTypeCode ∷ FileChangeTypeCode -> Maybe FileChangeType
+fromFileChangeTypeCode :: FileChangeTypeCode -> Maybe FileChangeType
 fromFileChangeTypeCode = case _ of
   FileChangeTypeCode 1 -> Just CreatedChangeType
   FileChangeTypeCode 2 -> Just ChangedChangeType
   FileChangeTypeCode 3 -> Just DeletedChangeType
   _ -> Nothing
 
-newtype FileEvent
-  = FileEvent { uri :: DocumentUri, type :: FileChangeTypeCode }
+newtype FileEvent = FileEvent { uri :: DocumentUri, type :: FileChangeTypeCode }
 
-newtype FoldingRange
-  = FoldingRange
+newtype FoldingRange = FoldingRange
   { startLine :: Int
   , startCharacter :: Nullable Int
   , endLine :: Int
@@ -410,43 +437,59 @@ newtype FoldingRange
   , kind :: Nullable String -- | comment, imports, region
   }
 
-type ClientCapabilities
-  = { workspace :: Nullable WorkspaceClientCapabilities, textDocument :: Nullable TextDocumentClientCapabilities }
-type WorkspaceClientCapabilities
-  = { applyEdit :: Nullable Boolean, workspaceEdit :: Nullable WorkspaceEditClientCapabilities, codeLens :: Nullable CodeLensWorkspaceClientCapabilities }
+type ClientCapabilities =
+  { workspace :: Nullable WorkspaceClientCapabilities
+  , textDocument :: Nullable TextDocumentClientCapabilities
+  }
 
-type TextDocumentClientCapabilities
-  = { codeAction :: Nullable CodeActionClientCapabilities
-    , definition :: Nullable DefinitionClientCapabilities
-    , codeLens :: Nullable CodeLensClientCapabilities
-    }
-type DefinitionClientCapabilities
-  = { linkSupport :: Nullable Boolean }
-type CodeActionClientCapabilities
-  = { codeActionLiteralSupport :: Nullable { codeActionKind :: { valueSet :: Array CodeActionKind } }, isPreferredSupport :: Nullable Boolean }
-type CodeLensClientCapabilities
-  = { dynamicRegistration :: Nullable Boolean }
+type WorkspaceClientCapabilities =
+  { applyEdit :: Nullable Boolean
+  , workspaceEdit :: Nullable WorkspaceEditClientCapabilities
+  , codeLens :: Nullable CodeLensWorkspaceClientCapabilities
+  }
 
-type CodeLensWorkspaceClientCapabilities
-  = { refreshSupport :: Nullable Boolean }
+type TextDocumentClientCapabilities =
+  { codeAction :: Nullable CodeActionClientCapabilities
+  , definition :: Nullable DefinitionClientCapabilities
+  , codeLens :: Nullable CodeLensClientCapabilities
+  }
 
-newtype CodeActionKind
-  = CodeActionKind String
+type DefinitionClientCapabilities = { linkSupport :: Nullable Boolean }
+
+type CodeActionClientCapabilities =
+  { codeActionLiteralSupport ::
+      Nullable { codeActionKind :: { valueSet :: Array CodeActionKind } }
+  , isPreferredSupport :: Nullable Boolean
+  }
+
+type CodeLensClientCapabilities = { dynamicRegistration :: Nullable Boolean }
+
+type CodeLensWorkspaceClientCapabilities =
+  { refreshSupport :: Nullable Boolean }
+
+newtype CodeActionKind = CodeActionKind String
+
 instance showCodeActionKind :: Show CodeActionKind where
   show (CodeActionKind s) = "CodeActionKind " <> s
 
 codeActionEmpty :: CodeActionKind
 codeActionEmpty = CodeActionKind ""
+
 codeActionQuickFix :: CodeActionKind
 codeActionQuickFix = CodeActionKind "quickfix"
+
 codeActionRefactor :: CodeActionKind
 codeActionRefactor = CodeActionKind "refactor"
+
 codeActionRefactorExtract :: CodeActionKind
 codeActionRefactorExtract = CodeActionKind "refactor.extract"
+
 codeActionRefactorInline :: CodeActionKind
 codeActionRefactorInline = CodeActionKind "refactor.inline"
+
 codeActionRefactorRewrite :: CodeActionKind
 codeActionRefactorRewrite = CodeActionKind "refactor.rewrite"
+
 codeActionSource :: CodeActionKind
 codeActionSource = CodeActionKind "source"
 
@@ -458,5 +501,4 @@ codeActionSourceOrganizeImports :: CodeActionKind
 codeActionSourceOrganizeImports = CodeActionKind "source.organizeImports"
 
 -- https://microsoft.github.io/language-server-protocol/specifications/specification-current/#workspaceEditClientCapabilities
-type WorkspaceEditClientCapabilities
-  = { documentChanges :: Nullable Boolean }
+type WorkspaceEditClientCapabilities = { documentChanges :: Nullable Boolean }

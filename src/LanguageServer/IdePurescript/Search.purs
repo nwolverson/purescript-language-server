@@ -2,10 +2,10 @@ module LanguageServer.IdePurescript.Search
   ( SearchResult
   , decodeSearchResult
   , search
-  )
-  where
+  ) where
 
 import Prelude
+
 import Control.Monad.Except (Except, runExcept)
 import Data.Either (Either(..))
 import Data.List.Types (NonEmptyList)
@@ -22,8 +22,8 @@ import PscIde as P
 import PscIde.Command (TypeInfo(..))
 import PscIde.Command as C
 
-newtype SearchResult
-  = SearchResult { identifier :: String, typ :: String, mod :: String }
+newtype SearchResult = SearchResult
+  { identifier :: String, typ :: String, mod :: String }
 
 encodeSearchResult :: SearchResult -> Foreign
 encodeSearchResult = unsafeToForeign
@@ -35,14 +35,19 @@ decodeSearchResult obj = do
   mod <- obj ! "mod" >>= readString
   pure $ SearchResult { identifier, typ, mod }
 
-search :: DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
+search ::
+  DocumentStore -> Settings -> ServerState -> Array Foreign -> Aff Foreign
 search _ _ state args = case state, runExcept $ traverse readString args of
   ServerState { port: Just port, modules }, Right [ text ] -> do
     loadedModules <- getLoadedModules port
     let getQualifiedModule = (flip getQualModule) modules
-    results <- getCompletion' (Just $ C.Flex text) [] port modules.main Nothing loadedModules getQualifiedModule P.defaultCompletionOptions
+    results <- getCompletion' (Just $ C.Flex text) [] port modules.main Nothing
+      loadedModules
+      getQualifiedModule
+      P.defaultCompletionOptions
     pure $ unsafeToForeign $ toResult <$> results
   _, _ -> pure $ unsafeToForeign []
 
   where
-  toResult (TypeInfo { type', identifier, module' }) = encodeSearchResult $ SearchResult { typ: type', identifier, mod: module' }
+  toResult (TypeInfo { type', identifier, module' }) = encodeSearchResult $
+    SearchResult { typ: type', identifier, mod: module' }

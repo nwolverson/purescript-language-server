@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.FoldingRanges
   ( getFoldingRanges
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -21,21 +20,36 @@ import PscIde.Command (Position)
 import PureScript.CST.Range (class RangeOf, rangeOf)
 import PureScript.CST.Types (Module(..), ModuleBody(..), ModuleHeader(..), SourceRange)
 
-getFoldingRanges :: Notify -> DocumentStore -> Settings -> ServerState -> FoldingRangesParams -> Aff (Array FoldingRange)
-getFoldingRanges notify _docs _ (ServerState { parsedModules }) { textDocument: TextDocumentIdentifier { uri } } =
+getFoldingRanges ::
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  FoldingRangesParams ->
+  Aff (Array FoldingRange)
+getFoldingRanges
+  notify
+  _docs
+  _
+  (ServerState { parsedModules })
+  { textDocument: TextDocumentIdentifier { uri } } =
   case Map.lookup uri parsedModules of
-    Just { parsed } -> 
+    Just { parsed } ->
       pure $ maybeParseResult [] getRanges parsed
     Nothing -> do
-      liftEffect $ notify Warning $ "getFoldingRanges - no parsed CST for " <> show uri
+      liftEffect $ notify Warning $ "getFoldingRanges - no parsed CST for " <>
+        show uri
       pure []
 
 getRanges :: forall a. RangeOf a => Module a -> Array FoldingRange
-getRanges (Module { header: ModuleHeader { imports }, body: ModuleBody { decls } }) =
+getRanges
+  (Module { header: ModuleHeader { imports }, body: ModuleBody { decls } }) =
   let
     importRanges = case Array.head imports, Array.last imports of
       Just a, Just b ->
-        [ makeRange (Nullable.notNull "imports") (rangeOf a).start (rangeOf b).end ]
+        [ makeRange (Nullable.notNull "imports") (rangeOf a).start
+            (rangeOf b).end
+        ]
       _, _ -> []
     bodyRanges = makeRange' <<< rangeOf <$> decls
   in
@@ -44,7 +58,7 @@ getRanges (Module { header: ModuleHeader { imports }, body: ModuleBody { decls }
 makeRange' :: SourceRange -> FoldingRange
 makeRange' range = makeRange Nullable.null range.start range.end
 
-makeRange ∷ Nullable String -> Position -> Position -> FoldingRange
+makeRange :: Nullable String -> Position -> Position -> FoldingRange
 makeRange kind startPos endPos =
   FoldingRange
     { startLine: startPos.line
