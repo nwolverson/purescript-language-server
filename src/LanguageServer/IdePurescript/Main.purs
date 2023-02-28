@@ -248,7 +248,7 @@ buildWarningDialog config conn state notify msg = do
 -- | Tries to start IDE server at workspace root
 mkStartPscIdeServer :: Ref Foreign -> Connection -> Ref ServerState -> Notify -> Aff Unit
 mkStartPscIdeServer config conn state notify = do
-  liftEffect $ notify Info "Starting IDE server"
+  liftEffect $ notify Info "Going to start purs IDE server"
   progressReporter <- createWorkDoneProgress conn
   liftEffect $ workBegin progressReporter { title: "Starting PureScript IDE server" }
   rootPath <- liftEffect $ Build.getWorkspaceRoot state
@@ -339,7 +339,7 @@ autoStartPcsIdeServer config conn state notify = do
   when (Config.autoStartPscIde c)
     $ do
         startPscIdeServer
-        hasPackageFile <- liftEffect $ 
+        hasPackageFile <- liftEffect $
           or
             <$> traverse (FSSync.exists <=< resolvePath)
                 [ "bower.json", "psc-package.json", "spago.dhall", "spago.yaml", "flake.nix", "shell.nix" ]

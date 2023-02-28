@@ -12,9 +12,9 @@ import Prelude
 import Data.Array (length, head)
 import Data.Either (either)
 import Data.Int as Int
-import Data.Maybe (Maybe(Just, Nothing), fromMaybe, isNothing, maybe)
-import Data.String (Pattern(Pattern), split, toLower)
-import Data.Traversable (traverse, traverse_)
+import Data.Maybe (Maybe(Just, Nothing), isNothing, maybe)
+import Data.String (Pattern(Pattern), joinWith, split, toLower, trim)
+import Data.Traversable (traverse)
 import Effect (Effect)
 import Effect.Aff (Aff, attempt, try)
 import Effect.Class (liftEffect)
@@ -92,23 +92,27 @@ startServer' ::
 startServer' settings@({ exe: server }) path addNpmBin cb logCb = do
   pathVar <- liftEffect $ getPathVar addNpmBin path
   serverBins <- findBins pathVar server
+  liftEffect
+    $ when (length serverBins > 1)
+    $ cb Warning
+    $ "Found multiple IDE server executables (will use the first one):\n"
+    <> joinWith "\n" (serverBins <#> printSrvExec)
   case head serverBins of
     Nothing -> do
       liftEffect
         $ cb Info
-        $ "Couldn't find IDE server, check PATH. Looked for: "
+        $ "Couldn't find IDE server, check PATH env variable. Looked for: "
         <> server
         <> " in PATH: "
         <> either identity identity pathVar
       pure { quit: pure unit, port: Nothing }
-    Just (Executable bin _version) -> do
-      liftEffect $ logCb Info $ "Resolved IDE server paths (npm-bin: " <> show addNpmBin <> ") from PATH of " <> either identity identity pathVar <> " (1st is used):"
-      traverse_
-        ( \(Executable x vv) ->
-            liftEffect $ logCb Info $ x <> ": " <> fromMaybe "ERROR" vv
-        )
-        serverBins
-      liftEffect $ when (length serverBins > 1) $ cb Warning $ "Found multiple IDE server executables; using " <> bin
+    Just srvExec@(Executable bin _version) -> do
+      liftEffect
+        $ logCb Info
+        $ "Using found IDE server bin (npm-bin: "
+        <> show addNpmBin
+        <> "): "
+        <> printSrvExec srvExec
       res <- startServer logCb (settings { exe = bin }) path
       let noRes = { quit: pure unit, port: Nothing }
       liftEffect
@@ -134,6 +138,11 @@ startServer' settings@({ exe: server }) path addNpmBin cb logCb = do
             Closed -> noRes <$ cb Info "IDE server exited with success code"
             StartError err -> noRes <$ (cb Error $ "Could not start IDE server process. Check the configured port number is valid.\n" <> err)
   where
+  printSrvExec (Executable bin' mbVer) =
+    bin'
+      <> ":"
+      <> maybe " could not determine version"
+          (\v -> " " <> trim v <> "") mbVer
   wireOutput :: ChildProcess -> Notify -> Effect Unit
   wireOutput cp log = do
     onDataString (stderr cp) UTF8 (log Warning)

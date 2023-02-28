@@ -6,7 +6,7 @@ export var initConnection = function (commands) {
             var conn = createConnection();
             conn.listen();
             conn.onInitialize(function (params) {
-                conn.console.info(JSON.stringify(params));
+                // conn.console.info(JSON.stringify(params));
                 cb({
                     params: params,
                     conn: conn,
