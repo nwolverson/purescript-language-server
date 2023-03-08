@@ -80,8 +80,9 @@ type ServerSettings =
   , port :: Maybe Int
   }
 
--- | Start a psc-ide server instance, or find one already running on the expected port, checking if it has the right path.
--- | Will notify as to what is happening, choose to supply globs appropriately
+-- | Start a psc-ide server instance, or find one already running on the
+-- | expected port, checking if it has the right path. Will notify as to what is
+-- | happening, choose to supply globs appropriately
 startServer' ::
   ServerSettings ->
   String ->
@@ -93,6 +94,9 @@ startServer' settings@({ exe: server }) path addNpmBin cb logCb = do
   pathVar <- liftEffect $ getPathVar addNpmBin path
   serverBins <- findBins pathVar server
   liftEffect
+    $ cb Info
+    $ "Using PATH env variable value: " <> either identity identity pathVar
+  liftEffect
     $ when (length serverBins > 1)
     $ cb Warning
     $ "Found multiple IDE server executables (will use the first one):\n"
@@ -101,10 +105,9 @@ startServer' settings@({ exe: server }) path addNpmBin cb logCb = do
     Nothing -> do
       liftEffect
         $ cb Info
-        $ "Couldn't find IDE server, check PATH env variable. Looked for: "
+        $ "Couldn't find IDE server, looked for: "
             <> server
-            <> " in PATH: "
-            <> either identity identity pathVar
+            <> " using PATH env variable."
       pure { quit: pure unit, port: Nothing }
     Just srvExec@(Executable bin _version) -> do
       liftEffect
