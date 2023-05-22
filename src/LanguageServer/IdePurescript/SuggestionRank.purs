@@ -7,6 +7,7 @@ module LanguageServer.IdePurescript.SuggestionRank
   ) where
 
 import Prelude
+
 import Data.Char as Char
 import Data.Enum (class Enum)
 import Data.Functor.Contravariant (class Contravariant)
@@ -15,8 +16,7 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.Ordering (invert)
 import Data.String as CodePoint
 
-newtype SuggestionRank
-  = SuggestionRank Int
+newtype SuggestionRank = SuggestionRank Int
 
 derive instance eqSuggestionRank :: Eq SuggestionRank
 
@@ -45,10 +45,10 @@ fromInt :: Int -> SuggestionRank
 fromInt = SuggestionRank <<< clamp 0 25
 
 toString :: SuggestionRank -> String
-toString (SuggestionRank n) = CodePoint.singleton $ CodePoint.codePointFromChar $ fromMaybe ' ' (Char.fromCharCode (65 + n))
+toString (SuggestionRank n) = CodePoint.singleton $ CodePoint.codePointFromChar
+  $ fromMaybe ' ' (Char.fromCharCode (65 + n))
 
-newtype Ranking a
-  = Ranking (a -> SuggestionRank)
+newtype Ranking a = Ranking (a -> SuggestionRank)
 
 derive instance newtypeRanking :: Newtype (Ranking a) _
 

@@ -6,7 +6,7 @@ import Control.Monad.Error.Class (throwError)
 import Data.Array (intercalate, uncons, (:))
 import Data.Array as Array
 import Data.Bifunctor (bimap)
-import Data.Either (either, Either(..))
+import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.String (Pattern(Pattern), indexOf, joinWith, split)
 import Data.String as String
@@ -32,19 +32,18 @@ import PscIde as P
 import PscIde.Command (CodegenTarget, RebuildResult(..))
 import PscIde.Server (Executable(Executable))
 
-type BuildOptions
-  = { command :: Command
-    , directory :: String
-    , useNpmDir :: Boolean
-    }
+type BuildOptions =
+  { command :: Command
+  , directory :: String
+  , useNpmDir :: Boolean
+  }
 
-data Command
-  = Command String (Array String)
+data Command = Command String (Array String)
 
-type BuildResult
-  = { errors :: PscResult
-    , success :: Boolean
-    }
+type BuildResult =
+  { errors :: PscResult
+  , success :: Boolean
+  }
 
 -- check if retrieved (copied) env object has "PATH" property, then use it,
 -- otherwise use "Path" (for windows)
@@ -58,15 +57,24 @@ spawn { command: Command cmd args, directory, useNpmDir } = do
     if useNpmDir then do
       pathVar <- getPathVar useNpmDir directory
       env <- getEnv
-      pure { env: Just $ Object.insert (getPathProp env) (either identity identity pathVar) env, path: either (const Nothing) Just pathVar }
+      pure
+        { env: Just $ Object.insert (getPathProp env)
+            (either identity identity pathVar)
+            env
+        , path: either (const Nothing) Just pathVar
+        }
     else
       pure { env: Nothing, path: Nothing }
 
-  cmd' <- (fromMaybe cmd <<< Array.head) <$> whichSync { path, pathExt: Nothing } cmd
-  CP.spawn cmd' args (CP.defaultSpawnOptions { cwd = Just directory, env = env })
+  cmd' <- (fromMaybe cmd <<< Array.head) <$> whichSync
+    { path, pathExt: Nothing }
+    cmd
+  CP.spawn cmd' args
+    (CP.defaultSpawnOptions { cwd = Just directory, env = env })
 
 -- Spawn with npm path, "which" call (windows support) and version info gathering
-spawnWithVersion :: BuildOptions -> Aff { cmdBins :: Array Executable, cp :: Maybe ChildProcess }
+spawnWithVersion ::
+  BuildOptions -> Aff { cmdBins :: Array Executable, cp :: Maybe ChildProcess }
 spawnWithVersion { command: Command cmd args, directory, useNpmDir } = do
   pathVar <- liftEffect $ getPathVar useNpmDir directory
   cmdBins <- findBins pathVar cmd
@@ -75,8 +83,14 @@ spawnWithVersion { command: Command cmd args, directory, useNpmDir } = do
       $ case uncons cmdBins of
           Just { head: Executable cmdBin _ } -> do
             env <- liftEffect getEnv
-            let childEnv = Object.insert (getPathProp env) (either identity identity pathVar) env
-            Just <$> CP.spawn cmdBin args (CP.defaultSpawnOptions { cwd = Just directory, env = Just childEnv })
+            let
+              childEnv = Object.insert (getPathProp env)
+                (either identity identity pathVar)
+                env
+            Just <$> CP.spawn cmdBin args
+              ( CP.defaultSpawnOptions
+                  { cwd = Just directory, env = Just childEnv }
+              )
           _ -> pure Nothing
   pure { cmdBins, cp }
 
@@ -97,7 +111,8 @@ build logCb buildOptions@{ command: Command cmd args } = do
         case cp' of
           Nothing -> succ $ Left $ "Didn't find command in PATH: " <> cmd
           Just cp -> do
-            logCb Info $ "Running build command: " <> intercalate " " (cmd : args)
+            logCb Info $ "Running build command: " <> intercalate " "
+              (cmd : args)
             CP.onError cp (cb <<< Left <<< CP.toStandardError)
             errOutput <- Ref.new []
             outOutput <- Ref.new []
@@ -110,29 +125,42 @@ build logCb buildOptions@{ command: Command cmd args } = do
               ( \exit -> case exit of
                   CP.Normally n
                     | n == 0 || n == 1 -> do
-                      pursError <- Ref.read errOutput >>= Buffer.concat >>= Buffer.toString Encoding.UTF8
-                      pursOutput <- Ref.read outOutput >>= Buffer.concat >>= Buffer.toString Encoding.UTF8
-                      let
-                        lines = split (Pattern "\n") $ pursError <> pursOutput
-                        { yes: json, no: toLog } = Array.partition (\s -> indexOf (Pattern "{\"") s == Just 0) lines
-                      logCb Info $ joinWith "\n" toLog
-                      case parsePscOutput <$> json of
-                        [ Left e ] -> succ $ Left $ "Couldn't parse build output: " <> e
-                        [ Right r ] -> succ $ Right { errors: r, success: n == 0 }
-                        [] ->
-                          succ
-                            $ Left
-                            $ "Problem running build: "
-                            <> if String.length pursError > 0 then
-                                String.take 500 pursError
-                              else
-                                "didn't find JSON output"
-                        _ -> succ $ Left "Found multiple lines of JSON output, don't know what to do"
+                        pursError <- Ref.read errOutput >>= Buffer.concat >>=
+                          Buffer.toString Encoding.UTF8
+                        pursOutput <- Ref.read outOutput >>= Buffer.concat >>=
+                          Buffer.toString Encoding.UTF8
+                        let
+                          lines = split (Pattern "\n") $ pursError <> pursOutput
+                          { yes: json, no: toLog } = Array.partition
+                            (\s -> indexOf (Pattern "{\"") s == Just 0)
+                            lines
+                        logCb Info $ joinWith "\n" toLog
+                        case parsePscOutput <$> json of
+                          [ Left e ] -> succ $ Left $
+                            "Couldn't parse build output: " <> e
+                          [ Right r ] -> succ $ Right
+                            { errors: r, success: n == 0 }
+                          [] ->
+                            succ
+                              $ Left
+                              $ "Problem running build: "
+                                  <>
+                                    if String.length pursError > 0 then
+                                      String.take 500 pursError
+                                    else
+                                      "didn't find JSON output"
+                          _ -> succ $ Left
+                            "Found multiple lines of JSON output, don't know what to do"
                   _ -> succ $ Left "Build process exited abnormally"
               )
         pure mempty
 
-rebuild :: Int -> String -> Maybe String -> Maybe (Array CodegenTarget) -> Aff BuildResult
+rebuild ::
+  Int ->
+  String ->
+  Maybe String ->
+  Maybe (Array CodegenTarget) ->
+  Aff BuildResult
 rebuild port file actualFile targets = do
   res <- P.rebuild port file actualFile targets
   either
@@ -143,8 +171,11 @@ rebuild port file actualFile targets = do
 
   onResult :: Either RebuildResult RebuildResult -> BuildResult
   onResult =
-    either (\errors -> { errors: PscResult { errors, warnings: [] }, success: true })
-      (\warnings -> { errors: PscResult { errors: [], warnings }, success: true })
+    either
+      (\errors -> { errors: PscResult { errors, warnings: [] }, success: true })
+      ( \warnings ->
+          { errors: PscResult { errors: [], warnings }, success: true }
+      )
       <<< bimap unwrap unwrap
     where
     unwrap (RebuildResult r) = r

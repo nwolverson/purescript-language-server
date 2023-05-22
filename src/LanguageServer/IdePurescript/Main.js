@@ -1,4 +1,4 @@
-export function version () {
+export function version() {
   try {
     return require("./package.json").version;
   } catch (e) {

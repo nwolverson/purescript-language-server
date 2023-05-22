@@ -9,12 +9,19 @@ import LanguageServer.Protocol.Types (DocumentStore, DocumentUri)
 
 foreign import getDocuments :: DocumentStore -> Effect (Array TextDocument)
 
-foreign import getDocument :: DocumentStore -> DocumentUri -> Effect (Nullable TextDocument)
+foreign import getDocument ::
+  DocumentStore -> DocumentUri -> Effect (Nullable TextDocument)
 
-type TextDocumentChangeEvent
-  = { document :: TextDocument }
+type TextDocumentChangeEvent = { document :: TextDocument }
 
-foreign import onDidSaveDocument :: DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit
-foreign import onDidOpenDocument :: DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit
-foreign import onDidCloseDocument :: DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit
-foreign import onDidChangeContent :: DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit
+foreign import onDidSaveDocument ::
+  DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit
+
+foreign import onDidOpenDocument ::
+  DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit
+
+foreign import onDidCloseDocument ::
+  DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit
+
+foreign import onDidChangeContent ::
+  DocumentStore -> (TextDocumentChangeEvent -> Effect Unit) -> Effect Unit

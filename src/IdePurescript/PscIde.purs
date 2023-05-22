@@ -17,11 +17,12 @@ module IdePurescript.PscIde
   ) where
 
 import Prelude
+
 import Control.Monad.Error.Class (throwError)
 import Data.Argonaut.Decode (class DecodeJson, decodeJson, (.:))
 import Data.Array (head, null)
 import Data.Either (Either(Right, Left))
-import Data.Maybe (maybe, Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Effect.Aff (Aff, error)
 import PscIde as P
 import PscIde.Command (CompletionOptions, DeclarationType(..), TypePosition)
@@ -64,8 +65,12 @@ primModules =
   , "Prim.TypeError"
   ]
 
-type TypeResult
-  = { type :: String, identifier :: String, module :: String, position :: Maybe TypePosition }
+type TypeResult =
+  { type :: String
+  , identifier :: String
+  , module :: String
+  , position :: Maybe TypePosition
+  }
 
 getTypeInfo ::
   Int ->
@@ -75,10 +80,17 @@ getTypeInfo ::
   Array String ->
   (String -> Array String) ->
   Aff (Maybe C.TypeInfo)
-getTypeInfo port text currentModule modulePrefix unqualModules getQualifiedModule =
+getTypeInfo
+  port
+  text
+  currentModule
+  modulePrefix
+  unqualModules
+  getQualifiedModule =
   result head $ P.type' port text moduleFilters currentModule
   where
-  moduleFilters = [ C.ModuleFilter $ maybe unqualModules getQualifiedModule modulePrefix ]
+  moduleFilters =
+    [ C.ModuleFilter $ maybe unqualModules getQualifiedModule modulePrefix ]
 
 getModuleInfo :: Int -> String -> Aff (Maybe C.TypeInfo)
 getModuleInfo port text =
@@ -95,12 +107,14 @@ getType ::
   (String -> Array String) ->
   Aff String
 getType port text currentModule modulePrefix unqualModules getQualifiedModule =
-  maybe "" getType' <$> getTypeInfo port text currentModule modulePrefix unqualModules getQualifiedModule
+  maybe "" getType' <$> getTypeInfo port text currentModule modulePrefix
+    unqualModules
+    getQualifiedModule
   where
   getType' (C.TypeInfo { type' }) = type'
 
-type CompletionResult
-  = { type :: String, identifier :: String, module :: String }
+type CompletionResult =
+  { type :: String, identifier :: String, module :: String }
 
 getCompletion ::
   Int ->
@@ -124,34 +138,53 @@ getCompletion' ::
   (String -> Array String) ->
   CompletionOptions ->
   Aff (Array C.TypeInfo)
-getCompletion' matcher mainFilter port currentModule modulePrefix unqualModules getQualifiedModule opts =
-  eitherToErr $ P.complete port (mainFilter <> moduleFilters) matcher currentModule opts
+getCompletion'
+  matcher
+  mainFilter
+  port
+  currentModule
+  modulePrefix
+  unqualModules
+  getQualifiedModule
+  opts =
+  eitherToErr $ P.complete port (mainFilter <> moduleFilters) matcher
+    currentModule
+    opts
   where
   modules = maybe unqualModules getQualifiedModule modulePrefix
-  moduleFilters = [ C.ModuleFilter $ if null modules then unqualModules else modules ]
+  moduleFilters =
+    [ C.ModuleFilter $ if null modules then unqualModules else modules ]
 
 typesInModule :: Int -> String -> Aff (Array C.TypeInfo)
 typesInModule port moduleName =
-  eitherToErr $ P.complete port [ C.ModuleFilter [ moduleName ] ] Nothing (Just moduleName) P.defaultCompletionOptions
-
+  eitherToErr $ P.complete port [ C.ModuleFilter [ moduleName ] ] Nothing
+    (Just moduleName)
+    P.defaultCompletionOptions
 
 loadDeps :: Int -> String -> Aff String
 loadDeps port main = result runMsg $ P.load port [] [ main ]
 
-type SearchResult
-  = { module :: String, package :: String, type :: Maybe String, identifier :: String, text :: String }
+type SearchResult =
+  { module :: String
+  , package :: String
+  , type :: Maybe String
+  , identifier :: String
+  , text :: String
+  }
 
 getPursuitCompletion :: Int -> String -> Aff (Array SearchResult)
-getPursuitCompletion port str = result (map convPursuitCompletion) $ P.pursuitCompletion port str
+getPursuitCompletion port str = result (map convPursuitCompletion) $
+  P.pursuitCompletion port str
 
 convPursuitCompletion :: C.PursuitCompletion -> SearchResult
-convPursuitCompletion (C.PursuitCompletion { identifier, type', module', package, text }) = { identifier, package, type: type', "module": module', text }
+convPursuitCompletion
+  (C.PursuitCompletion { identifier, type', module', package, text }) =
+  { identifier, package, type: type', "module": module', text }
 
-data ModuleCompletion
-  = ModuleCompletion
-    { module' :: String
-    , package :: String
-    }
+data ModuleCompletion = ModuleCompletion
+  { module' :: String
+  , package :: String
+  }
 
 instance decodeModuleCompletion :: DecodeJson ModuleCompletion where
   decodeJson json = do
@@ -165,15 +198,16 @@ instance decodeModuleCompletion :: DecodeJson ModuleCompletion where
           }
       )
 
-type ModuleSearchResult
-  = { module :: String, package :: String }
+type ModuleSearchResult = { module :: String, package :: String }
 
 getPursuitModuleCompletion :: Int -> String -> Aff (Array ModuleSearchResult)
-getPursuitModuleCompletion port str = result (map convPursuitModuleCompletion) $ complete str
+getPursuitModuleCompletion port str = result (map convPursuitModuleCompletion) $
+  complete str
   where
 
   complete :: String -> P.Cmd (Array ModuleCompletion)
   complete q = P.sendCommand port (C.Pursuit C.Package q)
 
   convPursuitModuleCompletion :: ModuleCompletion -> ModuleSearchResult
-  convPursuitModuleCompletion (ModuleCompletion { module', package }) = { package, "module": module' }
+  convPursuitModuleCompletion (ModuleCompletion { module', package }) =
+    { package, "module": module' }

@@ -1,6 +1,7 @@
 module IdePurescript.QuickFix where
 
 import Prelude
+
 import Data.Foldable (elem)
 
 -- | Get a title which explains what applying a compiler suggestion will do
@@ -18,7 +19,8 @@ getTitle code = case code of
 wildcardInferredType :: String
 wildcardInferredType = "WildcardInferredType"
 
--- | Determine whether an error code represents an unknown token (unknown identifier or missing import)
+-- | Determine whether an error code represents an unknown token (unknown
+-- | identifier or missing import)
 isUnknownToken :: String -> Boolean
 isUnknownToken =
   flip elem

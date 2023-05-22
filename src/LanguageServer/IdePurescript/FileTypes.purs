@@ -3,10 +3,10 @@ module LanguageServer.IdePurescript.FileTypes
   , jsUriToMayPsUri
   , uriExtensionIs
   , uriToRelevantFileType
-  )
-  where
+  ) where
 
 import Prelude
+
 import Data.Maybe (Maybe)
 import Data.String as String
 import LanguageServer.Protocol.Types (DocumentUri(..))
@@ -23,7 +23,7 @@ instance Show RelevantFileType where
   show JavaScriptFile = "JavaScriptFile"
   show UnsupportedFile = "UnsupportedFile"
 
-uriToRelevantFileType ∷ DocumentUri → RelevantFileType
+uriToRelevantFileType :: DocumentUri -> RelevantFileType
 uriToRelevantFileType uri = f
   where
   extIs = uriExtensionIs uri
@@ -32,13 +32,13 @@ uriToRelevantFileType uri = f
     | extIs "js" = JavaScriptFile
     | otherwise = UnsupportedFile
 
-uriExtensionIs ∷ DocumentUri → String → Boolean
+uriExtensionIs :: DocumentUri -> String -> Boolean
 uriExtensionIs (DocumentUri uri) ext = ext' == after
   where
   ext' = "." <> ext
   { after } = String.splitAt (String.length uri - String.length ext') uri
 
-jsUriToMayPsUri ∷ DocumentUri → Maybe DocumentUri
+jsUriToMayPsUri :: DocumentUri -> Maybe DocumentUri
 jsUriToMayPsUri (DocumentUri str) =
   (String.stripSuffix (String.Pattern ".js") str)
     <#> (_ <> ".purs")

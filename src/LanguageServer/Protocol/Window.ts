@@ -1,7 +1,7 @@
 import {
   Connection,
   MessageActionItem,
-  WorkDoneProgressServerReporter
+  WorkDoneProgressServerReporter,
 } from "vscode-languageserver/node";
 
 export const showError = (conn: Connection) => (s: string) => () =>

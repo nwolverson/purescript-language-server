@@ -1,7 +1,6 @@
 module LanguageServer.IdePurescript.References
   ( getReferences
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -37,12 +36,19 @@ getReferences ::
   Aff (Array Location)
 getReferences docs _ state ({ textDocument, position }) = do
   let { port, modules, root } = un ServerState $ state
-  doc <- liftEffect $ getDocument docs (_.uri $ un TextDocumentIdentifier textDocument)
+  doc <- liftEffect $ getDocument docs
+    (_.uri $ un TextDocumentIdentifier textDocument)
   Nullable.toMaybe doc # maybe (pure []) \doc -> do
     text <- liftEffect $ getTextAtRange doc (mkRange position)
-    case port, root, identifierAtPoint text (_.character $ un Position position) of
+    case
+      port,
+      root,
+      identifierAtPoint text (_.character $ un Position position)
+      of
       Just port', Just root', Just { word, qualifier } -> do
-        info <- getTypeInfo port' word modules.main qualifier (getUnqualActiveModules modules $ Just word) (flip getQualModule modules)
+        info <- getTypeInfo port' word modules.main qualifier
+          (getUnqualActiveModules modules $ Just word)
+          (flip getQualModule modules)
         case info of
           Just (Command.TypeInfo { module', type' }) -> do
             let
@@ -51,7 +57,8 @@ getReferences docs _ state ({ textDocument, position }) = do
                 _ | endsWith "-> Type" type' -> NSType
                 _ -> NSValue
             usg <- usages port' module' ns word
-            liftEffect $ either (pure $ pure []) (traverse $ convLocation root') usg
+            liftEffect $ either (pure $ pure []) (traverse $ convLocation root')
+              usg
           _ -> pure $ []
       _, _, _ -> pure $ []
   where

@@ -46,14 +46,15 @@ module LanguageServer.IdePurescript.Config
   ) where
 
 import Prelude
+
 import Control.Monad.Except (runExcept)
 import Data.Either (either)
-import Foreign (F, Foreign, readArray, readBoolean, readInt, readString)
-import Foreign.Index ((!))
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Traversable (traverse)
-import PscIde.Server (LogLevel(..))
+import Foreign (F, Foreign, readArray, readBoolean, readInt, readString)
+import Foreign.Index ((!))
 import PscIde.Command (CodegenTarget(..))
+import PscIde.Server (LogLevel(..))
 
 getConfigMaybe :: forall a. (Foreign -> F a) -> String -> Foreign -> Maybe a
 getConfigMaybe readValue key settings = do
@@ -77,8 +78,7 @@ getString = getConfig readString
 getInt :: String -> Int -> Foreign -> Int
 getInt = getConfig readInt
 
-type ConfigFn a
-  = Foreign -> a
+type ConfigFn a = Foreign -> a
 
 pursExe :: ConfigFn String
 pursExe = getString "pursExe" "purs"
@@ -120,7 +120,9 @@ autocompleteLimit :: ConfigFn (Maybe Int)
 autocompleteLimit = getConfigMaybe readInt "autocompleteLimit"
 
 importsPreferredModules :: ConfigFn (Array String)
-importsPreferredModules = getConfig (readArray >=> traverse readString) "importsPreferredModules" []
+importsPreferredModules = getConfig (readArray >=> traverse readString)
+  "importsPreferredModules"
+  []
 
 preludeModule :: ConfigFn String
 preludeModule = getString "preludeModule" "Prelude"
@@ -137,7 +139,8 @@ outputDirectory = getConfigMaybe readString "outputDirectory"
 
 -- | Effective output directory (taking account of purs default)
 effectiveOutputDirectory :: ConfigFn String
-effectiveOutputDirectory = fromMaybe "output" <<< ignoreEmpty <<< outputDirectory
+effectiveOutputDirectory = fromMaybe "output" <<< ignoreEmpty <<<
+  outputDirectory
 
 addPscPackageSources :: ConfigFn Boolean
 addPscPackageSources = getBoolean "addPscPackageSources" false
@@ -150,7 +153,6 @@ fullBuildOnSave = getBoolean "fullBuildOnSave" false
 
 fullBuildOnSaveProgress :: ConfigFn Boolean
 fullBuildOnSaveProgress = getBoolean "fullBuildOnSaveProgress" true
-
 
 diagnosticsOnType :: ConfigFn Boolean
 diagnosticsOnType = getBoolean "diagnosticsOnType" false
@@ -182,11 +184,11 @@ logLevel :: ConfigFn (Maybe LogLevel)
 logLevel =
   getString "pscIdelogLevel" ""
     >>> case _ of
-        "all" -> Just All
-        "none" -> Just None
-        "debug" -> Just Debug
-        "perf" -> Just Perf
-        _ -> Nothing
+      "all" -> Just All
+      "none" -> Just None
+      "debug" -> Just Debug
+      "perf" -> Just Perf
+      _ -> Nothing
 
 data Formatter
   = NoFormatter
@@ -198,12 +200,12 @@ formatter :: ConfigFn Formatter
 formatter =
   getString "formatter" ""
     >>> case _ of
-        "purty" -> Purty
-        "purs-tidy" -> PursTidy
-        "tidy" -> PursTidy
-        "pose" -> Pose
-        "" -> NoFormatter
-        _ -> NoFormatter
+      "purty" -> Purty
+      "purs-tidy" -> PursTidy
+      "tidy" -> PursTidy
+      "pose" -> Pose
+      "" -> NoFormatter
+      _ -> NoFormatter
 
 codegenTargets :: ConfigFn (Maybe (Array CodegenTarget))
 codegenTargets =

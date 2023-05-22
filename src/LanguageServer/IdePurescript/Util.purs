@@ -1,8 +1,7 @@
 module LanguageServer.IdePurescript.Util
   ( launchAffLog
   , maybeParseResult
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -18,8 +17,13 @@ launchAffLog :: forall a. Notify -> Aff a -> Effect (Fiber Unit)
 launchAffLog notify =
   runAff $ either (notify Error <<< show) (const $ pure unit)
 
-maybeParseResult :: forall a. a -> (forall b. RangeOf b => Module b -> a) -> RecoveredParserResult Module -> a
-maybeParseResult default f = 
+maybeParseResult ::
+  forall a.
+  a ->
+  (forall b. RangeOf b => Module b -> a) ->
+  RecoveredParserResult Module ->
+  a
+maybeParseResult default f =
   case _ of
     ParseSucceeded x -> f x
     ParseSucceededWithErrors x _errs -> f x

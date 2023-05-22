@@ -1,4 +1,4 @@
-import { createConnection, TextDocuments, CodeActionKind, TextDocumentSyncKind } from "vscode-languageserver/node";
+import { createConnection, TextDocuments, CodeActionKind, TextDocumentSyncKind, } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 export var initConnection = function (commands) {
     return function (cb) {
@@ -6,7 +6,7 @@ export var initConnection = function (commands) {
             var conn = createConnection();
             conn.listen();
             conn.onInitialize(function (params) {
-                conn.console.info(JSON.stringify(params));
+                // conn.console.info(JSON.stringify(params));
                 cb({
                     params: params,
                     conn: conn,

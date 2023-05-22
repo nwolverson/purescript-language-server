@@ -109,16 +109,18 @@ modifyState_ state mod =
   void $ modifyState state mod
 
 readState ::
-  ∀ a.
-  Ref ServerState -> (ServerStateRec -> a) -> Effect a
+  forall a.
+  Ref ServerState ->
+  (ServerStateRec -> a) ->
+  Effect a
 readState state get =
   get <$> un ServerState <$> Ref.read state
 
-type CmdLineArguments
-  = { config :: Maybe String
-    , filename :: Maybe String
-    , version :: Boolean
-    }
+type CmdLineArguments =
+  { config :: Maybe String
+  , filename :: Maybe String
+  , version :: Boolean
+  }
 
 -- | Parses command line arguments  passed to process.argv
 parseArgs :: Array String -> Maybe CmdLineArguments
@@ -146,8 +148,8 @@ updateModules ::
 updateModules state documents uri =
   liftEffect (Ref.read state)
     >>= case _ of
-        ServerState { port: Just port, modulesFile }
-          | modulesFile /= Just uri -> do
+      ServerState { port: Just port, modulesFile }
+        | modulesFile /= Just uri -> do
             maybeDoc <- liftEffect $ getDocument documents uri
             for (Nullable.toMaybe maybeDoc) \doc -> do
               text <- liftEffect $ getText doc
@@ -156,7 +158,7 @@ updateModules state documents uri =
               liftEffect
                 $ modifyState state
                     _ { modules = modules, modulesFile = Just uri }
-        _ -> pure Nothing
+      _ -> pure Nothing
 
 mkRunHandler ::
   Ref Foreign ->
@@ -172,12 +174,13 @@ mkRunHandler config state documents _handlerName maybeGetDocUri f b =
   Promise.fromAff do
     -- Should not allow any js files through
     case maybeGetDocUri b of
-      Just uri | FileTypes.JavaScriptFile <- FileTypes.uriToRelevantFileType uri ->
-        -- TODO :(
-        -- Returning null here rather than throwing an exception which will show up in output. Likely null is actually
-        -- valid return from all handlers and types can be adjusted; alternatively perhaps these handlers can only be registered
-        -- for .purs while getting changes for others.
-        pure $ unsafeCoerce null
+      Just uri
+        | FileTypes.JavaScriptFile <- FileTypes.uriToRelevantFileType uri ->
+            -- TODO :(
+            -- Returning null here rather than throwing an exception which will show up in output. Likely null is actually
+            -- valid return from all handlers and types can be adjusted; alternatively perhaps these handlers can only be registered
+            -- for .purs while getting changes for others.
+            pure $ unsafeCoerce null
       maybeUri -> do
         c <- liftEffect $ Ref.read config
         ms <- maybe (pure Nothing) (updateModules state documents) maybeUri
@@ -187,13 +190,15 @@ mkRunHandler config state documents _handlerName maybeGetDocUri f b =
 -- | Extracts document uri value
 getTextDocUri ::
   forall r.
-  { textDocument :: TextDocumentIdentifier | r } -> Maybe DocumentUri
-getTextDocUri = (Just <<< _.uri <<< un TextDocumentIdentifier <<< _.textDocument)
+  { textDocument :: TextDocumentIdentifier | r } ->
+  Maybe DocumentUri
+getTextDocUri =
+  (Just <<< _.uri <<< un TextDocumentIdentifier <<< _.textDocument)
 
 -- | This mutes buggy warning coming from purs-ide, just to keep the output clean.
 -- | The issue: https://github.com/purescript/purescript/issues/3377
 muteReexportsWarn ::
-  (Connection → String → Effect Unit) -> Connection -> String -> Effect Unit
+  (Connection -> String -> Effect Unit) -> Connection -> String -> Effect Unit
 muteReexportsWarn logFn con str =
   if str # contains (Pattern "Failed to resolve reexports for Type.") then
     pure unit
@@ -205,17 +210,18 @@ mkNotify ::
 mkNotify logFile state l s = do
   readState state _.conn
     >>= maybe (pure unit)
-        ( flip
-            case l of
-              Success -> log
-              Info -> muteReexportsWarn info
-              Warning -> warn
-              Error -> error
-            s
-        )
+      ( flip
+          case l of
+            Success -> log
+            Info -> muteReexportsWarn info
+            Warning -> warn
+            Error -> error
+          s
+      )
   case logFile of
     Just filename ->
-      FSSync.appendTextFile Encoding.UTF8 filename ("[" <> show l <> "] " <> s <> "\n")
+      FSSync.appendTextFile Encoding.UTF8 filename
+        ("[" <> show l <> "] " <> s <> "\n")
     Nothing -> pure unit
 
 -- | Stops IDE server
@@ -225,19 +231,31 @@ mkStopPscIdeServer state notify = do
   quit
   liftEffect do
     Ref.modify_
-      (over ServerState $ _ { port = Nothing, deactivate = pure unit, modules = initialModulesState, runningRebuild = Nothing })
+      ( over ServerState $ _
+          { port = Nothing
+          , deactivate = pure unit
+          , modules = initialModulesState
+          , runningRebuild = Nothing
+          }
+      )
       state
     notify Success "Stopped IDE server"
 
 -- | Reads workspace root from state
 buildWarningDialog ::
-  Ref Foreign -> Connection -> Ref ServerState -> (ErrorLevel -> String -> Effect Unit) -> String -> Aff Unit
+  Ref Foreign ->
+  Connection ->
+  Ref ServerState ->
+  (ErrorLevel -> String -> Effect Unit) ->
+  String ->
+  Aff Unit
 buildWarningDialog config conn state notify msg = do
   let buildOption = "Build project"
   action <-
     showWarningWithActions conn
       ( msg
-          <> ". \n\nEnsure project is built with the same purs version as the IDE server is using"
+          <>
+            ". \n\nEnsure project is built with the same purs version as the IDE server is using"
       )
       [ buildOption ]
   when (action == Just buildOption) do
@@ -246,11 +264,13 @@ buildWarningDialog config conn state notify msg = do
     liftEffect $ Build.requestFullBuild config conn state notify
 
 -- | Tries to start IDE server at workspace root
-mkStartPscIdeServer :: Ref Foreign -> Connection -> Ref ServerState -> Notify -> Aff Unit
+mkStartPscIdeServer ::
+  Ref Foreign -> Connection -> Ref ServerState -> Notify -> Aff Unit
 mkStartPscIdeServer config conn state notify = do
-  liftEffect $ notify Info "Starting IDE server"
+  liftEffect $ notify Info "Going to start purs IDE server"
   progressReporter <- createWorkDoneProgress conn
-  liftEffect $ workBegin progressReporter { title: "Starting PureScript IDE server" }
+  liftEffect $ workBegin progressReporter
+    { title: "Starting PureScript IDE server" }
   rootPath <- liftEffect $ Build.getWorkspaceRoot state
   settings <- liftEffect $ Ref.read config
   startRes <- Server.startServer' settings rootPath notify notify
@@ -258,19 +278,21 @@ mkStartPscIdeServer config conn state notify = do
     { port: Just port, quit } -> do
       Server.loadAll port
         >>= case _ of
-            Left msg
-              | String.contains (Pattern "Version mismatch for the externs") msg -> do
-                liftEffect $ info conn $ "Error loading modules: " <> msg
-                buildWarningDialog config conn state notify
-                  $ msg
-                  <> ". Ensure project is built with the same purs version as the IDE server is using"
+          Left msg
+            | String.contains (Pattern "Version mismatch for the externs") msg ->
+                do
+                  liftEffect $ info conn $ "Error loading modules: " <> msg
+                  buildWarningDialog config conn state notify
+                    $ msg
+                        <>
+                          ". Ensure project is built with the same purs version as the IDE server is using"
 
-            Left msg ->
-              liftEffect
-                $ notify Info
-                $ "Non-fatal error loading modules: "
-                <> msg
-            _ -> pure unit
+          Left msg ->
+            liftEffect
+              $ notify Info
+              $ "Non-fatal error loading modules: "
+                  <> msg
+          _ -> pure unit
       liftEffect do
         Ref.modify_
           (over ServerState $ _ { port = Just port, deactivate = quit })
@@ -285,25 +307,27 @@ mkStartPscIdeServer config conn state notify = do
 connect :: Ref ServerState -> Effect Connection
 connect state =
   initConnection
-    commands \({ params: InitParams { rootPath, rootUri, capabilities }, conn }) -> do
-    Process.argv >>= \args -> log conn $ "Starting with args: " <> show args
-    root <- case toMaybe rootUri, toMaybe rootPath of
-      Just uri, _ -> Just <$> uriToFilename uri
-      _, Just path -> pure $ Just path
-      Nothing, Nothing -> pure Nothing
-    workingRoot <- maybe Process.cwd pure root
-    modifyState_ state
-      _
-        { root = Just workingRoot
-        , clientCapabilities = Just capabilities
-        }
-    ( \(Tuple dir root') ->
-        log conn ("Starting with cwd: " <> dir <> " and using root path: " <> root')
-    )
-      =<< Tuple
-      <$> Process.cwd
-      <*> pure workingRoot
-    Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
+    commands
+    \({ params: InitParams { rootPath, rootUri, capabilities }, conn }) -> do
+      Process.argv >>= \args -> log conn $ "Starting with args: " <> show args
+      root <- case toMaybe rootUri, toMaybe rootPath of
+        Just uri, _ -> Just <$> uriToFilename uri
+        _, Just path -> pure $ Just path
+        Nothing, Nothing -> pure Nothing
+      workingRoot <- maybe Process.cwd pure root
+      modifyState_ state
+        _
+          { root = Just workingRoot
+          , clientCapabilities = Just capabilities
+          }
+      ( \(Tuple dir root') ->
+          log conn
+            ("Starting with cwd: " <> dir <> " and using root path: " <> root')
+      )
+        =<< Tuple
+          <$> Process.cwd
+          <*> pure workingRoot
+      Ref.modify_ (over ServerState $ _ { conn = Just conn }) state
 
 -- | Deletes output from previous build
 cleanProject :: Connection -> Foreign -> Aff Unit
@@ -312,13 +336,13 @@ cleanProject conn config = do
   liftEffect $ info conn "Started cleaning compiled output"
   clean config
     >>= case _ of
-        Left err ->
-          liftEffect do
-            error conn err
-            showError conn err
-        Right msg ->
-          liftEffect do
-            log conn $ msg
+      Left err ->
+        liftEffect do
+          error conn err
+          showError conn err
+      Right msg ->
+        liftEffect do
+          log conn $ msg
   liftEffect $ info conn "Finished cleaning compiled output"
   liftEffect $ sendCleanEnd conn
 
@@ -339,75 +363,108 @@ autoStartPcsIdeServer config conn state notify = do
   when (Config.autoStartPscIde c)
     $ do
         startPscIdeServer
-        hasPackageFile <- liftEffect $ 
+        hasPackageFile <- liftEffect $
           or
             <$> traverse (FSSync.exists <=< resolvePath)
-                [ "bower.json", "psc-package.json", "spago.dhall", "spago.yaml", "flake.nix", "shell.nix" ]
+              [ "bower.json"
+              , "psc-package.json"
+              , "spago.dhall"
+              , "spago.yaml"
+              , "flake.nix"
+              , "shell.nix"
+              ]
         envIdeSources <- Server.getEnvPursIdeSources
         when (not hasPackageFile && isNothing envIdeSources) do
           liftEffect
             $ showError conn
                 ( "It doesn't look like the workspace root is a PureScript project"
-                    <> "(has bower.json/psc-package.json/spago.dhall/flake.nix/shell.nix)."
-                    <> "The PureScript project should be opened as a root workspace folder."
+                    <>
+                      "(has bower.json/psc-package.json/spago.dhall/flake.nix/shell.nix)."
+                    <>
+                      "The PureScript project should be opened as a root workspace folder."
                 )
         outputDir <- liftEffect $ Build.getOutputDir config state
         exists <- liftEffect $ FSSync.exists outputDir
         unless exists
           $ liftEffect
           $ launchAff do
-              let message = "Output directory does not exist at '" <> outputDir <> "'"
+              let
+                message = "Output directory does not exist at '" <> outputDir <>
+                  "'"
               liftEffect $ info conn message
               buildWarningDialog config conn state notify
                 $ message
-                <> ". Ensure project is built, or check configuration of output directory and build command."
+                    <>
+                      ". Ensure project is built, or check configuration of output directory and build command."
 
 -- | Puts event handlers
 handleEvents ::
   Ref Foreign ->
   Connection ->
   Ref ServerState ->
-  DocumentStore -> Notify -> Effect Unit
+  DocumentStore ->
+  Notify ->
+  Effect Unit
 handleEvents config conn state documents notify = do
   let
     runHandler = mkRunHandler config state documents
     stopPscIdeServer = mkStopPscIdeServer state notify
   onCompletion conn
     $ runHandler
-        "onCompletion" getTextDocUri (getCompletions notify documents)
+        "onCompletion"
+        getTextDocUri
+        (getCompletions notify documents)
   onDefinition conn
     $ runHandler
-        "onDefinition" getTextDocUri (getDefinition notify documents)
+        "onDefinition"
+        getTextDocUri
+        (getDefinition notify documents)
   onDocumentSymbol conn
     $ runHandler
-        "onDocumentSymbol" getTextDocUri getDocumentSymbols
+        "onDocumentSymbol"
+        getTextDocUri
+        getDocumentSymbols
   onWorkspaceSymbol conn
     $ runHandler
-        "onWorkspaceSymbol" (const Nothing) getWorkspaceSymbols
+        "onWorkspaceSymbol"
+        (const Nothing)
+        getWorkspaceSymbols
   onFoldingRanges conn
     $ runHandler
-        "onFoldingRanges" getTextDocUri (getFoldingRanges notify documents)
+        "onFoldingRanges"
+        getTextDocUri
+        (getFoldingRanges notify documents)
   onDocumentFormatting conn
     $ runHandler
-        "onDocumentFormatting" getTextDocUri (getFormattedDocument notify documents)
+        "onDocumentFormatting"
+        getTextDocUri
+        (getFormattedDocument notify documents)
   onReferences conn
     $ runHandler
-        "onReferences" getTextDocUri (getReferences documents)
+        "onReferences"
+        getTextDocUri
+        (getReferences documents)
   onHover conn
     $ runHandler
-        "onHover" getTextDocUri (getTooltips documents)
+        "onHover"
+        getTextDocUri
+        (getTooltips documents)
   onCodeAction conn
     $ runHandler
-        "onCodeAction" getTextDocUri (getActions documents)
+        "onCodeAction"
+        getTextDocUri
+        (getActions documents)
   onCodeLens conn
     $ runHandler
-        "onCodeLens" getTextDocUri (getCodeLenses notify state documents)
+        "onCodeLens"
+        getTextDocUri
+        (getCodeLenses notify state documents)
   onShutdown conn $ Promise.fromAff stopPscIdeServer
   --
   onDidChangeWatchedFiles
     conn
     $ launchAff_
-    <<< handleDidChangeWatchedFiles config conn state documents
+        <<< handleDidChangeWatchedFiles config conn state documents
   --
   onDidChangeContent documents
     $ \{ document } -> do
@@ -425,7 +482,9 @@ handleConfig ::
   Ref Foreign ->
   Connection ->
   Ref ServerState ->
-  Maybe Foreign -> Notify -> Aff Unit
+  Maybe Foreign ->
+  Notify ->
+  Aff Unit
 handleConfig config conn state cmdLineConfig notify = do
   let launchAff = void <<< launchAffLog notify
   gotConfig :: AVar Unit <- AVar.empty
@@ -437,8 +496,8 @@ handleConfig config conn state cmdLineConfig notify = do
         Ref.write newConfig config
       AVar.tryPut unit gotConfig
         >>= case _ of
-            true -> pure unit
-            false -> liftEffect $ log conn "Not starting server, already started"
+          true -> pure unit
+          false -> liftEffect $ log conn "Not starting server, already started"
   liftEffect
     $ onDidChangeConfiguration conn
     $ \{ settings } ->
@@ -478,7 +537,8 @@ handleCommands ::
   Effect Unit
 handleCommands config conn state documents notify = do
   let
-    onBuild _ _ _ _ = liftEffect $ Build.requestFullBuild config conn state notify
+    onBuild _ _ _ _ = liftEffect $ Build.requestFullBuild config conn state
+      notify
     onClean _ c _ _ = cleanProject conn c
     stopPscIdeServer = mkStopPscIdeServer state notify
     startPscIdeServer = mkStartPscIdeServer config conn state notify
@@ -491,34 +551,34 @@ handleCommands config conn state documents notify = do
     voidHandler h d c s a =
       try (h d c s a)
         >>= case _ of
-            Left err -> do
-              liftEffect $ notify Error $ show err
-              pure noResult
-            Right _ -> pure noResult
+          Left err -> do
+            liftEffect $ notify Error $ show err
+            pure noResult
+          Right _ -> pure noResult
     simpleHandler h _ _ _ _ = h $> noResult
   let
     handlers :: Object (CommandHandler Foreign)
     handlers =
       Object.fromFoldable
         $ first cmdName
-        <$>
-          [ caseSplitCmd /\ voidHandler caseSplit
-          , addClauseCmd /\ voidHandler addClause
-          , replaceSuggestionCmd /\ voidHandler onReplaceSuggestion
-          , replaceAllSuggestionsCmd /\ voidHandler onReplaceAllSuggestions
-          , buildCmd /\ voidHandler onBuild
-          , cleanCmd /\ voidHandler onClean
-          , addCompletionImportCmd /\ addCompletionImport notify
-          , addModuleImportCmd /\ voidHandler (addModuleImport' notify)
-          , sortImportsCmd /\ reformatImports notify
-          , startPscIdeCmd /\ simpleHandler startPscIdeServer
-          , stopPscIdeCmd /\ simpleHandler stopPscIdeServer
-          , restartPscIdeCmd /\ simpleHandler restartPscIdeServer
-          , getAvailableModulesCmd /\ getAllModules notify
-          , searchCmd /\ search
-          , fixTypoCmd /\ fixTypo notify
-          , typedHoleExplicitCmd /\ voidHandler (fillTypedHole notify)
-          ]
+            <$>
+              [ caseSplitCmd /\ voidHandler caseSplit
+              , addClauseCmd /\ voidHandler addClause
+              , replaceSuggestionCmd /\ voidHandler onReplaceSuggestion
+              , replaceAllSuggestionsCmd /\ voidHandler onReplaceAllSuggestions
+              , buildCmd /\ voidHandler onBuild
+              , cleanCmd /\ voidHandler onClean
+              , addCompletionImportCmd /\ addCompletionImport notify
+              , addModuleImportCmd /\ voidHandler (addModuleImport' notify)
+              , sortImportsCmd /\ reformatImports notify
+              , startPscIdeCmd /\ simpleHandler startPscIdeServer
+              , stopPscIdeCmd /\ simpleHandler stopPscIdeServer
+              , restartPscIdeCmd /\ simpleHandler restartPscIdeServer
+              , getAvailableModulesCmd /\ getAllModules notify
+              , searchCmd /\ search
+              , fixTypoCmd /\ fixTypo notify
+              , typedHoleExplicitCmd /\ voidHandler (fillTypedHole notify)
+              ]
   onExecuteCommand conn
     $ \{ command, arguments } ->
         Promise.fromAff do
@@ -545,7 +605,9 @@ main = do
       v <- version
       Console.log v
     Just args -> do
-      maybe (pure unit) (flip (FSSync.writeTextFile Encoding.UTF8) "Starting logging...\n") args.filename
+      maybe (pure unit)
+        (flip (FSSync.writeTextFile Encoding.UTF8) "Starting logging...\n")
+        args.filename
       let
         config' = case args.config of
           Just c -> either (const Nothing) Just $ runExcept $ parseJSON c
@@ -565,6 +627,7 @@ main' { filename: logFile, config: cmdLineConfig } = do
   let notify = mkNotify logFile state
   handleEvents config conn state documents notify
   handleCommands config conn state documents notify
-  void $ launchAffLog notify $ handleConfig config conn state cmdLineConfig notify
+  void $ launchAffLog notify $ handleConfig config conn state cmdLineConfig
+    notify
   plsVersion <- version
   log conn $ "PureScript Language Server started (" <> plsVersion <> ")"
