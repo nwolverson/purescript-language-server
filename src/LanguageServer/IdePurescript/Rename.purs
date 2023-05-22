@@ -226,19 +226,14 @@ getTextEdits typeInfo usages docsToEdit newText oldName =
             -- that should be fixed.
             # maybeParseResult identity
                 ( \m ->
-                    ( case Array.head $ getExportedRanges m isType oldName of
-                        Just range -> do
-                          fixRange range
-                        Nothing ->
-                          identity
-                    )
+                    -- Apply all found ranges in the exports with
+                    -- duplicates possible.
+                    flip (Array.foldl (#))
+                      (fixRange <$> getExportedRanges m isType oldName)
                       -- Add declaration signature.
                       # (<<<)
-                          case getDeclSignatureName m isType oldName of
-                            Just range ->
-                              addEdit' range
-                            Nothing ->
-                              identity
+                          (maybe identity addEdit' (getDeclSignatureName m isType oldName))
+
                 )
                 parsed
 
@@ -269,13 +264,10 @@ getTextEdits typeInfo usages docsToEdit newText oldName =
                 editsMap #
                   ( maybeParseResult identity
                       ( \m ->
-                          case
-                            Array.head $ getImportedRanges m isType oldName moduleDefinedIn
-                            of
-                            Just range ->
-                              fixRange range
-                            Nothing ->
-                              identity
+                          -- Apply all found ranges in one import with
+                          -- duplicates possible.
+                          flip (Array.foldl (#))
+                            (fixRange <$> getImportedRanges m isType oldName moduleDefinedIn)
                       )
                       parsed
                   )
@@ -318,6 +310,7 @@ getTextEdits typeInfo usages docsToEdit newText oldName =
         , end
         }
       )
+
 
 --| Uses purs ide to find information about definition and usages of rename target given its
 -- symbolic name and its type position.

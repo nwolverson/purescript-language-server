@@ -1,6 +1,6 @@
 module Test.Fixture.RenameB where
 
-import Test.Fixture.RenameA (class ClsA, DataType(ACons), Newt(Newt), TypeSyn, func1, toInt, Tup(..), (/\), type (/\))
+import Test.Fixture.RenameA (class ClsA, DataType(ACons), Newt(Newt), TypeSyn, func1, func1, toInt, Tup(..), (/\), type (/\))
 import Test.Fixture.RenameA as A
 
 dt :: A.DataType

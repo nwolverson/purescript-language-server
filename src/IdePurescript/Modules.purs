@@ -124,9 +124,10 @@ getUnqualActiveModules state ident = getModules include state
   where
   include (Module { qualifier: Just _ }) = false
   include (Module { importType: Explicit idents }) =
-    -- idents array doesn't contain imports of constructors, something like:
-    -- (A), (A,B) or (..)
-    maybe false (_ `elem` idents) ident
+    -- idents array contains operators inside parentheses: `(/\)`. Note: it
+    -- doesn't contain imports of constructors, something like: (A), (A,B) or
+    -- (..)
+    maybe false (\x -> x `elem` idents || ("(" <> x <> ")") `elem` idents) ident
   include (Module { importType: Implicit }) = true
   include (Module { importType: Hiding idents }) =
     maybe true (_ `notElem` idents) ident

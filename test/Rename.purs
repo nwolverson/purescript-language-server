@@ -180,7 +180,6 @@ editsToCompare edits =
   Map.toUnfoldable edits <#>
     \((uri /\ _) /\ ranges) ->
       (fileToModuleName $ show uri)
-        --/\ (Array.sort $ ranges <#> renderRange <<< _.range)
         /\ (Array.sort $ ranges <#> map renderRange <<< lift2 (/\) _.newText _.range)
 
 -- | Coverts found type position to ["Module.Name" /\ ["1:10-1:15"]]
@@ -275,13 +274,10 @@ prepare = do
       rebuild moduleN = do
         buildRes <-
           PscIde.rebuild port mPath (Just mPath) Nothing
-        --(Just targets)
         case buildRes of
           Left err ->
-            --log $ "Rebuild error: " <> err
             A.fail $ "Module rebuild error: " <> err
           Right _ ->
-            --log "Rebuild ok"
             pure unit
         where
         (ModulePath mPath) = toPath moduleN
@@ -301,7 +297,6 @@ prepare = do
   notify = emptyNotify
 
 -- | Test Rename.getTextEdits function.
---mySpec :: SpecT Aff Unit Effect Unit
 renameSpec :: PrepareResult -> S.Spec Unit
 renameSpec prep = do
   S.before (pure prep) $
@@ -314,7 +309,8 @@ renameSpec prep = do
           , moduleA /\ "func1 int" /\ "func1"
           , moduleA /\ "( func1" /\ "func1" -- export
           , moduleA /\ "= func1 10" /\ "func1"
-          , moduleB /\ "import" /\ "func1"
+          , moduleB /\ "import" /\ "func1" -- import
+          , moduleB /\ "nc1, func1" /\ "func1" -- duplicate import
           , moduleB /\ "= A.func1 0" /\ "func1"
           , moduleB /\ "func1 v" /\ "func1" -- inside instance
           ]
@@ -455,23 +451,37 @@ renameSpec prep = do
 
       -- TODO: tests for value fixity, type fixity (value/ctor), value op, type op, kind
 
+      let
+        expectedValueOp =
+          [ moduleA /\ "5 Tup as" /\ "/\\" --def
+          , moduleA /\ ", (/\\)" /\ "/\\" -- export
+          , moduleB /\ "import" /\ "/\\" -- import
+          , moduleB /\ "tup =" /\ "/\\" -- usage
+          ]
+
       testRename it "value operator"
         (moduleA /\ "5 Tup as" /\ "/\\")
-        [ moduleA /\ "5 Tup as" /\ "/\\" --def
-        , moduleA /\ ", (/\\)" /\ "/\\" -- export
-        , moduleB /\ "import" /\ "/\\" -- import
-        , moduleB /\ "tup =" /\ "/\\" -- usage
-        ]
+        expectedValueOp
+
+      testRename it "value operator (in other module)"
+        (moduleB /\ "tup = 1" /\ "/\\")
+        expectedValueOp
+
+      let
+        expectedTypeOp =
+          [ moduleA /\ "5 type Tup as" /\ "/\\" --def
+          , moduleA /\ ", type (/\\)" /\ "/\\" -- export
+          , moduleB /\ "type (/\\)" /\ "/\\" -- import
+          , moduleB /\ "tup ::" /\ "/\\" -- usage
+          ]
 
       testRename it "type operator"
         (moduleA /\ "5 type Tup as" /\ "/\\")
-        [ moduleA /\ "5 type Tup as" /\ "/\\" --def
-        , moduleA /\ ", type (/\\)" /\ "/\\" -- export
-        , moduleB /\ "type (/\\)" /\ "/\\" -- import
-        , moduleB /\ "tup ::" /\ "/\\" -- usage
-        ]
+        expectedTypeOp
 
-  -- TODO: multiple times export/imports
+      testRename it "type operator"
+        (moduleA /\ "5 type Tup as" /\ "/\\")
+        expectedTypeOp
 
   -- TODO: support renaming names in imports/exports
 
@@ -498,8 +508,9 @@ renameSpec prep = do
             case mbUsage of
               -- Returns usages: array of type positions.
               Just (typeInfo /\ usages) -> do
-                let edits =
-                      R.getTextEdits typeInfo usages docsToEdit (newName ident) identPtn
+                let
+                  edits =
+                    R.getTextEdits typeInfo usages docsToEdit (newName ident) identPtn
 
                 case makeTps modules ident of
                   Right tps ->
