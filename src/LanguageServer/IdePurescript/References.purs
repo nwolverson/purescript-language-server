@@ -13,11 +13,11 @@ import Data.Traversable (traverse)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
-import IdePurescript.Modules (getQualModule, getUnqualActiveModules)
-import IdePurescript.PscIde (getTypeInfo)
+import IdePurescript.PscIdeServer (Notify)
 import IdePurescript.Tokens (identifierAtPoint)
 import LanguageServer.IdePurescript.Symbols (convPosition)
 import LanguageServer.IdePurescript.Types (ServerState(..))
+import LanguageServer.IdePurescript.Util.TypeInfo (getTypeInfoMaybeNew)
 import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (ReferenceParams)
 import LanguageServer.Protocol.TextDocument (getTextAtRange)
@@ -28,16 +28,17 @@ import PscIde (usages)
 import PscIde.Command (Namespace(..))
 import PscIde.Command as Command
 
-getReferences ::
+getReferences ::  Notify ->
   DocumentStore ->
   Settings ->
   ServerState ->
   ReferenceParams ->
   Aff (Array Location)
-getReferences docs _ state ({ textDocument, position }) = do
-  let { port, modules, root } = un ServerState $ state
-  doc <- liftEffect $ getDocument docs
-    (_.uri $ un TextDocumentIdentifier textDocument)
+getReferences notify docs _ state ({ textDocument, position }) = do
+  let { port, root } = un ServerState $ state
+      uri =_.uri $ un TextDocumentIdentifier textDocument
+  doc <- liftEffect $ getDocument docs uri
+    
   Nullable.toMaybe doc # maybe (pure []) \doc -> do
     text <- liftEffect $ getTextAtRange doc (mkRange position)
     case
@@ -46,9 +47,7 @@ getReferences docs _ state ({ textDocument, position }) = do
       identifierAtPoint text (_.character $ un Position position)
       of
       Just port', Just root', Just { word, qualifier } -> do
-        info <- getTypeInfo port' word modules.main qualifier
-          (getUnqualActiveModules modules $ Just word)
-          (flip getQualModule modules)
+        info <- getTypeInfoMaybeNew notify state uri word qualifier
         case info of
           Just (Command.TypeInfo { module', type' }) -> do
             let

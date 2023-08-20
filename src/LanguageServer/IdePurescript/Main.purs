@@ -296,7 +296,7 @@ mkStartPscIdeServer config conn state notify = do
           _ -> pure unit
       liftEffect do
         Ref.modify_
-          (over ServerState $ _ { port = Just port, deactivate = quit })
+          (over ServerState $ _ { port = Just port, deactivate = quit, purs = purs })
           state
         ServerState { clientCapabilities } <- liftEffect $ Ref.read state
         when (CodeLenses.supportsRefresh clientCapabilities) do
@@ -444,7 +444,7 @@ handleEvents config conn state documents notify = do
     $ runHandler
         "onReferences"
         getTextDocUri
-        (getReferences documents)
+        (getReferences notify documents)
   onHover conn
     $ runHandler
         "onHover" getTextDocUri (getTooltips notify documents)

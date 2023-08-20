@@ -29,12 +29,12 @@ import Data.Traversable (foldMap, for, traverse)
 import Data.Tuple (Tuple(..), snd)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
-import IdePurescript.Modules (getQualModule, getUnqualActiveModules)
-import IdePurescript.PscIde (getCompletion, getLoadedModules, getModuleInfo, getTypeInfo)
+import IdePurescript.PscIde (getCompletion, getLoadedModules, getModuleInfo)
 import IdePurescript.PscIdeServer (Notify)
 import IdePurescript.Tokens (identifierAtPoint)
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.IdePurescript.Util.CST (sourceRangeToRange)
+import LanguageServer.IdePurescript.Util.TypeInfo (getTypeInfoMaybeNew)
 import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (DocumentSymbolParams, TextDocumentPositionParams, WorkspaceSymbolParams)
 import LanguageServer.Protocol.TextDocument (getTextAtRange)
@@ -65,7 +65,7 @@ getDefinition ::
   TextDocumentPositionParams ->
   Aff (Nullable GotoDefinitionResult)
 getDefinition
-  _notify
+  notify
   docs
   _
   state@
@@ -79,7 +79,7 @@ getDefinition
         Nothing -> pure Nothing
         Just doc -> do
           text <- liftEffect $ getTextAtRange doc (mkLineRange position)
-          let { port, modules, root } = un ServerState $ state
+          let { port, root } = un ServerState $ state
           case
             port,
             root,
@@ -92,7 +92,7 @@ getDefinition
                     Just res | isNothing qualifier -> pure $ Just res
                     _ -> do
                       info <- lift2 (<|>) (moduleInfo port' identRes range)
-                        (typeInfo port' modules identRes)
+                        (typeInfo uri identRes)
                       for info
                         \{ typePos: Command.TypePosition { name, start }
                          , originRange
@@ -129,10 +129,8 @@ getDefinition
           Just (Command.TypeInfo { definedAt: Just typePos }) ->
             Just { typePos, originRange: Just $ mkNewRange position left right }
           _ -> Nothing
-  typeInfo port' modules { word, qualifier } = do
-    info <- getTypeInfo port' word modules.main qualifier
-      (getUnqualActiveModules modules $ Just word)
-      (flip getQualModule modules)
+  typeInfo uri { word, qualifier } = do
+    info <- getTypeInfoMaybeNew notify state uri word qualifier
     pure
       $ case info of
           Just (Command.TypeInfo { definedAt: Just typePos }) -> Just

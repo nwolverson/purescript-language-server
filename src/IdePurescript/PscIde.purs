@@ -22,9 +22,10 @@ import Prelude
 
 import Control.Monad.Error.Class (throwError)
 import Data.Argonaut.Decode (class DecodeJson, decodeJson, (.:))
-import Data.Array (head, null)
+import Data.Array (head, null, (:))
 import Data.Either (Either(Right, Left))
 import Data.Maybe (Maybe(..), maybe)
+import Data.String as String
 import Effect.Aff (Aff, error)
 import PscIde as P
 import PscIde.Command (CompletionOptions, DeclarationType(..), TypePosition)
@@ -105,7 +106,10 @@ getTypeInfoWithImportFilter ::
 getTypeInfoWithImportFilter port text currentModule qualifier importLines =
   result head $ P.type' port text moduleFilters currentModule
   where
-  moduleFilters = [ C.DependencyFilter qualifier importLines ]
+  moduleFilters = [ C.DependencyFilter qualifier moduleText ]
+  moduleText = String.joinWith "\n" $
+    "module RequestModule where" :
+    importLines
 
 getModuleInfo :: Int -> String -> Aff (Maybe C.TypeInfo)
 getModuleInfo port text =

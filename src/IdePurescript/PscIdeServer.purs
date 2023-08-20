@@ -18,7 +18,9 @@ import Data.Either (either)
 import Data.Int as Int
 import Data.Maybe (Maybe(Just, Nothing), isNothing, maybe)
 import Data.String (Pattern(Pattern), joinWith, split, toLower, trim)
+import Data.String as String
 import Data.Traversable (traverse)
+import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Aff (Aff, attempt, try)
 import Effect.Class (liftEffect)
@@ -56,23 +58,29 @@ instance showErrorLevel :: Show ErrorLevel where
 
 type Notify = ErrorLevel -> String -> Effect Unit
 
-data Version = Version Int Int Int
+data Version = Version Int Int Int (Maybe String)
 
 parseVersion :: String -> Maybe Version
-parseVersion s =
-  case traverse Int.fromString $ split (Pattern ".") s of
-    Just [ a, b, c ] -> Just $ Version a b c
+parseVersion s0 = 
+  let
+    s = String.trim s0
+    dotted = String.takeWhile (\c -> c /= String.codePointFromChar ' ' && c /= String.codePointFromChar '-') s
+    rest = String.trim <$> String.stripPrefix (Pattern dotted) s
+    
+  in
+  case traverse Int.fromString $ split (Pattern ".") dotted of
+    Just [ a, b, c ] -> Just $ Version a b c rest
     _ -> Nothing
 
 instance eqVersion :: Eq Version where
-  eq (Version a b c) (Version a' b' c') = a == a' && b == b' && c == c'
+  eq (Version a b c x) (Version a' b' c' x') = a == a' && b == b' && c == c' && x == x'
 
 instance ordVersion :: Ord Version where
-  compare (Version a b c) (Version a' b' c') = compare [ a, b, c ]
-    [ a', b', c' ]
+  compare (Version a b c x) (Version a' b' c' x') = compare (Tuple [ a, b, c ] x)
+    (Tuple [ a', b', c' ] x')
 
 instance showVersion :: Show Version where
-  show (Version a b c) = show a <> "." <> show b <> "." <> show c
+  show (Version a b c z) = show a <> "." <> show b <> "." <> show c <> (maybe "" \zz -> " " <> zz) z
 
 type ServerSettings =
   { exe :: String
