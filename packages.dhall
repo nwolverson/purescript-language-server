@@ -46,4 +46,4 @@ in  upstream
   with literals.repo = "https://github.com/ilyakooo0/purescript-literals.git"
   with literals.version = "6875fb28026595cfb780318305a77e79b098bb01"
   
-  with psc-ide.version = "1340d958d410d961cc017884a8d6d95d640344a2"
+  with psc-ide.version = "0f16603b3336340cbdbde197671cb96ff969a5f8"
