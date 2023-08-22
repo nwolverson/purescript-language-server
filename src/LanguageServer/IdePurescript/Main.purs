@@ -50,6 +50,7 @@ import LanguageServer.IdePurescript.FoldingRanges (getFoldingRanges)
 import LanguageServer.IdePurescript.Formatting (getFormattedDocument)
 import LanguageServer.IdePurescript.Imports (addCompletionImport, addModuleImport', getAllModules, reformatImports)
 import LanguageServer.IdePurescript.References (getReferences)
+import LanguageServer.IdePurescript.Rename (prepareRename, renameIdentifier)
 import LanguageServer.IdePurescript.Search (search)
 import LanguageServer.IdePurescript.Server as Server
 import LanguageServer.IdePurescript.Symbols (getDefinition, getDocumentSymbols, getWorkspaceSymbols)
@@ -59,7 +60,7 @@ import LanguageServer.IdePurescript.Util (launchAffLog)
 import LanguageServer.IdePurescript.WatchedFiles (handleDidChangeWatchedFiles)
 import LanguageServer.Protocol.Console (error, info, log, warn)
 import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidCloseDocument, onDidSaveDocument)
-import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onReferences, onShutdown, onWorkspaceSymbol, sendCleanBegin, sendCleanEnd)
+import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onPrepareRename, onReferences, onRenameRequest, onShutdown, onWorkspaceSymbol, sendCleanBegin, sendCleanEnd)
 import LanguageServer.Protocol.Setup (InitParams(..), getConfiguration, initConnection, initDocumentStore)
 import LanguageServer.Protocol.TextDocument (getText)
 import LanguageServer.Protocol.Types (Connection, DocumentStore, DocumentUri, Settings, TextDocumentIdentifier(..))
@@ -177,10 +178,11 @@ mkRunHandler config state documents _handlerName maybeGetDocUri f b =
     case maybeGetDocUri b of
       Just uri
         | FileTypes.JavaScriptFile <- FileTypes.uriToRelevantFileType uri ->
-            -- TODO :(
-            -- Returning null here rather than throwing an exception which will show up in output. Likely null is actually
-            -- valid return from all handlers and types can be adjusted; alternatively perhaps these handlers can only be registered
-            -- for .purs while getting changes for others.
+            -- TODO :( Returning null here rather than throwing an exception
+            -- which will show up in output. Likely null is actually valid
+            -- return from all handlers and types can be adjusted; alternatively
+            -- perhaps these handlers can only be registered for .purs while
+            -- getting changes for others.
             pure $ unsafeCoerce null
       maybeUri -> do
         c <- liftEffect $ Ref.read config
@@ -440,6 +442,16 @@ handleEvents config conn state documents notify = do
         "onDocumentFormatting"
         getTextDocUri
         (getFormattedDocument notify documents)
+  onPrepareRename conn
+    $ runHandler
+        "onPrepareRename"
+        getTextDocUri
+        (prepareRename documents)
+  onRenameRequest conn
+    $ runHandler
+        "onRenameRequest"
+        getTextDocUri
+        (renameIdentifier documents)
   onReferences conn
     $ runHandler
         "onReferences"

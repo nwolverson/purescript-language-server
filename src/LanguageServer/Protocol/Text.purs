@@ -29,9 +29,32 @@ makeWorkspaceEdit capabilities uri version range newText = workspaceEdit
     { uri, version: Nullable.notNull version }
   edit = TextDocumentEdit { textDocument: docid, edits: [ textEdit ] }
 
--- | Make a full-text workspace edit via a minimal diff under the assumption
--- | that at most one change is required In particular the scenario of inserting
--- | text in the middle AC -> ABC becomes an edit of B only.
+type EditParams =
+  { range :: Range
+  , newText :: String
+  }
+
+type MultiEdit =
+  { uri :: DocumentUri
+  , version :: Maybe Number
+  , edits :: Array { range :: Range, newText :: String }
+  }
+
+makeMultiWorkspaceEdit ::
+  Maybe ClientCapabilities -> Array (MultiEdit) -> WorkspaceEdit
+makeMultiWorkspaceEdit capabilities multiEdits =
+  workspaceEdit capabilities
+    $ multiEdits
+        <#> \{ uri, version, edits } ->
+          TextDocumentEdit
+            { textDocument: OptionalVersionedTextDocumentIdentifier
+                { uri, version: Nullable.toNullable version }
+            , edits: edits <#> \{ range, newText } -> TextEdit
+                { range, newText }
+            }
+
+-- | Make a full-text workspace edit via a minimal diff under the assumption that at most one change is required
+-- | In particular the scenario of inserting text in the middle AC -> ABC becomes an edit of B only.
 makeMinimalWorkspaceEdit ::
   Maybe ClientCapabilities ->
   DocumentUri ->

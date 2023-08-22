@@ -1,4 +1,4 @@
-import { createConnection, TextDocuments, CodeActionKind, TextDocumentSyncKind, } from "vscode-languageserver/node";
+import { createConnection, TextDocuments, CodeActionKind, TextDocumentSyncKind, } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 export var initConnection = function (commands) {
     return function (cb) {
@@ -39,6 +39,10 @@ export var initConnection = function (commands) {
                                 CodeActionKind.SourceFixAll,
                                 CodeActionKind.Source,
                             ],
+                        },
+                        renameProvider: {
+                            prepareProvider: true,
+                            workDoneProgress: true
                         },
                         executeCommandProvider: (params.initializationOptions || {})
                             .executeCommandProvider === false
