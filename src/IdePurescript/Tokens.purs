@@ -28,10 +28,11 @@ moduleRegex = regex (modulePrefix <> "?" <> identPart <> "?$") noFlags
   modulePrefix :: String
   modulePrefix = "(?:^|[^A-Za-z_.])(?:" <> modulePart <> """\.)"""
 
-identifierAtPoint ::
-  String ->
-  Int ->
-  Maybe { word :: String, range :: WordRange, qualifier :: Maybe String }
+type TokenInfo = { word :: String, range :: WordRange, qualifier :: Maybe String }
+
+-- | Finds identifier token at given position (column number) of the text
+-- | string.
+identifierAtPoint :: String -> Int -> Maybe TokenInfo
 identifierAtPoint line column =
   go $ TokenStream.step $ CST.Lexer.lex line
   where

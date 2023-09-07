@@ -6,7 +6,7 @@ import {
   PublishDiagnosticsParams,
   WorkspaceEdit,
   Connection,
-} from "vscode-languageserver/node";
+} from "vscode-languageserver/node.js";
 import { NotificationType0 } from "vscode-jsonrpc";
 
 let registerHandler =
@@ -61,6 +61,12 @@ export const onFoldingRanges = (conn: Connection) =>
 
 export const onDocumentFormatting = (conn: Connection) =>
   registerHandler(conn.onDocumentFormatting);
+
+export const onPrepareRename = (conn: Connection) =>
+  registerHandler(conn.onPrepareRename);
+
+export const onRenameRequest = (conn: Connection) =>
+  registerHandler(conn.onRenameRequest);
 
 export const onDidChangeConfiguration = (conn: Connection) =>
   registerNotificationHandler(conn.onDidChangeConfiguration);

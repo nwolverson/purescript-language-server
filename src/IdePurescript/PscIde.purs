@@ -10,13 +10,13 @@ module IdePurescript.PscIde
   , getModuleInfo
   , getPursuitCompletion
   , getPursuitModuleCompletion
-  , getType
+  -- , getType
   , getTypeInfo
+  , getTypeInfos
   , getTypeInfoWithImportFilter
   , loadDeps
   , typesInModule
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -75,6 +75,20 @@ type TypeResult =
   , position :: Maybe TypePosition
   }
 
+getTypeInfos ::
+  Int ->
+  String ->
+  Maybe String ->
+  Maybe String ->
+  Array String ->
+  (String -> Array String) ->
+  Aff (Array C.TypeInfo)
+getTypeInfos port text currentModule modulePrefix unqualModules getQualifiedModule =
+  result identity $ P.type' port text moduleFilters currentModule
+  where
+  moduleFilters =
+    [ C.ModuleFilter $ maybe unqualModules getQualifiedModule modulePrefix ]
+
 getTypeInfo ::
   Int ->
   String ->
@@ -83,13 +97,7 @@ getTypeInfo ::
   Array String ->
   (String -> Array String) ->
   Aff (Maybe C.TypeInfo)
-getTypeInfo
-  port
-  text
-  currentModule
-  modulePrefix
-  unqualModules
-  getQualifiedModule =
+getTypeInfo port text currentModule modulePrefix unqualModules getQualifiedModule =
   result head $ P.type' port text moduleFilters currentModule
   where
   moduleFilters =
@@ -109,7 +117,7 @@ getTypeInfoWithImportFilter port text currentModule qualifier importLines =
   moduleFilters = [ C.DependencyFilter qualifier moduleText ]
   moduleText = String.joinWith "\n" $
     "module RequestModule where" :
-    importLines
+      importLines
 
 getModuleInfo :: Int -> String -> Aff (Maybe C.TypeInfo)
 getModuleInfo port text =
@@ -117,20 +125,20 @@ getModuleInfo port text =
   where
   filters = [ C.DeclarationFilter [ DeclModule ] ]
 
-getType ::
-  Int ->
-  String ->
-  Maybe String ->
-  Maybe String ->
-  Array String ->
-  (String -> Array String) ->
-  Aff String
-getType port text currentModule modulePrefix unqualModules getQualifiedModule =
-  maybe "" getType' <$> getTypeInfo port text currentModule modulePrefix
-    unqualModules
-    getQualifiedModule
-  where
-  getType' (C.TypeInfo { type' }) = type'
+-- getType ::
+--   Int ->
+--   String ->
+--   Maybe String ->
+--   Maybe String ->
+--   Array String ->
+--   (String -> Array String) ->
+--   Aff String
+-- getType port text currentModule modulePrefix unqualModules getQualifiedModule =
+--   maybe "" getType' <$> getTypeInfo port text currentModule modulePrefix
+--     unqualModules
+--     getQualifiedModule
+--   where
+--   getType' (C.TypeInfo { type' }) = type'
 
 type CompletionResult =
   { type :: String, identifier :: String, module :: String }

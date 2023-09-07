@@ -6,7 +6,7 @@ import {
   CodeActionKind,
   LSPObject,
   TextDocumentSyncKind,
-} from "vscode-languageserver/node";
+} from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
 export const initConnection =
@@ -51,6 +51,10 @@ export const initConnection =
               CodeActionKind.SourceFixAll,
               CodeActionKind.Source,
             ],
+          },
+          renameProvider: {
+            prepareProvider: true,
+            workDoneProgress: true
           },
           executeCommandProvider:
             ((params.initializationOptions as LSPObject) || {})

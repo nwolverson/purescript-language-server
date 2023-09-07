@@ -55,6 +55,12 @@ export var onFoldingRanges = function (conn) {
 export var onDocumentFormatting = function (conn) {
     return registerHandler(conn.onDocumentFormatting);
 };
+export var onPrepareRename = function (conn) {
+    return registerHandler(conn.onPrepareRename);
+};
+export var onRenameRequest = function (conn) {
+    return registerHandler(conn.onRenameRequest);
+};
 export var onDidChangeConfiguration = function (conn) {
     return registerNotificationHandler(conn.onDidChangeConfiguration);
 };

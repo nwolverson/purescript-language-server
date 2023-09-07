@@ -7,6 +7,7 @@ module IdePurescript.Modules
   , getModulesForFile
   , getModulesForFileTemp
   , getUnqualActiveModules
+  , getAllUnqualActiveModules
   , getAllActiveModules
   , getQualModule
   , getModuleFromUnknownQualifier
@@ -116,17 +117,27 @@ mkImplicit :: String -> Module
 mkImplicit m = Module
   { qualifier: Nothing, importType: Implicit, moduleName: m }
 
+-- Returns unqualified modules that can possibly import the ident. If ident is
+-- Nothing it returns only implicit imports.
 getUnqualActiveModules :: State -> Maybe String -> Array String
 getUnqualActiveModules state ident = getModules include state
   where
   include (Module { qualifier: Just _ }) = false
-  include (Module { importType: Explicit idents }) = maybe false
-    (\x -> x `elem` idents || ("(" <> x <> ")") `elem` idents)
-    ident
+  include (Module { importType: Explicit idents }) =
+    -- idents array contains operators inside parentheses: `(/\)`. Note: it
+    -- doesn't contain imports of constructors, something like: (A), (A,B) or
+    -- (..)
+    maybe false (\x -> x `elem` idents || ("(" <> x <> ")") `elem` idents) ident
   include (Module { importType: Implicit }) = true
-  include (Module { importType: Hiding idents }) = maybe true
-    (_ `notElem` idents)
-    ident
+  include (Module { importType: Hiding idents }) =
+    maybe true (_ `notElem` idents) ident
+
+-- Returns all unqualified modules that can possibly, explicit and implicit.
+getAllUnqualActiveModules :: State -> Array String
+getAllUnqualActiveModules state = getModules include state
+  where
+  include (Module { qualifier: Just _ }) = false
+  include (_) = true
 
 getAllActiveModules :: State -> Array String
 getAllActiveModules = getModules (const true)

@@ -38,7 +38,20 @@ type CodeLensResult =
 
 type FoldingRangesParams = { textDocument :: TextDocumentIdentifier }
 
-type DocumentFormattingParams = { textDocument :: TextDocumentIdentifier }
+type DocumentFormattingParams =
+  { textDocument :: TextDocumentIdentifier
+  }
+
+type PrepareRenameParams =
+  { textDocument :: TextDocumentIdentifier
+  , position :: Position
+  }
+
+type RenameParams =
+  { textDocument :: TextDocumentIdentifier
+  , position :: Position
+  , newName :: String
+  }
 
 type DidChangeConfigurationParams = { settings :: Foreign }
 
@@ -94,6 +107,12 @@ foreign import onDocumentFormatting ::
   Connection ->
   (DocumentFormattingParams -> Res (Array TextEdit)) ->
   Effect Unit
+
+foreign import onPrepareRename ::
+  Connection -> (PrepareRenameParams -> Res (Nullable Range)) -> Effect Unit
+
+foreign import onRenameRequest ::
+  Connection -> (RenameParams -> Res WorkspaceEdit) -> Effect Unit
 
 foreign import onDidChangeConfiguration ::
   Connection -> (DidChangeConfigurationParams -> Effect Unit) -> Effect Unit

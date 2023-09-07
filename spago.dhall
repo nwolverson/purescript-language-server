@@ -50,6 +50,7 @@ You can edit this file as you like.
   , "psc-ide"
   , "psci-support"
   , "refs"
+  , "spec"
   , "strings"
   , "stringutils"
   , "test-unit"

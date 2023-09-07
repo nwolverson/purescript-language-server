@@ -41,6 +41,7 @@ instance showDocumentUri :: Show DocumentUri where
 derive newtype instance eqDocumentUri :: Eq DocumentUri
 derive newtype instance Ord DocumentUri
 
+-- Line and character indexes, start from 0
 newtype Position = Position { line :: Int, character :: Int }
 
 instance eqPosition :: Eq Position where
