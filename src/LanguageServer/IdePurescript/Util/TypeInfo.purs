@@ -3,11 +3,11 @@ module LanguageServer.IdePurescript.Util.TypeInfo where
 
 import Prelude
 
+import Data.Array ((:))
 import Data.Foldable (foldMap)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), maybe)
 import Data.String as String
-import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import IdePurescript.Modules (getQualModule, getUnqualActiveModules)
@@ -22,7 +22,7 @@ import PureScript.CST.Print as CST.Print
 import PureScript.CST.Range (class TokensOf) as CST
 import PureScript.CST.Range (tokensOf)
 import PureScript.CST.Range.TokenList as TokenList
-import PureScript.CST.Types (Module(..), ModuleHeader(..)) as CST
+import PureScript.CST.Types (Module(..), ModuleHeader(..), ModuleName(..), Name(..)) as CST
 
 dependencyFilterAvailable :: ServerState -> Boolean
 dependencyFilterAvailable (ServerState { purs }) = case purs of
@@ -32,7 +32,6 @@ dependencyFilterAvailable (ServerState { purs }) = case purs of
 
 getTypeInfoMaybeNew :: Notify -> ServerState -> DocumentUri ->  String -> Maybe String -> Aff (Maybe C.TypeInfo)
 getTypeInfoMaybeNew notify state@(ServerState { parsedModules, modules, port: maybePort, purs }) uri text qualifier = do
-  liftEffect $ notify Info $ "getTypeInfoMaybeNew: new=" <> show (dependencyFilterAvailable state) <> " version_new=" <> maybe "?" (\(Executable exe vers) -> show ({vers, parsed: parseVersion <$> vers})) purs
   case maybePort of 
     Just port ->
       if dependencyFilterAvailable state then do
@@ -48,14 +47,14 @@ getTypeInfoMaybeNew notify state@(ServerState { parsedModules, modules, port: ma
       Just { parsed } -> 
         pure $ maybeParseResult [] parseImports parsed
       Nothing -> do
-        liftEffect $ notify Warning $ "tooltips - no parsed CST for " <> show uri
+        liftEffect $ notify Warning $ "typeinfo - no parsed CST for " <> show uri
         pure []
 
 parseImports :: forall a. CST.TokensOf a => CST.Module a -> Array String
-parseImports (CST.Module { header: CST.ModuleHeader { imports } }) =
+parseImports (CST.Module { header: CST.ModuleHeader { imports, name: CST.Name { name: CST.ModuleName name } } }) =
   let
     printImport imp =
       String.trim $ foldMap CST.Print.printSourceToken (TokenList.toArray (tokensOf imp))
   in
-    printImport <$> imports
+    ("import " <> name) : (printImport <$> imports)
 
