@@ -17,7 +17,7 @@ export const initConnection =
     conn.listen();
 
     conn.onInitialize((params) => {
-      // conn.console.info(JSON.stringify(params));
+      conn.console.info(JSON.stringify(params, null, 2));
       cb({
         params,
         conn,
@@ -33,7 +33,7 @@ export const initConnection =
           },
           // Tell the client that the server support code complete
           completionProvider: {
-            resolveProvider: false,
+            resolveProvider: true,
             triggerCharacters: ["."],
           },
           codeLensProvider: {

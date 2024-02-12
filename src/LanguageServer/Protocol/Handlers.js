@@ -33,6 +33,9 @@ export var onDefinition = function (conn) {
 export var onCompletion = function (conn) {
     return registerHandler(conn.onCompletion);
 };
+export var onCompletionResolve = function (conn) {
+    return registerHandler(conn.onCompletionResolve);
+};
 export var onHover = function (conn) { return registerHandler(conn.onHover); };
 export var onDocumentSymbol = function (conn) {
     return registerHandler(conn.onDocumentSymbol);

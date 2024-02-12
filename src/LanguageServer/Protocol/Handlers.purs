@@ -8,7 +8,7 @@ import Data.Nullable (Nullable)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Foreign (Foreign)
-import LanguageServer.Protocol.Types (CodeActionKind(..), CodeActionResult, Command, CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, FoldingRange, GotoDefinitionResult, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, TextEdit, WorkspaceEdit)
+import LanguageServer.Protocol.Types (CodeActionKind(..), CodeActionResult, Command, CompletionItem(..), CompletionItemList, Connection, Diagnostic, DocumentUri, FileEvent, FoldingRange, GotoDefinitionResult, Hover, Location, Position, Range, SymbolInformation, TextDocumentIdentifier, TextEdit, WorkspaceEdit)
 
 type TextDocumentPositionParams =
   { textDocument :: TextDocumentIdentifier, position :: Position }
@@ -72,6 +72,11 @@ foreign import onDefinition ::
 foreign import onCompletion ::
   Connection ->
   (TextDocumentPositionParams -> Res CompletionItemList) ->
+  Effect Unit
+
+foreign import onCompletionResolve ::
+  Connection ->
+  (CompletionItem -> Res CompletionItem) ->
   Effect Unit
 
 foreign import onHover ::

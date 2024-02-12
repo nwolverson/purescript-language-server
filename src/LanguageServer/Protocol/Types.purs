@@ -136,6 +136,7 @@ newtype CompletionItem = CompletionItem
   , textEdit :: Nullable TextEdit
   , additionalTextEdits :: Nullable (Array TextEdit)
   , command :: Nullable Command
+  , "data" :: Nullable Foreign -- represent LSPAny ideally
   }
 
 derive instance newtypeCompletionItem :: Newtype CompletionItem _
@@ -174,6 +175,7 @@ defaultCompletionItem label =
     , textEdit: toNullable Nothing
     , additionalTextEdits: toNullable Nothing
     , command: toNullable Nothing
+    , "data": toNullable Nothing
     }
 
 completionItem :: String -> CompletionItemKind -> CompletionItem

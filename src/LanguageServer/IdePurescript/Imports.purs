@@ -4,9 +4,12 @@ module LanguageServer.IdePurescript.Imports
   , addCompletionImportEdit
   , addModuleImport'
   , getAllModules
+  , getCompletionItemEdit
+  , parseNS
   , reformatImports
   , showNS
-  ) where
+  )
+  where
 
 import Prelude
 
@@ -28,9 +31,9 @@ import LanguageServer.IdePurescript.Config (autocompleteAddImport, preludeModule
 import LanguageServer.IdePurescript.Types (ServerState(..))
 import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (applyEdit)
-import LanguageServer.Protocol.Text (makeMinimalWorkspaceEdit)
+import LanguageServer.Protocol.Text (makeMinimalWorkspaceEdit, minimalEdit)
 import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtVersion)
-import LanguageServer.Protocol.Types (DocumentStore, DocumentUri(DocumentUri), Settings, WorkspaceEdit)
+import LanguageServer.Protocol.Types (DocumentStore, DocumentUri(DocumentUri), Settings, TextEdit(..), WorkspaceEdit)
 import LanguageServer.Protocol.Uri (uriToFilename)
 import LanguageServer.Protocol.Window as Window
 import PscIde.Command as C
@@ -104,6 +107,64 @@ showNS :: C.Namespace -> String
 showNS C.NSValue = "NSValue"
 showNS C.NSKind = "NSKind"
 showNS C.NSType = "NSType"
+
+
+-- TODO remove duplication by splitting addCompletionImportEdit
+getCompletionItemEdit ::
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  CompletionImportArgs ->
+  String ->
+  Maybe C.Namespace ->
+  Aff (Either Foreign (Array TextEdit))
+getCompletionItemEdit
+  _log
+  _
+  config
+  (ServerState { port, modules })
+  { identifier, mod, qual, uri }
+  text
+  ns = do
+  let prelude = preludeModule config
+  case port of
+    Just port' -> do
+      { result } <-
+        case mod, qual of
+          Just mod', Just qual'
+            | noModule (isSameQualified mod' qual') -> do
+                addQualifiedImport modules port' (un DocumentUri uri) text mod'
+                  qual'
+          Just mod', Nothing
+            | mod' == prelude && noModule (isSameUnqualified prelude) -> do
+                addModuleImport modules port' (un DocumentUri uri) text mod'
+          mod', qual' ->
+            addExplicitImport modules port' (un DocumentUri uri) text mod' qual'
+              identifier
+              ns
+
+      case result of
+        UpdatedImports newText -> do
+          let
+            edit = minimalEdit text newText
+          pure $ Right $ maybe [] singleton edit
+
+        _ ->
+          pure $ Right []
+
+    Nothing -> pure $ Right []
+  where
+
+  noModule f = all (not f <<< unwrap) modules.modules
+  isSameQualified mod' qual' = case _ of
+    { moduleName: mod'', qualifier: Just qual'' } -> mod' == mod'' && qual' ==
+      qual''
+    _ -> false
+
+  isSameUnqualified mod' = case _ of
+    { moduleName, qualifier: Nothing } -> mod' == moduleName
+    _ -> false
 
 addCompletionImportEdit ::
   Notify ->

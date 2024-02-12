@@ -1,36 +1,78 @@
 module LanguageServer.IdePurescript.Completion
   ( getCompletions
-  ) where
+  , resolveCompletion
+  )
+  where
 
 import Prelude
 
 import Data.Array (filter, mapMaybe)
 import Data.Array (length, null) as Arr
+import Data.Either (hush)
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (over, un, unwrap)
-import Data.Nullable (toNullable)
+import Data.Nullable (Nullable, toNullable)
 import Data.Nullable as Nullable
 import Data.String (Pattern(..), Replacement(..), indexOf, joinWith, length, replaceAll, split, toUpper)
 import Data.String.Utils (toCharArray)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
+import Foreign (Foreign, unsafeToForeign)
 import IdePurescript.Completion (SuggestionResult(..), SuggestionType(..), getSuggestions)
 import IdePurescript.Modules (State, getAllActiveModules, getModuleFromUnknownQualifier, getModuleName, getQualModule, getUnqualActiveModules)
 import IdePurescript.Modules as Modules
 import IdePurescript.PscIde (getLoadedModules)
-import IdePurescript.PscIdeServer (Notify)
-import LanguageServer.IdePurescript.Commands (addCompletionImport)
+import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import LanguageServer.IdePurescript.Config as Config
-import LanguageServer.IdePurescript.Imports (showNS)
+import LanguageServer.IdePurescript.Imports (getCompletionItemEdit, parseNS, showNS)
 import LanguageServer.IdePurescript.SuggestionRank (Ranking(..), cmapRanking)
 import LanguageServer.IdePurescript.SuggestionRank as SuggestionRank
 import LanguageServer.IdePurescript.Types (ServerState)
 import LanguageServer.Protocol.DocumentStore (getDocument)
 import LanguageServer.Protocol.Handlers (TextDocumentPositionParams)
-import LanguageServer.Protocol.TextDocument (getTextAtRange)
-import LanguageServer.Protocol.Types (CompletionItem(..), CompletionItemLabelDetails(..), CompletionItemList(..), DocumentStore, Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, markupContent)
+import LanguageServer.Protocol.TextDocument (getText, getTextAtRange)
+import LanguageServer.Protocol.Types (CompletionItem(..), CompletionItemLabelDetails(..), CompletionItemList(..), DocumentStore, DocumentUri(..), Position(..), Range(..), Settings, TextDocumentIdentifier(..), TextEdit(..), completionItem, markupContent)
 import LanguageServer.Protocol.Types as LS
+import Unsafe.Coerce (unsafeCoerce)
+
+resolveCompletion ::
+  Notify ->
+  DocumentStore ->
+  Settings ->
+  ServerState ->
+  CompletionItem ->
+  Aff CompletionItem
+resolveCompletion notify docs settings state (CompletionItem item@{ label: identifier }) = do
+  liftEffect $ notify Info "Completion resolve running"
+  case unpackData =<< Nullable.toMaybe item."data" of
+    Just itemData@{ uri, qualifier, mod, ns} -> do
+      doc <- liftEffect $ getDocument docs (DocumentUri uri)
+      case Nullable.toMaybe doc of
+        Just doc -> do
+          liftEffect $ notify Info $ "Completion resolve: " <> identifier <> " - " <> uri <> " - " <> show itemData
+          text <- liftEffect $ getText doc
+          edit <- hush <$>
+              getCompletionItemEdit notify docs settings state 
+                  { identifier, mod: Just mod, qual: Nullable.toMaybe qualifier, uri: DocumentUri uri }
+                  text
+                  (parseNS ns)
+          liftEffect $ notify Info $ "Completion resolve got edit"
+
+          -- TODO this should depend on capabilities but I guess we can send it regardless, what harm can there be
+          pure $ CompletionItem item { additionalTextEdits = toNullable edit }
+
+        Nothing ->     
+          pure $ CompletionItem item
+    
+    Nothing -> 
+      pure $ CompletionItem item
+
+type CompletionItemData =  { uri :: String, qualifier :: Nullable String, mod :: String, ns :: String }
+
+unpackData :: Foreign -> Maybe CompletionItemData
+unpackData = Just <<< unsafeCoerce
+
 
 getCompletions ::
   Notify ->
@@ -141,6 +183,7 @@ getCompletions notify docs settings state ({ textDocument, position }) = do
           , namespace
           }
       ) =
+
     completionItem identifier (convertSuggest suggestType)
       # over CompletionItem
           ( _
@@ -152,13 +195,15 @@ getCompletions notify docs settings state ({ textDocument, position }) = do
                   }
               , documentation = toNullable $ Just $ markupContent $
                   (fromMaybe "" documentation) <> exportText
-              , command = toNullable $ Just $ addCompletionImport identifier
-                  (Just exportMod)
-                  qualifier
-                  uri
-                  (maybe "" showNS namespace)
+              -- , command = toNullable $ Just $ addCompletionImport identifier
+              --     (Just exportMod)
+              --     qualifier
+              --     uri
+              --     (maybe "" showNS namespace)
+              , additionalTextEdits = toNullable $ Nothing
               , textEdit = toNullable $ Just $ edit identifier prefix
               , sortText = toNullable $ Just $ rankText <> "." <> identifier
+              , "data" = toNullable $ Just $ unsafeToForeign ({ uri: unwrap uri, qualifier: Nullable.toNullable qualifier, mod: exportMod, ns: maybe "" showNS namespace } :: CompletionItemData)
               }
           )
     where

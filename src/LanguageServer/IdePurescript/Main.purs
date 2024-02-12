@@ -43,7 +43,7 @@ import LanguageServer.IdePurescript.CodeActions (getActions, onReplaceAllSuggest
 import LanguageServer.IdePurescript.CodeLenses (getCodeLenses)
 import LanguageServer.IdePurescript.CodeLenses as CodeLenses
 import LanguageServer.IdePurescript.Commands (addClauseCmd, addCompletionImportCmd, addModuleImportCmd, buildCmd, caseSplitCmd, cleanCmd, cmdName, commands, fixTypoCmd, getAvailableModulesCmd, replaceAllSuggestionsCmd, replaceSuggestionCmd, restartPscIdeCmd, searchCmd, sortImportsCmd, startPscIdeCmd, stopPscIdeCmd, typedHoleExplicitCmd)
-import LanguageServer.IdePurescript.Completion (getCompletions)
+import LanguageServer.IdePurescript.Completion (getCompletions, resolveCompletion)
 import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.IdePurescript.FileTypes as FileTypes
 import LanguageServer.IdePurescript.FoldingRanges (getFoldingRanges)
@@ -60,7 +60,7 @@ import LanguageServer.IdePurescript.Util (launchAffLog)
 import LanguageServer.IdePurescript.WatchedFiles (handleDidChangeWatchedFiles)
 import LanguageServer.Protocol.Console (error, info, log, warn)
 import LanguageServer.Protocol.DocumentStore (getDocument, onDidChangeContent, onDidCloseDocument, onDidSaveDocument)
-import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onPrepareRename, onReferences, onRenameRequest, onShutdown, onWorkspaceSymbol, sendCleanBegin, sendCleanEnd)
+import LanguageServer.Protocol.Handlers (onCodeAction, onCodeLens, onCompletion, onCompletionResolve, onDefinition, onDidChangeConfiguration, onDidChangeWatchedFiles, onDocumentFormatting, onDocumentSymbol, onExecuteCommand, onFoldingRanges, onHover, onPrepareRename, onReferences, onRenameRequest, onShutdown, onWorkspaceSymbol, sendCleanBegin, sendCleanEnd)
 import LanguageServer.Protocol.Setup (InitParams(..), getConfiguration, initConnection, initDocumentStore)
 import LanguageServer.Protocol.TextDocument (getText)
 import LanguageServer.Protocol.Types (Connection, DocumentStore, DocumentUri, Settings, TextDocumentIdentifier(..))
@@ -417,6 +417,11 @@ handleEvents config conn state documents notify = do
         "onCompletion"
         getTextDocUri
         (getCompletions notify documents)
+  onCompletionResolve conn
+    $ runHandler
+        "onCompletionResolve"
+        (const Nothing)
+        (resolveCompletion notify documents)
   onDefinition conn
     $ runHandler
         "onDefinition"

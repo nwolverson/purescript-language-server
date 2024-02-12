@@ -6,7 +6,7 @@ export var initConnection = function (commands) {
             var conn = createConnection();
             conn.listen();
             conn.onInitialize(function (params) {
-                // conn.console.info(JSON.stringify(params));
+                conn.console.info(JSON.stringify(params, null, 2));
                 cb({
                     params: params,
                     conn: conn,
@@ -21,7 +21,7 @@ export var initConnection = function (commands) {
                         },
                         // Tell the client that the server support code complete
                         completionProvider: {
-                            resolveProvider: false,
+                            resolveProvider: true,
                             triggerCharacters: ["."],
                         },
                         codeLensProvider: {

@@ -20,11 +20,17 @@ makeWorkspaceEdit ::
   Range ->
   String ->
   WorkspaceEdit
-makeWorkspaceEdit capabilities uri version range newText = workspaceEdit
+makeWorkspaceEdit capabilities uri version range newText = makeWorkspaceEdit' capabilities uri version (TextEdit {newText, range})
+
+makeWorkspaceEdit' ::
+  Maybe ClientCapabilities ->
+  DocumentUri ->
+  Number -> TextEdit ->
+  WorkspaceEdit
+makeWorkspaceEdit' capabilities uri version textEdit = workspaceEdit
   capabilities
   [ edit ]
   where
-  textEdit = TextEdit { range, newText }
   docid = OptionalVersionedTextDocumentIdentifier
     { uri, version: Nullable.notNull version }
   edit = TextDocumentEdit { textDocument: docid, edits: [ textEdit ] }
@@ -63,6 +69,13 @@ makeMinimalWorkspaceEdit ::
   String ->
   Maybe WorkspaceEdit
 makeMinimalWorkspaceEdit clientCapabilities uri version oldText newText =
+  makeWorkspaceEdit' clientCapabilities uri version <$> minimalEdit oldText newText
+
+minimalEdit ::
+  String ->
+  String ->
+  Maybe TextEdit
+minimalEdit oldText newText =
   let
     splitLines t = either (const [ t ]) (\r -> Regex.split r t) $ regex "\r?\n"
       noFlags
@@ -82,7 +95,6 @@ makeMinimalWorkspaceEdit clientCapabilities uri version oldText newText =
     lastDiff = findIndex (uncurry (/=))
       (zip (reverse oldLines) (reverse newLines))
 
-    e a b = Just $ makeWorkspaceEdit clientCapabilities uri version a b
     oldLen = length oldLines
     newLen = length newLines
 
@@ -93,10 +105,11 @@ makeMinimalWorkspaceEdit clientCapabilities uri version oldText newText =
             let
               m' = min m (oldLen - n)
             in
-              e (range oldLines n m')
-                ( joinWith "\n" (lines newLines n m') <>
-                    if null newLines then "" else "\n"
-                )
+              Just $ TextEdit { range:  (range oldLines n m')
+                , newText: 
+                     joinWith "\n" (lines newLines n m') <>
+                      if null newLines then "" else "\n"
+                }
       Nothing, Nothing
         | oldLen == newLen -> Nothing
-      _, _ -> e (range oldLines 0 0) newText
+      _, _ -> Just $ TextEdit { range: (range oldLines 0 0), newText }

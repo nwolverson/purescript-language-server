@@ -39,6 +39,10 @@ export const onDefinition = (conn: Connection) =>
 export const onCompletion = (conn: Connection) =>
   registerHandler(conn.onCompletion);
 
+
+export const onCompletionResolve = (conn: Connection) =>
+  registerHandler(conn.onCompletionResolve);
+
 export const onHover = (conn: Connection) => registerHandler(conn.onHover);
 
 export const onDocumentSymbol = (conn: Connection) =>
