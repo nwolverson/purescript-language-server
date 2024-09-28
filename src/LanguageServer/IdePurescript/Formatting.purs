@@ -30,8 +30,10 @@ import LanguageServer.Protocol.Uri (uriToFilename)
 import Node.Buffer (Buffer)
 import Node.Buffer as Buffer
 import Node.ChildProcess as CP
+import Node.ChildProcess.Types (Exit(..))
 import Node.Encoding (Encoding(..))
-import Node.Encoding as Encoding
+import Node.Errors.SystemError (toError)
+import Node.EventEmitter (on_, once_)
 import Node.Stream as S
 
 getFormattedDocument ::
@@ -106,29 +108,29 @@ format _logCb settings state formatter text = do
               , directory
               , useNpmDir: Config.addNpmPath settings
               }
-            CP.onError cp (err <<< CP.toStandardError)
+            cp # once_ CP.errorH (err <<< toError)
             result <- Ref.new []
             let
               res :: Buffer -> Effect Unit
               res s = Ref.modify_ (_ `Array.snoc` s) result
-            catchException err $ S.onDataString (CP.stderr cp) Encoding.UTF8 $
-              err <<< error
-            catchException err $ S.onData (CP.stdout cp) res
-            CP.onClose cp \exit -> case exit of
-              CP.Normally n
+
+            catchException err $ (CP.stderr cp) # on_ S.dataH
+              (\b -> Buffer.toString UTF8 b >>= (err <<< error))
+            catchException err $ (CP.stdout cp) # on_ S.dataH res
+
+            cp # once_ CP.closeH \exit -> case exit of
+              Normally n
                 | n == 0 || n == 1 ->
                     Ref.read result >>= Buffer.concat
-                      >>= Buffer.toString Encoding.UTF8
+                      >>= Buffer.toString UTF8
                       >>= succ
               _ -> do
                 let Command cmd _ = command
                 err $ error $ cmd <> " process exited abnormally"
+
             when (not $ Foreign.isUndefined $ unsafeToForeign $ CP.pid cp) do
               catchException err $ void $ S.writeString (CP.stdin cp) UTF8 text
-                ( const
-                    $ pure unit
-                )
-              catchException err $ S.end (CP.stdin cp) (const $ pure unit)
+              catchException err $ S.end (CP.stdin cp)
             pure mempty
     _ -> pure ""
 

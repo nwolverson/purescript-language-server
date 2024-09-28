@@ -616,7 +616,7 @@ main = do
   case maybeArgs of
     Nothing -> do
       Console.error "Error parsing args"
-      Process.exit 1
+      Process.exit' 1
     Just { version: true } -> do
       v <- version
       Console.log v

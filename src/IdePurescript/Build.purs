@@ -25,7 +25,10 @@ import Node.Buffer (Buffer)
 import Node.Buffer as Buffer
 import Node.ChildProcess (ChildProcess)
 import Node.ChildProcess as CP
+import Node.ChildProcess.Types (Exit(..), enableShell)
 import Node.Encoding as Encoding
+import Node.Errors.SystemError (toError)
+import Node.EventEmitter (on_, once_)
 import Node.Process (getEnv)
 import Node.Stream as S
 import PscIde as P
@@ -69,8 +72,8 @@ spawn { command: Command cmd args, directory, useNpmDir } = do
   cmd' <- (fromMaybe cmd <<< Array.head) <$> whichSync
     { path, pathExt: Nothing }
     cmd
-  CP.spawn cmd' args
-    (CP.defaultSpawnOptions { cwd = Just directory, env = env })
+  CP.spawn' cmd' args
+    (_ { cwd = Just directory, env = env, shell = Just enableShell })
 
 -- Spawn with npm path, "which" call (windows support) and version info gathering
 spawnWithVersion ::
@@ -87,9 +90,9 @@ spawnWithVersion { command: Command cmd args, directory, useNpmDir } = do
               childEnv = Object.insert (getPathProp env)
                 (either identity identity pathVar)
                 env
-            Just <$> CP.spawn cmdBin args
-              ( CP.defaultSpawnOptions
-                  { cwd = Just directory, env = Just childEnv }
+            Just <$> CP.spawn' cmdBin args
+              ( _
+                  { cwd = Just directory, env = Just childEnv, shell = Just enableShell }
               )
           _ -> pure Nothing
   pure { cmdBins, cp }
@@ -113,17 +116,17 @@ build logCb buildOptions@{ command: Command cmd args } = do
           Just cp -> do
             logCb Info $ "Running build command: " <> intercalate " "
               (cmd : args)
-            CP.onError cp (cb <<< Left <<< CP.toStandardError)
+            cp # once_ CP.errorH (cb <<< Left <<< toError)
             errOutput <- Ref.new []
             outOutput <- Ref.new []
             let
               res :: Ref (Array Buffer) -> Buffer -> Effect Unit
               res r s = Ref.modify_ (_ `Array.snoc` s) r
-            catchException err $ S.onData (CP.stderr cp) (res errOutput)
-            catchException err $ S.onData (CP.stdout cp) (res outOutput)
-            CP.onClose cp
+            catchException err $ (CP.stderr cp) # on_ S.dataH (res errOutput)
+            catchException err $ (CP.stdout cp) # on_ S.dataH (res outOutput)
+            cp # once_ CP.closeH
               ( \exit -> case exit of
-                  CP.Normally n
+                  Normally n
                     | n == 0 || n == 1 -> do
                         pursError <- Ref.read errOutput >>= Buffer.concat >>=
                           Buffer.toString Encoding.UTF8

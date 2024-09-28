@@ -26,12 +26,15 @@ import Effect.Aff (Aff, attempt, try)
 import Effect.Class (liftEffect)
 import IdePurescript.Exec (findBins, getPathVar)
 import IdePurescript.PscIde (cwd) as PscIde
+import Node.Buffer as Buffer
 import Node.ChildProcess (ChildProcess, stderr, stdout)
+import Node.ChildProcess.Types (enableShell)
 import Node.Encoding (Encoding(..))
+import Node.EventEmitter (on_)
 import Node.Path (normalize)
 import Node.Platform (Platform(..))
 import Node.Process (platform)
-import Node.Stream (onDataString)
+import Node.Stream (dataH)
 import PscIde.Server (Executable(Executable), LogLevel, defaultServerArgs, getSavedPort, pickFreshPort, savePort)
 import PscIde.Server as S
 
@@ -61,12 +64,12 @@ type Notify = ErrorLevel -> String -> Effect Unit
 data Version = Version Int Int Int (Maybe String)
 
 parseVersion :: String -> Maybe Version
-parseVersion s0 = 
+parseVersion s0 =
   let
     s = String.trim s0
     dotted = String.takeWhile (\c -> c /= String.codePointFromChar ' ' && c /= String.codePointFromChar '-') s
     rest = String.trim <$> String.stripPrefix (Pattern dotted) s
-    
+
   in
   case traverse Int.fromString $ split (Pattern ".") dotted of
     Just [ a, b, c ] -> Just $ Version a b c rest
@@ -172,8 +175,14 @@ startServer' settings@({ exe: server }) path addNpmBin cb logCb = do
 
   wireOutput :: ChildProcess -> Notify -> Effect Unit
   wireOutput cp log = do
-    onDataString (stderr cp) UTF8 (log Warning)
-    onDataString (stdout cp) UTF8 (log Info)
+    logData stderr Warning
+    logData stdout Info
+    where
+    logData std level =
+      (std cp) # on_ dataH \buf -> do
+      str <- Buffer.toString UTF8 buf
+      log level str
+
 
 -- | Start a psc-ide server instance, or find one already running on the expected port, checking if it has the right path.
 startServer :: Notify -> ServerSettings -> String -> Aff ServerStartResult
@@ -222,6 +231,7 @@ startServer
             , source = glob
             , logLevel = logLevel
             , outputDirectory = outputDirectory
+            , shell = Just enableShell
             }
         )
     where

@@ -26,7 +26,8 @@ import LanguageServer.IdePurescript.Config (ConfigFn)
 import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.Protocol.Types (Settings)
 import Node.Buffer (toString)
-import Node.ChildProcess (defaultExecOptions, execFile)
+import Node.ChildProcess as CP
+import Node.ChildProcess.Types (enableShell)
 import Node.Encoding (Encoding(..))
 import Node.Process (lookupEnv)
 import PscIde (load)
@@ -105,8 +106,8 @@ getPackagerPaths enabled binName settings root =
       Just (Executable bin _) ->
         makeAff \cb -> do
           void
-            $ execFile bin [ "sources" ]
-                (defaultExecOptions { cwd = Just root })
+            $ CP.execFile' bin [ "sources" ]
+                (_ { cwd = Just root, shell = Just enableShell })
                 ( \{ stdout } -> do
                     text <- toString UTF8 stdout
                     cb $ pure $ lines text
