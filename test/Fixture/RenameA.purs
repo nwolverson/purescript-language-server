@@ -8,6 +8,7 @@ module Test.Fixture.RenameA
   , Tup(..)
   , (/\)
   , type (/\)
+  , func'
   ) where
 
 type TypeSyn :: Type
@@ -23,7 +24,15 @@ func1 :: Int -> TypeSyn
 func1 int =
   int
 
+func' :: Int
+func' = 1
+
+f = func'
+
+newT :: Newt
 newT = Newt 10
+
+foreign import fNewT :: Newt
 
 local1 :: Int
 local1 = func1 10

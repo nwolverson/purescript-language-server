@@ -31,7 +31,7 @@ import Node.Process as Process
 import PscIde as PscIde
 import PscIde.Command (TypePosition(..))
 import PureScript.CST (parseModule)
-import Test.Spec (it)
+import Test.Spec (it, itOnly)
 import Test.Spec as S
 import Test.Spec.Assertions as A
 import Test.Spec.Reporter (consoleReporter)
@@ -214,7 +214,7 @@ prepare = do
   cwdDir <- liftEffect $ Process.cwd
   let rootPath = cwdDir <> "/test"
 
-  let settings = unsafeToForeign {}
+  let settings = unsafeToForeign {} --{ purescript: {"pscIdelogLevel": "debug"} }
   startRes <- PursIde.startServer' settings rootPath notify notify
 
   case startRes of
@@ -294,7 +294,9 @@ prepare = do
     _ ->
       liftEffect $ throw "Could not start ide server"
   where
+  --notify _ str = Console.log str
   notify = emptyNotify
+
 
 -- | Test Rename.getTextEdits function.
 renameSpec :: PrepareResult -> S.Spec Unit
@@ -326,6 +328,10 @@ renameSpec prep = do
       testRename it "value ident - in usage"
         (moduleA /\ "func1 10" /\ "func1")
         expectedFunc
+
+      testRename itOnly "name with quote"
+        (moduleA /\ "func' =" /\ "func'")
+        [ moduleA /\ "func' ::" /\ "func'"]
 
       let
         expectedTypeSyn =
@@ -378,6 +384,8 @@ renameSpec prep = do
           [ moduleA /\ "newtype Newt ::" /\ "Newt" -- def kind
           , moduleA /\ "newtype Newt =" /\ "Newt" -- def
           , moduleA /\ "Newt(Newt" /\ "Newt" -- export
+          , moduleA /\ "newT :: Newt" /\ "Newt"
+          , moduleA /\ "fNewT :: Newt" /\ "Newt" -- foreign import
           , moduleB /\ "Newt(Newt" /\ "Newt" --import
           , moduleB /\ "newT ::" /\ "Newt"
           ]
@@ -535,8 +543,9 @@ renameSpec prep = do
           <$> (getTypePos path text (LinePattern lPtn) (Pattern ident))
 
     replaceNewName ident iPtn =
+
       (String.replace (Pattern ident) (Replacement (newName ident)) iPtn)
 
 main :: Effect Unit
 main = launchAff_ do
-  prepare >>= runSpec [ consoleReporter ] <<< renameSpec
+  prepare >>=  runSpec [ consoleReporter ] <<< renameSpec
