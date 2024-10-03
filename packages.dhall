@@ -68,8 +68,8 @@ in  upstream
       , "random"
       , "strings"
       ]
-    , repo = "https://github.com/wclr/purescript-psc-ide"
-    , version = "914230579ee2c0e9c91fa48af508bbe54f1e1bf1"
+    , repo = "https://github.com/kritzcreek/purescript-psc-ide"
+    , version = "5cc2cd48d067f72a760b970080d0ef0a4b427fdf"
     }
   with language-cst-parser =
     { dependencies =
