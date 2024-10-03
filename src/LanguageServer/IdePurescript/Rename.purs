@@ -77,7 +77,7 @@ renameIdentifier docs settings state ({ textDocument, position, newName }) = do
           $ makeMultiWorkspaceEdit clientCapabilities (toMultiEdits usgEdits)
     -- Means that we deal with a local identifier.
     -- Not implemented.
-    Just ({ found: Left { } }) -> do
+    Just ({ found: Left {} }) -> do
       pure wsEditEmpty
 
     Nothing -> do
@@ -311,7 +311,6 @@ getTextEdits typeInfo usages docsToEdit newText oldName =
         }
       )
 
-
 --| Uses purs ide to find information about definition and usages of rename target given its
 -- symbolic name and its type position.
 --
@@ -332,10 +331,10 @@ getTypeInfoWithUsages port word wordPos qualifier moduleState = do
   -- Find where the target is defined.
   typeInfos <-
     (eitherToErr $ P.type' port word moduleFilters moduleState.main)
+
   -- Find its usages. First, try to check if if the target is in the defined
   -- positions. Then for each defined position find usages until they contain
   -- the target.
-
   case findInDefined typeInfos of
     Just info ->
       getUsages info <#> Just <<< (/\) info
@@ -617,12 +616,13 @@ findWordInRange (Pattern word) text range =
   where
   isOp = maybe false (not <<< flip Regex.test word) $ hush
     $ Regex.regex ("[a-z]") Regex.ignoreCase
+  nonNameSymbolRe = "[^A-Za-z\\d_]?"
   searchIndex line
     -- For operators use just search in string, for identifiers - regexp to
     -- match the whole word
     | isOp = String.indexOf (Pattern word) line
     | otherwise =
-        (hush $ Regex.regex ("\\b" <> word <> "\\b") Regex.noFlags) >>=
+        (hush $ Regex.regex ("\\b" <> word <> nonNameSymbolRe) Regex.noFlags) >>=
           flip Regex.search line
 
 getTextAtRangeInLines :: Array String -> Range -> String

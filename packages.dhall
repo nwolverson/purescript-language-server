@@ -1,5 +1,5 @@
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.15.2-20220706/packages.dhall sha256:7a24ebdbacb2bfa27b2fc6ce3da96f048093d64e54369965a2a7b5d9892b6031
+      https://github.com/purescript/package-sets/releases/download/psc-0.15.14-20240227/packages.dhall sha256:c9633eb78193aac138d7debbc907bfedb8f2e3025ef5a874b8dbc1f35b75eef4
 
 in  upstream
   with uuid =
@@ -41,9 +41,36 @@ in  upstream
     }
   with literals.repo = "https://github.com/ilyakooo0/purescript-literals.git"
   with literals.version = "6875fb28026595cfb780318305a77e79b098bb01"
-
-  with psc-ide.version = "0f16603b3336340cbdbde197671cb96ff969a5f8"
-  -- purescript-language-cst-parser v0.12.1 with bugfixes is not yet in the package set.
+  with psc-ide =
+    { dependencies =
+      [ "aff"
+      , "argonaut"
+      , "argonaut-codecs"
+      , "argonaut-core"
+      , "arrays"
+      , "bifunctors"
+      , "control"
+      , "datetime"
+      , "effect"
+      , "either"
+      , "exceptions"
+      , "foldable-traversable"
+      , "foreign-object"
+      , "integers"
+      , "maybe"
+      , "node-buffer"
+      , "node-child-process"
+      , "node-fs"
+      , "node-path"
+      , "nullable"
+      , "parallel"
+      , "prelude"
+      , "random"
+      , "strings"
+      ]
+    , repo = "https://github.com/kritzcreek/purescript-psc-ide"
+    , version = "5cc2cd48d067f72a760b970080d0ef0a4b427fdf"
+    }
   with language-cst-parser =
     { dependencies =
       [ "arrays"
