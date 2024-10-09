@@ -16,7 +16,6 @@ You can edit this file as you like.
   , "contravariant"
   , "control"
   , "datetime"
-  , "debug"
   , "effect"
   , "either"
   , "enums"
@@ -47,7 +46,6 @@ You can edit this file as you like.
   , "profunctor"
   , "profunctor-lenses"
   , "psc-ide"
-  , "psci-support"
   , "refs"
   , "spec"
   , "strings"
@@ -58,6 +56,8 @@ You can edit this file as you like.
   , "unsafe-coerce"
   , "untagged-union"
   , "uuid"
+  , "node-os"
+  , "node-event-emitter"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
