@@ -12,10 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: nwolverson/setup-purescript@30d9b862f160b3a09a21a6457d6bc0d1ac9e92f3
+      - uses: nwolverson/setup-purescript@ff0795267bfc3408ed3a4ffeaa69f78c512d187b
         with:
-          purescript: "0.15.2"
+          purescript: "0.15.14"
           spago: "latest"
+
           
       # - uses: actions/setup-node@v1
       #   with:
