@@ -1,5 +1,21 @@
 # Changelog
 
+### 0.18.2
+
+- Addressing breakage calling cmd-wrapped purescript binaries on windows after node security release #207
+
+### 0.18.1
+
+No changes from 0.18.0, release process issues.
+
+### 0.18.0
+
+- Change completion import addition to use the `additionalTextEdits` property of `CompletionItem` instead of a `Command`. This should work for any LSP client which supports item resolve support for that property.
+
+   - Auto import addition should now work for editors that don't support the command property, such as Helix and Zed
+   -  UX change - this may now mean an observed difference in undo behaviour, at least in vscode completion+import addition is now a single undo item rather than 2 steps
+
+
 ### 0.17.1
 
 - Fix workspace symbol provider
