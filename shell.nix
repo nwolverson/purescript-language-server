@@ -4,15 +4,15 @@ let
     (pkgs.fetchFromGitHub {
       owner = "justinwoo";
       repo = "easy-purescript-nix";
-      rev = "cbcb53725c430de4e69f652d69c1677e17c6bcec";
-      sha256 = "155f8vischacl8108ibgs51kj3r7yq1690y4yb4nnqmnjww41k9b";
+      rev = "117fd96acb69d7d1727df95b6fde9d8715e031fc";
+      sha256 = "lcIRIOFCdIWEGyKyG/tB4KvxM9zoWuBRDxW+T+mvIb0=";
     }) {
     inherit pkgs;
   };
 in
 pkgs.mkShell {
   buildInputs = [
-    easy-ps.purs-0_15_2
+    easy-ps.purs-0_15_14
     easy-ps.spago
     easy-ps.psa
 
