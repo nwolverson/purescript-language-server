@@ -92,6 +92,11 @@ nvim_lsp.purescriptls.setup {
 }
 ```
 
+### NeoVim plugin that adds more commands, designed to supplement built-in language server
+
+Use [nvimmer-ps](https://github.com/srghma/nvimmer-ps).
+
+
 ### Vim/LSP
 
 Auto configuration with [vim-lsp-settings](https://github.com/mattn/vim-lsp-settings)
