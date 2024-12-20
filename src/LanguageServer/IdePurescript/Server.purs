@@ -19,7 +19,7 @@ import Data.Time.Duration (Milliseconds(..))
 import Effect.Aff (Aff, attempt, delay, makeAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Foreign (Foreign)
-import IdePurescript.Exec (findBins, getPathVar)
+import IdePurescript.Exec (findBins, getPathVar, shellSetting)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import IdePurescript.PscIdeServer as P
 import LanguageServer.IdePurescript.Config (ConfigFn)
@@ -27,7 +27,6 @@ import LanguageServer.IdePurescript.Config as Config
 import LanguageServer.Protocol.Types (Settings)
 import Node.Buffer (toString)
 import Node.ChildProcess as CP
-import Node.ChildProcess.Types (enableShell)
 import Node.Encoding (Encoding(..))
 import Node.Process (lookupEnv)
 import PscIde (load)
@@ -107,7 +106,7 @@ getPackagerPaths enabled binName settings root =
         makeAff \cb -> do
           void
             $ CP.execFile' bin [ "sources" ]
-                (_ { cwd = Just root, shell = Just enableShell })
+                (_ { cwd = Just root, shell = shellSetting })
                 ( \{ stdout } -> do
                     text <- toString UTF8 stdout
                     cb $ pure $ lines text

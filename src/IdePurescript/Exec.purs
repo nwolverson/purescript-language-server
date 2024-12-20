@@ -10,11 +10,17 @@ import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Foreign.Object as Object
-import Node.ChildProcess.Types (enableShell)
+import Node.ChildProcess.Types (Shell, enableShell)
 import Node.Path as Path
-import Node.Process (getEnv, lookupEnv)
+import Node.Platform (Platform(..))
+import Node.Process (getEnv, lookupEnv, platform)
 import Node.Which (which')
 import PscIde.Server (Executable(..), findBins')
+
+shellSetting :: Maybe Shell
+shellSetting = case platform of
+  Just Win32 -> Just enableShell
+  _ -> Nothing
 
 findBins :: forall a. Either a String -> String -> Aff (Array Executable)
 findBins pathVar server = do
@@ -24,7 +30,7 @@ findBins pathVar server = do
     , path: either (const Nothing) Just pathVar
     , env: either (const Nothing) (Just <<< flip (Object.insert "PATH") env)
         pathVar
-    , shell: Just enableShell
+    , shell: shellSetting
     }
     server
 

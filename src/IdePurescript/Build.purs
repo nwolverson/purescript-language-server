@@ -18,14 +18,14 @@ import Effect.Exception (catchException)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Foreign.Object as Object
-import IdePurescript.Exec (findBins, getPathVar, whichSync)
+import IdePurescript.Exec (findBins, getPathVar, shellSetting, whichSync)
 import IdePurescript.PscErrors (PscResult(..), parsePscOutput)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import Node.Buffer (Buffer)
 import Node.Buffer as Buffer
 import Node.ChildProcess (ChildProcess)
 import Node.ChildProcess as CP
-import Node.ChildProcess.Types (Exit(..), enableShell)
+import Node.ChildProcess.Types (Exit(..))
 import Node.Encoding as Encoding
 import Node.Errors.SystemError (toError)
 import Node.EventEmitter (on_, once_)
@@ -73,7 +73,7 @@ spawn { command: Command cmd args, directory, useNpmDir } = do
     { path, pathExt: Nothing }
     cmd
   CP.spawn' cmd' args
-    (_ { cwd = Just directory, env = env, shell = Just enableShell })
+    (_ { cwd = Just directory, env = env, shell = shellSetting })
 
 -- Spawn with npm path, "which" call (windows support) and version info gathering
 spawnWithVersion ::
@@ -92,7 +92,7 @@ spawnWithVersion { command: Command cmd args, directory, useNpmDir } = do
                 env
             Just <$> CP.spawn' cmdBin args
               ( _
-                  { cwd = Just directory, env = Just childEnv, shell = Just enableShell }
+                  { cwd = Just directory, env = Just childEnv, shell = shellSetting }
               )
           _ -> pure Nothing
   pure { cmdBins, cp }

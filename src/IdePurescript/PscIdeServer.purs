@@ -24,11 +24,10 @@ import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Aff (Aff, attempt, try)
 import Effect.Class (liftEffect)
-import IdePurescript.Exec (findBins, getPathVar)
+import IdePurescript.Exec (findBins, getPathVar, shellSetting)
 import IdePurescript.PscIde (cwd) as PscIde
 import Node.Buffer as Buffer
 import Node.ChildProcess (ChildProcess, stderr, stdout)
-import Node.ChildProcess.Types (enableShell)
 import Node.Encoding (Encoding(..))
 import Node.EventEmitter (on_)
 import Node.Path (normalize)
@@ -231,7 +230,7 @@ startServer
             , source = glob
             , logLevel = logLevel
             , outputDirectory = outputDirectory
-            , shell = Just enableShell
+            , shell = shellSetting
             }
         )
     where
