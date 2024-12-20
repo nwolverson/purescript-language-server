@@ -92,5 +92,5 @@ in  upstream
       , "typelevel-prelude"
       ]
     , repo = "https://github.com/natefaubion/purescript-language-cst-parser.git"
-    , version = "v0.12.1"
+    , version = "v0.14.0"
     }
