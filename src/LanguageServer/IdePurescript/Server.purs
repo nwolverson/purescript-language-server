@@ -11,6 +11,7 @@ import Data.Array (filter, head)
 import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..))
 import Data.String (null)
+import Data.String as String
 import Data.String.Regex as Regex
 import Data.String.Regex.Flags (noFlags)
 import Data.String.Regex.Unsafe (unsafeRegex)
@@ -19,6 +20,8 @@ import Data.Time.Duration (Milliseconds(..))
 import Effect.Aff (Aff, attempt, delay, makeAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Foreign (Foreign)
+import Foreign.Object as Object
+import IdePurescript.Build (getPathProp)
 import IdePurescript.Exec (findBins, getPathVar, shellSetting)
 import IdePurescript.PscIdeServer (ErrorLevel(..), Notify)
 import IdePurescript.PscIdeServer as P
@@ -28,7 +31,7 @@ import LanguageServer.Protocol.Types (Settings)
 import Node.Buffer (toString)
 import Node.ChildProcess as CP
 import Node.Encoding (Encoding(..))
-import Node.Process (lookupEnv)
+import Node.Process (getEnv, lookupEnv)
 import PscIde (load)
 import PscIde.Server (Executable(..))
 
@@ -70,7 +73,9 @@ startServer' settings root cb logCb = do
         settings
         root
       spagoGlob <- getPackagerPaths Config.addSpagoSources "spago" settings root
-      pure (pscpGlob <> spagoGlob)
+      let glob = pscpGlob <> spagoGlob
+      liftEffect $ logCb Info $ "Source globs: " <> String.joinWith " " glob
+      pure glob
   P.startServer'
     { exe
     , combinedExe: true
@@ -101,12 +106,17 @@ getPackagerPaths enabled binName settings root =
   else do
     pathVar <- liftEffect $ getPathVar (Config.addNpmPath settings) root
     serverBins <- findBins pathVar binName
+    env <- liftEffect getEnv
     case head serverBins of
       Just (Executable bin _) ->
         makeAff \cb -> do
           void
             $ CP.execFile' bin [ "sources" ]
-                (_ { cwd = Just root, shell = shellSetting })
+                (_ { cwd = Just root, shell = shellSetting
+                , env = Just $ Object.insert (getPathProp env)
+                  (either identity identity pathVar)
+                  env
+                  })
                 ( \{ stdout } -> do
                     text <- toString UTF8 stdout
                     cb $ pure $ lines text

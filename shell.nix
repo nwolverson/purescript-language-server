@@ -11,7 +11,8 @@ let
   };
 in
 pkgs.mkShell {
-  buildInputs = [
+  buildInputs = with pkgs; [
+    nodejs
     easy-ps.purs-0_15_14
     easy-ps.spago
     easy-ps.psa
