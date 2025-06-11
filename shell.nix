@@ -16,6 +16,7 @@ pkgs.mkShell {
     easy-ps.purs-0_15_14
     easy-ps.spago
     easy-ps.psa
+    git
 
   ];
 }
