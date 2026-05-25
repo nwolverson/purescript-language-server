@@ -272,8 +272,8 @@ newtype CodeAction = CodeAction
   { title :: String
   , kind :: CodeActionKind
   , isPreferred :: Boolean
-  , edit :: Nullable WorkspaceEdit
-  , command :: Nullable Command
+  , edit :: UndefinedOr WorkspaceEdit
+  , command :: UndefinedOr Command
   }
 
 foreign import data CodeActionResult :: Type

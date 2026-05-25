@@ -7,13 +7,17 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Nullable (null, toMaybe)
 import Data.Nullable as Nullable
 import Effect (Effect)
+import Foreign (unsafeToForeign)
 import IdePurescript.Tokens (identifierAtPoint)
 import LanguageServer.IdePurescript.FileTypes (RelevantFileType(..), jsUriToMayPsUri, uriToRelevantFileType)
 import LanguageServer.Protocol.Text (makeMinimalWorkspaceEdit)
-import LanguageServer.Protocol.Types (ClientCapabilities, DocumentUri(..), Position(..), Range(..), TextDocumentEdit(..), TextEdit(..), WorkspaceEdit(..))
+import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), Command(..), DocumentUri(..), Position(..), Range(..), TextDocumentEdit(..), TextEdit(..), WorkspaceEdit(..), codeActionSourceSortImports)
 import Test.Unit (suite, test)
 import Test.Unit.Assert as Assert
 import Test.Unit.Main (runTest)
+import Untagged.Union (maybeToUor)
+
+foreign import stringifyCodeAction :: CodeAction -> String
 
 getEdit :: WorkspaceEdit -> Array TextEdit
 getEdit (WorkspaceEdit { documentChanges }) = concat $ map go $ changes
@@ -76,6 +80,22 @@ main =
         -- If I have a CRLF file for some reason but IDE server gives me back LF
         let edit = makeEdit "A\r\nC\r\n" "A\nB\nC\n"
         Assert.equal (Just [ mkEdit 1 1 "B\n" ]) (getEdit <$> edit)
+      test "command-only code action omits edit when serialized" do
+        let
+          action = CodeAction
+            { title: "Sort/reformat imports"
+            , kind: codeActionSourceSortImports
+            , isPreferred: false
+            , edit: maybeToUor Nothing
+            , command: maybeToUor $ Just $ Command
+                { title: "Sort/reformat imports"
+                , command: "sortImports"
+                , arguments: Nullable.notNull [ unsafeToForeign "uri" ]
+                }
+            }
+        Assert.equal
+          """{"title":"Sort/reformat imports","kind":"source.sortImports","isPreferred":false,"command":{"title":"Sort/reformat imports","command":"sortImports","arguments":["uri"]}}"""
+          (stringifyCodeAction action)
       -- Type at point
       test "identifierAtPoint: identifies $" do
         let str = """$"""
