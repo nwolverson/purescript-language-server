@@ -37,6 +37,7 @@ import LanguageServer.Protocol.Text (makeWorkspaceEdit)
 import LanguageServer.Protocol.TextDocument (TextDocument, getTextAtRange, getVersion)
 import LanguageServer.Protocol.Types (ClientCapabilities, CodeAction(..), CodeActionKind(..), CodeActionResult, Command(..), DocumentStore, DocumentUri(DocumentUri), OptionalVersionedTextDocumentIdentifier(..), Position(Position), Range(Range), Settings, TextDocumentEdit(..), TextDocumentIdentifier(TextDocumentIdentifier), TextEdit(..), codeActionEmpty, codeActionResult, codeActionSourceOrganizeImports, codeActionSourceSortImports, readRange, workspaceEdit)
 import PscIde.Command (PscSuggestion(..), PursIdeInfo(..), RebuildError(..))
+import Untagged.Union (maybeToUor, uorToMaybe)
 
 getActions ::
   DocumentStore ->
@@ -200,8 +201,7 @@ codeActionToCommand capabilities action =
         convert action
   where
   supportsLiteral = maybe true codeActionLiteralsSupported capabilities
-  convert (CodeAction { command }) | Just c <- Nullable.toMaybe command = Just $
-    Right c
+  convert (CodeAction { command }) | Just c <- uorToMaybe command = Just $ Right c
   convert _ = Nothing
 
 commandAction :: CodeActionKind -> Command -> CodeAction
@@ -210,8 +210,8 @@ commandAction kind c@(Command { title }) =
     { title
     , kind
     , isPreferred: false
-    , edit: Nullable.toNullable Nothing
-    , command: Nullable.toNullable $ Just c
+    , edit: maybeToUor Nothing
+    , command: maybeToUor $ Just c
     }
 
 commandAction_ :: Command -> CodeAction
